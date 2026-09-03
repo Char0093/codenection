@@ -305,7 +305,7 @@ Bot: ETA difference is 25 minutes.
 
 ## Phase 0 — Narrow the prototype and establish persistence
 
-**Implementation status (2026-09-03):** Phase 0 and 1 application code is implemented on `codex/phase-0-1`. Local unit, component, API, PostgreSQL, browser, and production-build checks are recorded in `docs/testing/phase-0-1.md`. Hosted Supabase migration/authentication checks and a real Gemini request remain pending configuration. Neither phase's live exit gate is marked complete. The separate proposed commits below are consolidated into `feat: implement authenticated trip planning and Gemini proposals` at the user's request.
+**Implementation status (2026-09-04):** Phase 0 and 1 application code is implemented on `main`. Local unit, component, API, PostgreSQL, browser, and production-build checks are recorded in `docs/testing/phase-0-1.md`. All forward migrations are applied to the authorized disposable Supabase project; a rollback-only database role matrix and a server-only Gemini smoke request passed. Real browser sign-in plus the complete authenticated create/generate/decide/reload workflow remain pending, so neither phase's live exit gate is marked complete. The separate proposed commits below are consolidated into `feat: implement authenticated trip planning and Gemini proposals` at the user's request.
 
 **Contract clarifications:** Each activity includes a `date` for multi-day validation. Trips cover 1-14 days. Owners/planners may edit and generate; only the owner may confirm/reject. Confirmation revalidates the proposal against the current trip revision in a database transaction.
 

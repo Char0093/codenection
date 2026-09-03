@@ -38,15 +38,16 @@ The local Superpowers repository is tracked as a pinned Git submodule. New check
 
 ## Live Service Gate
 
-This checkout has no `.env.local` Supabase/Gemini credentials. Docker Desktop is installed but its engine was not running. No hosted project was created or modified, no live Gemini request was sent, and no email sign-in was verified.
+On 2026-09-04, all four forward migrations were applied to the authorized disposable Supabase project. The rollback-only hosted database role matrix passed for owner, planner, member, and unrelated roles; it includes the repository-critical owner `INSERT ... RETURNING` path, planner edits/preferences, member read-only behavior, direct proposal-write denial, and unrelated isolation. The test left zero fixture users after rollback. A final migration dry run reported the remote database up to date. A direct server-only Gemini smoke request also succeeded for the configured model. No credential values were logged.
+
+Real browser sign-in, authenticated PostgREST/repository requests, and the complete create-generate-decide-reload workflow still need manual end-to-end verification.
 
 Before marking either phase's live exit criteria complete:
 
-1. Configure a disposable Supabase project and apply all migrations.
-2. Complete the role matrix in `tests/database/live-rls.md` using owner, planner, member, viewer, and unrelated users.
-3. Set the server-only Gemini key and an available model. Sign in, create a trip, reload it, and generate a real proposal.
-4. Confirm and reload the active itinerary. Generate a second proposal and reject it; verify the first remains active.
-5. Edit a trip after generation and verify stale confirmation fails. Simulate a provider error and check that the active itinerary survives.
+1. Sign in to the configured Supabase project, create a trip, reload it, and generate a real proposal.
+2. Confirm and reload the active itinerary. Generate a second proposal and reject it; verify the first remains active.
+3. Exercise real owner, planner, member, viewer, unrelated-user and anonymous HTTP sessions as described in `tests/database/live-rls.md`.
+4. Edit a trip after generation and verify stale confirmation fails. Simulate a provider error and check that the active itinerary survives.
 
 The code and local verification can be delivered independently of these credentials; the hosted acceptance gate remains explicitly open.
 

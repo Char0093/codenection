@@ -2,7 +2,17 @@
 
 ## Actual Evidence
 
-Recorded 2026-09-03. No live Supabase credentials were configured. No hosted project was contacted or changed. All results below are local PGlite evidence, not live Supabase evidence.
+Local PGlite evidence was recorded on 2026-09-03. Hosted verification was added on 2026-09-04 against an authorized disposable Supabase project; no credentials, real user data, or profile data were printed or retained.
+
+Hosted commands executed from the repository:
+
+```powershell
+npm exec --yes --package supabase@2.116.0 supabase -- db push --linked
+npm exec --yes --package supabase@2.116.0 supabase -- db query --linked --file tests/database/live-rls.sql
+npm exec --yes --package supabase@2.116.0 supabase -- db push --linked --dry-run
+```
+
+All four forward migrations applied and the final dry run reported the remote database up to date. The rollback-only SQL matrix passed with authenticated owner, planner, member, and unrelated roles. It verifies owner `INSERT ... RETURNING`, planner trip/preference writes, member reads with no trip update, direct proposal-write denial, and unrelated read/update isolation. Fixture users are created inside the transaction and the follow-up count was zero after rollback. Membership fixture setup runs as the privileged test connection because ordinary membership writes are intentionally server-only.
 
 Command executed from `C:\Codenection`:
 
@@ -130,10 +140,9 @@ For RPC-generated itineraries, `starts_at` is `(activity.date + activity.startTi
 
 ## Pending Live Checks
 
-Every item below is pending. A disposable Supabase project and authorized test accounts are required before execution.
+The migration application and database-role matrix are complete. The remaining items require real authenticated HTTP sessions and separate database connections.
 
-1. Apply all migrations in order to the disposable project, record migration versions and result, and inspect actual table/column/function grants for `anon`, `authenticated`, `service_role`, and PUBLIC.
-2. Exercise PostgREST with real owner, planner, member, viewer, unrelated-user and anonymous sessions. Verify membership SELECT, trip input column restrictions, revoked retired-table access, and direct proposal/itinerary mutation denial with both authenticated and service credentials.
+1. Exercise PostgREST with real owner, planner, member, viewer, unrelated-user and anonymous sessions. Verify membership SELECT, trip input column restrictions, revoked retired-table access, and direct proposal/itinerary mutation denial with both authenticated and service credentials.
 3. Call the exact named-argument RPCs through the parent repository. Verify composite response serialization, SQLSTATE-to-HTTP mapping, bigint revision representation, `updated_at` ordering, expired/replayed decisions, and active history after edits.
 4. In separate database sessions, race two accepts for competing proposals and race acceptance against trip/preference edits. Verify one consistent result, no partial itinerary, no stale activation, and no deadlock in the trip-then-proposal lock order.
 5. In separate sessions, race reservation calls across users on one trip and across trips for one user. Verify the three-per-trip and five-per-user caps with committed transactions and independent connections.
