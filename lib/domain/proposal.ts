@@ -6,8 +6,8 @@ export function confirmProposal(status: ProposalStatus, role: TripRole): Proposa
     throw new Error("Only pending proposals can be confirmed.");
   }
 
-  if (role !== "owner" && role !== "planner") {
-    throw new Error("Only a trip owner or planner can activate this proposal.");
+  if (role !== "owner") {
+    throw new Error("Only a trip owner can activate this proposal.");
   }
 
   return "accepted";
