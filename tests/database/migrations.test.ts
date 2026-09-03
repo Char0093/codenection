@@ -260,6 +260,16 @@ describe("narrowed database permissions", () => {
       values ($1,'Forged','Kyoto','2026-11-01','2026-11-01',10)`, [owner])).rejects.toThrow();
   });
 
+  it("returns an owner's newly created trip under RLS", async () => {
+    const created = await db.query<{ id: string; owner_user_id: string }>(`insert into trips(
+      owner_user_id,name,destination_name,start_date,end_date
+    ) values ($1,'Returned trip','Kyoto','2026-11-01','2026-11-01')
+    returning id,owner_user_id`, [owner]);
+
+    expect(created.rows).toHaveLength(1);
+    expect(created.rows[0].owner_user_id).toBe(owner);
+  });
+
   it("permits owner/planner input edits and bumps revision only on actual input changes", async () => {
     for (const [user, revision] of [[owner, 2], [planner, 3]] as const) {
       await actor(user);
