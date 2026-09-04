@@ -28,7 +28,7 @@ Use `member_profiles` for sensitive profile details and `trip_members` for membe
 ## Privacy Rules
 
 - Do not expose sensitive profile data outside authorized trip members.
-- Do not infer health, religion, or disability data from Telegram chat without confirmation.
+- Do not infer health, religion, or disability data from trip chat without confirmation.
 - Store derived confirmed preferences separately from raw chat content.
 
 ## Non-Goals

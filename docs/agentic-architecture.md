@@ -39,7 +39,7 @@ Not allowed:
 
 Responsibilities:
 
-- Parse Telegram messages and profile notes for possible preferences or constraints.
+- Parse trip chat messages and profile notes for possible preferences or constraints.
 - Classify signals such as pace, dietary preference, walking tolerance, budget concern, or desired activity type.
 - Convert signals into pending confirmation events.
 
@@ -86,7 +86,7 @@ Responsibilities:
 
 Allowed writes:
 
-- Pending expense events from Telegram.
+- Pending expense events from the workspace chat.
 - Confirmed web-created expenses.
 - Derived settlement rows after explicit calculation.
 
@@ -94,7 +94,7 @@ Not allowed:
 
 - Executing payments.
 - Linking bank accounts.
-- Finalizing Telegram-created expenses without confirmation.
+- Finalizing chat-created expenses without confirmation.
 
 ### Contingency Agent
 
@@ -122,7 +122,7 @@ Use a job-based orchestration model:
 - Route handlers and server actions enqueue agent jobs.
 - Agents read current trip state through typed query functions.
 - Agents write proposals, events, and audit records through typed command functions.
-- UI and Telegram confirmation callbacks execute approved domain mutations.
+- Workspace confirmation actions execute approved domain mutations.
 
 Recommended job types:
 
@@ -221,7 +221,7 @@ Always require confirmation for:
 
 - Itinerary changes.
 - Profile or constraint changes derived from chat.
-- Expense creation from Telegram.
+- Expense creation from the workspace chat.
 - Split activation.
 - Merge instruction publication.
 - Any recommendation involving fixed commitments or possible financial loss.
@@ -252,7 +252,7 @@ Minimum evals:
 - Trip planning blocks severe allergy conflicts.
 - Trip planning blocks inaccessible activities for members with hard accessibility requirements.
 - Coordination agent selects correct merge bucket for ETA deltas.
-- Ledger agent keeps Telegram expenses pending until confirmation.
+- Ledger agent keeps chat-created expenses pending until confirmation.
 - Contingency agent marks mocked provider data as mocked or degraded.
 
 Store eval fixtures under `tests/fixtures/agents/` and keep them deterministic.

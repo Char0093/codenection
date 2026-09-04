@@ -29,14 +29,14 @@ Do not put business rules directly inside React components.
 - All tables must include `created_at`; mutable domain tables should include `updated_at`.
 - Sensitive profile fields must only be readable by authorized trip members.
 - Use explicit trip membership checks in RLS policies.
-- Store pending Telegram confirmations as structured events, not as raw indefinite chat transcripts.
+- Store pending confirmations as structured events. Trip chat is persisted as first-class messages under RLS; assistant context is a bounded window, not the whole transcript.
 
 ## Domain Rules
 
 - Deterministic logic belongs in pure functions with unit tests.
 - Recommendation explanations must be generated from actual scoring or constraint decisions.
 - Provider failures must degrade gracefully with cached, mock, or user-visible fallback state.
-- Schedule-changing, expense-changing, or subgroup-changing actions from Telegram require confirmation.
+- Schedule-changing, expense-changing, or subgroup-changing actions proposed in chat or by the assistant require explicit confirmation.
 
 ## UI Rules
 
@@ -48,6 +48,6 @@ Do not put business rules directly inside React components.
 ## Testing Expectations
 
 - Unit test all pure domain modules.
-- Integration test route handlers/server actions that write trip, expense, Telegram, or provider state.
+- Integration test route handlers/server actions that write trip, expense, chat, or provider state.
 - E2E test the primary user path: create trip, add members, generate itinerary, view map, log expense, settle, split, merge.
 - Do not mark a feature complete without tests for its critical failure modes.

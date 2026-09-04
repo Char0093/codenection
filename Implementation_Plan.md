@@ -1,583 +1,796 @@
-# Gemini-Driven Travel Planner Implementation Plan
+# WanderSync — Implementation Plan
 
-> **For agentic workers:** Use `superpowers:subagent-driven-development` or `superpowers:executing-plans` task by task. Keep TDD, review gates, and verification evidence with every task.
+> **For agentic workers:** Use `superpowers:subagent-driven-development` or `superpowers:executing-plans` task by task. Keep TDD, review gates, and verification evidence with every task. This document is the binding specification and **replaces the earlier narrowed "travel planner MVP" plan**. Where `docs/` files conflict with this plan, this plan wins; the retired scope-lock and the profile/allergen/weather non-goals in older docs are superseded by [Section IX](#ix-data-privacy--safety-appendix).
 
 ## What this does
 
-This project helps solo travelers and groups turn scattered trip ideas into one approved itinerary. The web app captures the trip basics, Gemini drafts a practical plan, the backend validates every suggestion before it becomes official, and Telegram keeps the group coordinated during the trip without forcing everyone into a new app.
+WanderSync is an **end-to-end adaptive collaborative travel system** for group trips. It turns scattered group intent (chat, voice notes, social links) into a validated, budget-bounded, safety-checked itinerary, then keeps that itinerary alive during the trip: it re-optimizes around weather, budget drift, and impromptu detours, coordinates group split-and-merge with real routing math, and gives human-scale on-site help for navigation, photography, and dietary safety.
 
-**Goal:** Deliver a group trip planner where a focused web app captures trip-level inputs, Gemini generates structured itinerary proposals, deterministic backend rules validate them, and Telegram coordinates the approved trip.
+**Goal:** Deliver a system where an LLM proposes and enriches, deterministic optimization decides what is feasible, and the group explicitly confirms what becomes real — coordinated in a native, multi-user collaborative workspace in the browser.
 
-**Architecture:** Next.js owns the web UI, server routes, and Telegram webhook. Supabase owns authenticated trip data and RLS. Gemini is a server-only proposal provider; it returns typed JSON, while backend validation remains responsible for dates, budget, authorization, and every state change.
+**Core value:** It systematically resolves the failure modes of existing travel tools — rigid schedules, group compromise fatigue, navigation disorientation, budget drift, and algorithmic echo chambers that over-filter discovery.
 
-**Tech stack:** Next.js App Router, React, TypeScript, Supabase Auth/Postgres/RLS, `@google/genai`, Zod, Vitest, GitHub Actions, Telegram Bot API.
+**Architecture (hybrid):** A **Next.js / TypeScript** application owns the entire user-facing experience — the collaborative workspace, Supabase auth and data access, Realtime fan-out, LLM/VQA calls, and orchestration. There is no third-party chat platform, bot, or webview in the product. A separate stateless **Python / FastAPI optimization service** owns the operations-research compute: m-VRPTW routing, multi-objective Knapsack scheduling, traveler clustering, astronomical (SunCalc) computation, and DAG itinerary retopology. The Python service holds no credentials beyond a shared secret, never writes the database, and never calls external providers — it receives an anonymized problem payload and returns a solution.
 
-**Specification:** `docs/README.md`, `docs/framework.md`, `docs/features/telegram-bot.md`, and `docs/features/privacy-safety.md` remain binding unless this plan explicitly narrows their scope.
+**Tech stack:** Next.js 15 App Router, React 19, TypeScript, Mapbox GL JS (3D extrusion), `lucide-react` icons, pointer-event drag (no drag library: the 30-minute grid and magnetic snapping are custom), and the existing hand-written CSS design tokens in `app/globals.css` (this project does **not** use Tailwind); Supabase Auth / Postgres / PostGIS / pgvector / RLS / **Realtime**; `@google/genai` (Gemini) for intent extraction, VQA, and narration; Zod; Vitest + Playwright. Python 3.12, FastAPI, Google OR-Tools, NumPy / scikit-learn (K-Means, GMM), SunCalc, pytest + ruff + mypy. Redis for ephemeral group location, session state, locks, and a job queue. GitHub Actions CI.
+
+**Control contract (the moat):** Gemini produces candidates, explanations, and alternatives. It cannot activate a plan, spend money, assign people to subgroups, bypass RLS, or mutate state. The Python service can compute an optimal assignment or route but cannot persist or activate it. Every candidate item passes a deterministic hard-constraint gate ([Section VII](#vii-hard-constraint-gate)) before it is stored or shown as approved, and every state change is confirmed by an authorized human.
 
 ## Table of contents
 
 - [What this does](#what-this-does)
-- [Target users](#target-users)
-- [Why now](#why-now)
-- [Before and after impact story](#before-and-after-impact-story)
-- [Differentiation](#differentiation)
-- [Idea evolution](#idea-evolution)
-- [Scope lock](#scope-lock)
-- [Gemini safety contract](#gemini-safety-contract)
-- [Product flow](#product-flow)
-- [User journey map](#user-journey-map)
-- [System architecture diagram](#system-architecture-diagram)
-- [Concept mindmap](#concept-mindmap)
-- [Wireframes](#wireframes)
-- [Implementation phases](#phase-0--narrow-the-prototype-and-establish-persistence)
+- [I. Target users](#i-target-users)
+- [II. The eleven core modules](#ii-the-eleven-core-modules)
+- [II-b. Conflict resolution framework](#ii-b-progressive-conflict-resolution-framework)
+- [III. Deep-dive: Module 5 — serendipity & dynamic exploration engine](#iii-deep-dive-module-5--serendipity--dynamic-exploration-engine)
+- [IV. End-to-end system architecture](#iv-end-to-end-system-architecture)
+- [V. Service boundary](#v-service-boundary-nextjs--python-optimization-service)
+- [VI. Persistence model](#vi-persistence-model)
+- [VII. Hard-constraint gate](#vii-hard-constraint-gate)
+- [VIII. Complete execution lifecycle](#viii-complete-execution-lifecycle)
+- [Architectural moats](#architectural-moats)
+- [Delivered foundation](#delivered-foundation-do-not-rebuild)
+- [Phase 1 — Intent & hard-constraint extraction](#phase-1--intent--hard-constraint-extraction-module-1)
+- [Phase 2 — Optimization service boundary & budget scheduling](#phase-2--optimization-service-boundary--budget-scheduling-module-2)
+- [Phase 3 — Collaborative workspace: realtime chat & flashcard timeline](#phase-3--collaborative-workspace-realtime-chat--flashcard-timeline-client-layer)
+- [Phase 4 — Group routing, split & merge, mobility](#phase-4--group-routing-split--merge-mobility-modules-5--6)
+- [Phase 5 — Serendipity & exploration engine](#phase-5--serendipity--exploration-engine-module-5)
+- [Phase 6 — On-site execution: navigation, photo, packing](#phase-6--on-site-execution-navigation-photo-packing-modules-3-7-8)
+- [Phase 7 — Environmental self-healing](#phase-7--environmental-self-healing-module-9)
+- [Phase 8 — Multimodal on-site VQA](#phase-8--multimodal-on-site-vqa-module-10)
+- [Phase 9 — End-to-end, deployment, demo](#phase-9--end-to-end-deployment-demo)
+- [IX. Data privacy & safety appendix](#ix-data-privacy--safety-appendix)
 - [Explicit non-goals](#explicit-non-goals)
 - [Verification standard](#verification-standard)
 
-## Target users
+## I. Target users
 
-### Persona 1: Group trip planner
+The reference scenario is a four-person friend group on a 3-day city trip in Malaysia (Kuala Lumpur / Melaka). Each traveler carries a distinct constraint profile, and the trip must serve all of them without forcing majority compromise. This group is used as the fixture for every phase's exit criteria.
 
-**Name:** Amira, 24, university society committee member
+### Persona 1: The planner-organizer
 
-**Trip type:** 6 friends visiting Bangkok for 4 days
+**Name:** Amira, 24. **Constraints:** Halal-only, budget-flexible.
 
-**Pain:** Everyone drops ideas in chat, but nobody knows which plan is final. The planner gets stuck reconciling budget, timing, and last-minute changes.
+**Pain:** She manually reconciles everyone's budget, timing, and dietary limits, then re-explains "the current plan" every time the chat moves on.
 
-**Quote:** "I do not need a booking super-app. I need one plan everyone can agree on and check quickly."
+**Quote:** "I need one plan everyone agrees on, that updates itself when things change."
 
-### Persona 2: Solo traveler who coordinates with others sometimes
+### Persona 2: The safety-critical traveler
 
-**Name:** Daniel, 28, remote worker
+**Name:** Ben, 23. **Constraints:** Severe peanut allergy, strict budget (RM 150/day).
 
-**Trip type:** Solo weekend in Penang, meeting friends for selected meals and activities
+**Pain:** He wants AI planning help but cannot trust a system that might quietly route the group to a restaurant with cross-contamination risk, or blow his daily cap.
 
-**Pain:** He wants AI help planning the day, but does not want the AI to silently change confirmed plans or expose private notes to a group chat.
+**Quote:** "The allergy rule is not a preference. It must never be traded off."
 
-**Quote:** "Suggest options, but let me approve what becomes real."
+### Persona 3: The specialist splitters
 
-## Why now
+**Names:** Chloe, 22 (photography, chases golden hour) and Danish, 22 (heritage, student budget RM 150/day).
 
-Large language models can now create useful first-draft itineraries from natural trip preferences, but travel still breaks down at the coordination layer: group chat, shared notes, budget discussions, and mid-trip changes live in separate tools. This MVP uses AI only where it is strong, drafting structured options, and keeps correctness, permissions, confirmation, and money arithmetic in deterministic application code.
+**Pain:** Their must-see lists barely overlap. Today's tools make them either split with no coordination or stay together and both settle.
 
-## Before and after impact story
+**Quote:** "Let us do our own thing for three hours and still make dinner together on time."
 
-**Before:** A group plans in Telegram, saves places in Google Maps, tracks costs in a spreadsheet, asks one person to summarize the plan, and loses clarity when someone wants to split off for a different activity. The itinerary becomes a moving target, and nobody is sure whether the latest chat message is a suggestion or the final decision.
+## II. The eleven core modules
 
-**With this solution:** The planner creates one trip, generates a structured proposal, reviews it, and activates it. Telegram becomes the coordination layer for reading the plan, confirming changes, splitting into subgroups, merging back, and logging shared expenses. The AI drafts; the app decides what is valid; the group explicitly confirms what changes.
+| Stage | Module | Core functionality & technical implementation | Value proposition |
+| --- | --- | --- | --- |
+| **Pre-trip** | **1. Intent & hard-constraint extraction** | Ingests group chat text, voice notes, and social media URLs (Instagram, TikTok, Xiaohongshu); parses latent interest vectors; strictly enforces non-negotiables: **Halal compliance** and **food allergens**. | Zero-friction data entry; guarantees critical health and cultural requirements are never violated. |
+| | **2. Budget-aware scheduling** | Feeds total, daily, and per-meal financial caps into a multi-objective Knapsack solver; balances paid activities with free local gems; receipt-OCR group expense ledger. | Keeps spending strictly bounded; eliminates awkward group math and split calculations. |
+| | **3. Context-aware packing checklist** | Evaluates hourly weather forecasts (rain gear, UV) and cultural/religious dress codes (modest attire for mosques and temples); generates bilingual emergency allergy cards and shared-item claims. | Prevents missing critical gear or medication; avoids on-site entry refusal for dress code. |
+| **Pre-trip co-creation** | **4. Smart timeline jigsaw & group bargaining scheduler** | AI generates the initial DAG draft; blocks drag with magnetic snapping on a 30-minute grid; embeds minimax-regret minimisation and Pareto frontier filling, with a shorten/replace/split trilemma on collision. | Converts a chaotic group chat into a visual puzzle; the algorithm plays the impartial judge, so nobody has to be the one who concedes. |
+| **Planning & discovery** | **5. Serendipity & exploration engine (anti-filter-bubble)** | Implements an ε-greedy exploration mechanism; surfaces out-of-comfort-zone suggestions (local subcultures, artisan workshops, seasonal micro-events); generates "Safe vs. Wildcard" itinerary variants. | Prevents repetitive recommendations; balances comfort with spontaneous authentic discovery. |
+| | **6. Group split & merge routing** | Clusters travelers by interest vector and spending capacity (Photography Crew vs. Deep Heritage Crew); routes sub-branches via time-window graph optimization; converges punctually at a consensus anchor. | Ends mutual compromise; individuals pursue what they value while the group trip stays intact. |
+| | **7. Multi-modal mobility decisions** | Computes group rideshare break-even economics (3–4 passenger ride-hail vs. transit fares); outputs Fastest, Budget, and Scenic Walk options; pivots to covered/indoor connections under rain triggers. | Removes transit trade-off friction; delivers optimal cost-to-time trade-offs dynamically. |
+| **On-site execution** | **8. 3D landmark navigation** | Renders extruded 3D geometry at a 60° camera pitch; highlights turn-by-turn landmarks; serves conversational orientation cues ("walk toward the clock tower, turn right at the McDonald's"). | Eliminates spatial confusion, compass-heading errors, and 2D GPS drift at intersections. |
+| | **9. Photo spot & lighting engine** | Pinpoints exact ground coordinates ("Golden Footprints"); uses SunCalc to compute sun azimuth and elevation to schedule spots during Golden and Blue Hours; provides focal length and framing guides. | Eliminates bad lighting, crowded framing, and tourist-trap vantage points. |
+| | **10. Environmental self-healing** | Triggers sub-second DAG retopology when precipitation exceeds 70%, budgets run over, or ad-hoc detours occur — swapping outdoor routes for indoor equivalents and rebalancing financial headroom. | Keeps itineraries resilient against weather disruption and sudden change. |
+| | **11. Multimodal on-site VQA** | Ingests snapshots of local food to screen for allergen cross-contamination and detail culinary origins; analyzes heritage architecture to identify styles and historical context. | Protects dietary safety on the spot while delivering rich cultural storytelling. |
 
-## Differentiation
+## II-b. Progressive conflict resolution framework
 
-The defining twist is the **AI proposes, backend approves** contract. Gemini can produce itinerary candidates and explanations, but it cannot activate a plan, spend money, assign people, bypass permissions, or mutate state. That makes the product different from pure AI chat planners: it combines flexible generation with deterministic safety rails.
-
-| Existing approach | Strength | Gap this plan addresses |
-|-------------------|----------|--------------------------|
-| TripIt-style itinerary organizer | Good for storing bookings and reservations | Weak at group preference coordination before bookings exist |
-| Wanderlog-style collaborative planning | Good shared trip boards and itinerary editing | Still requires users to manage agreement and mid-trip chat decisions manually |
-| Google Maps lists or shared docs | Familiar and flexible | No approval workflow, no validated AI proposal, no group expense or split/merge state |
-| Pure AI travel chatbot | Fast first draft | Risky as source of truth unless output is validated and confirmed |
-
-## Idea evolution
-
-| Iteration | Direction considered | Decision | Reasoning |
-|-----------|----------------------|----------|-----------|
-| 1 | Broad travel super-app with maps, weather, booking, price tracking, profile constraints, and provider dashboards | Rejected | Too large for the available prototype window and diluted the core group-coordination problem |
-| 2 | Profile-heavy planner with sensitive per-member constraints | Narrowed | Medical, severe allergy, disability, and religious-profile handling requires a higher privacy and safety bar than this MVP should claim |
-| 3 | Chat-first autonomous planning bot | Rejected | Direct chat mutation would make state ambiguous and harder to audit |
-| 4 | Focused web setup plus Telegram coordination | Accepted | Keeps the web app simple, uses Telegram where groups already coordinate, and makes confirmation explicit |
-
-## Scope lock
-
-The following website features are deliberately **aborted**. Do not build, extend, demo, or describe them as active functionality:
-
-- Per-member profile editor and website consent-control interface.
-- MBTI-style travel discovery quiz.
-- Niche-place discovery feed and destination-comparison interface.
-- Dedicated website weather and Plan B explanation/approval screen.
-- Provider-health or provider-status page.
-
-The existing local prototype contains People and provider-status demonstration UI from an earlier direction. It is not part of this plan's target experience and must be removed from the visible MVP in Phase 0.
-
-Trip-level inputs that remain in scope are destination, dates, budget tier, travel load/pace, group notes, and optional ordinary group preferences. Do not collect or persist medical, disability, severe-allergy, or individual religious-profile data in this narrowed MVP. Telegram may collect ordinary trip preferences only after explicit confirmation.
-
-## Gemini safety contract
-
-- Store `GEMINI_API_KEY` only in server-side environment configuration. Never use `NEXT_PUBLIC_GEMINI_API_KEY`.
-- Configure `GEMINI_MODEL` server-side; default to a stable Flash model available to the project, initially `gemini-3.7-flash`.
-- Use the official `@google/genai` SDK and structured JSON output, then validate the received JSON with Zod.
-- Send Gemini the minimum necessary trip-level input. Do not send raw Telegram history or sensitive personal data.
-- Gemini proposes activities, ordering, explanations, and alternatives. It cannot mutate Supabase data, bypass RLS, finalize bookings, spend money, or activate a trip plan.
-- Backend validation must approve every generated item before it is saved or displayed as approved.
-- Gemini API failures, invalid JSON, schema mismatch, timeouts, and rate limits must leave the current approved itinerary unchanged.
-
-## Product flow
+The system removes the guilt of avoiding conflict by escalating through four levels rather than
+falling back on majority rule. Each level is only reached when the one above it cannot hold.
 
 ```text
-Website: destination + dates + budget + pace
-                    │
-                    ▼
-          authenticated server route
-                    │
-                    ▼
-          Gemini structured proposal
-                    │
-                    ▼
-       Zod + deterministic validation
-                    │
-          ┌─────────┴─────────┐
-          ▼                   ▼
-   pending proposal      validation errors
-          │
-          ▼
-website review or Telegram inline confirmation
-          │
-          ▼
-Supabase transaction activates itinerary
+Level 0: Pre-trip timeline jigsaw co-creation --> turn compromise into a drag game
+   |  (intention divergence appears in group chat)
+Level 1: Pareto optimal substitution ----------> everyone still travels together
+   |  (preferences or energy levels diverge)
+Level 2: Co-located micro-zone split ----------> same 300 m area, tailored experiences
+   |  (itineraries are entirely mutually exclusive)
+Level 3: Strategic split & merge --------------> split with tasks, merge at a ritual anchor
 ```
 
-## User journey map
+### The four-step bargaining pipeline (Level 0)
 
-| Stage | User action | System response | Success signal |
-|-------|-------------|-----------------|----------------|
-| Discover | Planner opens the web app | Shows focused setup form for destination, dates, budget, pace, and notes | Planner knows what input is required |
-| Generate | Planner requests a plan | Server sends trip-level context to Gemini and validates the structured response | Pending proposal appears with assumptions and explanations |
-| Decide | Planner reviews proposal | Web app allows confirm or reject; Telegram can show confirmation prompts later | Approved itinerary becomes the active plan only after confirmation |
-| Coordinate | Group members use Telegram | Bot answers `/plan`, `/route`, and `/status` from persisted trip data | Members see the same source of truth |
-| Adapt | Group splits or merges mid-trip | Bot creates confirmation-first split/merge flows with deterministic ETA guidance | The group can separate and regroup without losing the plan |
-| Close | Group logs expense and requests offline summary | Ledger records confirmed expense; offline summary exports itinerary | Group has cost clarity and a lightweight backup |
+When three or more members drag their preferred blocks, the system runs this pipeline instead of a
+crude vote. It is implemented in `lib/domain/jigsaw.ts` and re-runs on every drag.
 
-## System architecture diagram
+| Step | Algorithmic logic | UI feedback |
+| --- | --- | --- |
+| **1. Rigid anchor locking** | Blocks at weight >= 9 with a fixed time freeze as immovable red anchors. Everything else may only fill the idle windows between them. | Red lock icons with a magnetic force field; other blocks avoid them automatically. |
+| **2. Pareto frontier filling** | Multi-objective knapsack over the idle windows. Maximise total team satisfaction under a hard floor: no member drops below 70% of their own best case, so nobody is merely accompanying the group. | Generates high-consensus drafts for one-click team voting. |
+| **3. Round-robin veto** | A wish wheel. In contribution order, each member forcibly places one block per turn. What never fits collects in the unaccommodated wish pool. | Side panel of unplaced gems, offered as Level 2 micro-zone split targets. |
+| **4. Explicit split cut** | If satisfaction spread exceeds the threshold, or the fairness floor cannot be met, the day splits into two trajectories that reconverge at the dinner anchor within 10 minutes. | A scissors line on the timeline; the map draws bifurcated routes and the chat opens a pre-poll. |
+
+**Minimax regret is the objective.** Each member's regret is their own best achievable score at the
+same schedule size minus what the current schedule gives them. The pipeline minimises the maximum
+regret across members, which is what makes the outcome comparable between people with very
+different tastes rather than just summing scores and letting a majority win.
+
+## III. Deep-dive: Module 5 — serendipity & dynamic exploration engine
+
+Recommendation engines frequently fall into the **algorithmic echo chamber**: if a user tags "coffee and modern art," they get trapped in identical cafes and galleries. WanderSync treats exploration as a core algorithmic primitive.
+
+1. **The ε-greedy travel recommender**
+   - **Exploitation (1 − ε, ~80%):** aligns tightly with confirmed group preferences, dietary rules, and budget limits.
+   - **Exploration (ε, ~20%):** injects high-variance, off-the-beaten-path POIs — traditional batik workshops, hidden residential food courts, obscure architectural anomalies — that contrast with the dominant profile **without violating any dietary or mobility constraint**. Exploration items pass the same [hard-constraint gate](#vii-hard-constraint-gate) as exploitation items. Serendipity is a relaxation of *taste*, never of *safety*.
+
+2. **"Switch It Up" alternate modes** — one click in the workspace requests instant alternatives:
+   - **Safe Track:** the crowd-pleasing, highly verified route.
+   - **Local Track:** where residents actually go; avoids international tourist density.
+   - **Wildcard Track:** an entirely different theme (retail mall → urban greenway plus antique night market).
+
+3. **Contextual in-situ suggestions ("spontaneous detours")** — while the group walks a planned path, the system watches hyper-local opportunities: *"You have a 30-minute buffer before your dinner reservation. An 80-year-old traditional tea shop is 120 m down this alley — detour?"* One tap to accept or dismiss; accepting recalculates the remaining waypoints through the Phase 4 solver and re-verifies the anchor arrival.
+
+## IV. End-to-end system architecture
 
 ```text
-┌─────────────────────┐       ┌────────────────────────┐
-│ Next.js web app      │       │ Telegram chat           │
-│ Trip setup/review    │       │ /plan /route /status    │
-└──────────┬──────────┘       └───────────┬────────────┘
-           │                              │
-           ▼                              ▼
-┌──────────────────────────────────────────────────────┐
-│ Next.js server routes and actions                    │
-│ Auth, proposal generation, confirmation, webhook     │
-└──────────┬───────────────────────┬───────────────────┘
-           │                       │
-           ▼                       ▼
-┌─────────────────────┐       ┌────────────────────────┐
-│ Gemini provider      │       │ Supabase               │
-│ Structured JSON only │       │ Postgres, Auth, RLS     │
-└─────────────────────┘       └────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────┐
+│                      Client interaction layer                          │
+│   Collaborative workspace  (Next.js route, React 19)                   │
+│   - Top 60%: Mapbox 3D spatial map, 60 deg tilt, split/merge routes     │
+│   - Bottom 40%: realtime chatroom, AI assistant, action sheet           │
+│   - Pre-trip mode: full-screen timeline jigsaw (drag bargaining)        │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ HTTPS + Supabase Realtime (WSS)
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│              Next.js application  (gateway + orchestrator)             │
+│   - Supabase SSR auth, RLS-scoped data access                          │
+│   - Session state machine & multi-source context ingestion             │
+│   - LLM intent extraction, VQA, narration  (Gemini, server-only)       │
+│   - Hard-constraint gate  (deterministic, Section VII)                 │
+│   - Job queue + callbacks  (Redis)                                     │
+└───────┬───────────────────────────────────────────────┬────────────────┘
+        │ anonymized solve payload / solution           │ reads + writes
+        ▼                                               ▼
+┌───────────────────────────────────┐   ┌───────────────────────────────────┐
+│  Python optimization service      │   │  Supabase                         │
+│  (FastAPI, stateless, no creds)   │   │  Postgres + PostGIS + pgvector    │
+│  - m-VRPTW solver (OR-Tools)      │   │  Auth, RLS                        │
+│  - Multi-objective Knapsack       │   ├───────────────────────────────────┤
+│  - Clustering (K-Means / GMM)     │   │  Redis                            │
+│  - SunCalc astronomical engine    │   │  ephemeral group location,        │
+│  - DAG itinerary retopology       │   │  session state, locks, job queue  │
+└───────────────────────────────────┘   └───────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────┐
+│  External providers, called ONLY by Next.js:                           │
+│  Mapbox · Google Routes & Transit · OpenWeatherMap · social fetchers    │
+└────────────────────────────────────────────────────────────────────────┘
 
 Control boundary:
-Gemini drafts proposals. Server validation and Supabase policies decide what is saved, visible, and active.
+Gemini drafts and enriches. The Python service computes feasibility and optima.
+Next.js validation + Supabase policies decide what is saved, shown, and active.
+Humans confirm every state change.
 ```
 
-## Concept mindmap
+## V. Service boundary (Next.js ↔ Python optimization service)
+
+**Next.js owns**
+
+- All authentication, session handling, and RLS-scoped reads/writes. Supabase credentials live only here.
+- The collaborative workspace: realtime chat, presence, the embedded assistant, and the flashcard timeline, all served as Next.js routes.
+- All Gemini calls: intent extraction, "Switch It Up" narration, orientation cues, VQA, detour copy.
+- The **hard-constraint gate**: no itinerary item is persisted or shown as approved until it passes.
+- Orchestration: builds solve payloads, enqueues jobs, applies solutions, pushes confirmations.
+- All external-provider calls (Mapbox, Google Routes/Transit, OpenWeatherMap, social fetchers).
+
+**Python optimization service owns**
+
+| Endpoint | Responsibility |
+| --- | --- |
+| `POST /solve/schedule` | Multi-objective Knapsack over candidate activities with total / daily / per-meal caps; returns selected set + slack per cap. |
+| `POST /solve/cluster` | K-Means / GMM over interest vectors + budget capacity; returns branch assignments. |
+| `POST /solve/route` | m-VRPTW with time windows, sub-branches, and a consensus anchor; returns ordered waypoints + arrival times per branch. |
+| `POST /solve/sun` | SunCalc azimuth/elevation for coordinates + date; returns golden- and blue-hour windows. |
+| `POST /solve/reoptimize` | Partial DAG retopology given a trigger and a locked set; returns a minimal diff. |
+| `GET /healthz` | Liveness. |
+
+**Contract rules**
+
+- The service is **stateless and pure**: no database, no Redis, no outbound HTTP, no clock-dependent behavior except values passed in the payload. A CI check enforces the absent dependencies.
+- Auth is a single shared secret (`OPT_SERVICE_TOKEN`) in an `Authorization` header, plus network isolation in production.
+- Payloads are **anonymized**: travelers are opaque handles (`t1`…`tn`); dietary constraints arrive as enum flags (`halal`, `no_peanut`, …), never free text or names; POIs are ids + coordinates + cost tier + tags.
+- Every request and response is Zod-validated on the Next.js side and Pydantic-validated on the Python side against a shared `schema_version`. Version mismatch is a hard error, never a silent coercion.
+- Solvers are deterministic under a supplied seed, so a solution can be reproduced in a test from the persisted payload.
+- Solver failure, timeout, or infeasibility returns a typed error; Next.js leaves the current active itinerary unchanged and surfaces a clear message.
+
+## VI. Persistence model
+
+New tables extend the existing `trips` / `trip_members` / itinerary schema. All are trip-scoped with RLS mirroring the current policies (`can_view_trip`, `can_manage_trip`, owner-only activation). Requires the `postgis` and `vector` extensions.
+
+- `traveler_profiles` — per member: `interest_vector vector(64)` (pgvector), `budget_daily_cap numeric`, `budget_total_cap numeric`, `pace`, `mobility_threshold_m int`. **No free-text medical data.**
+- `trip_constraints` — hard constraints as typed rows: `kind` (`dietary` | `religious_access` | `mobility`), `flag` (enum), `severity` (`severe` | `standard`), `source` (`chat` | `voice` | `social` | `manual`), `confirmed_by`, `confirmed_at`. Nothing is enforced until `confirmed_at` is set.
+- `poi_catalog` — cached POIs: `geog geography(Point,4326)` (PostGIS), `cost_tier`, `tags text[]`, `halal_status` (`verified` | `claimed` | `unknown` | `no`), `allergen_risk text[]`, `indoor bool`, `dress_code` enum, `tourist_density` enum.
+- `itinerary_dag` — nodes (activities, transits) + edges with time windows; `locked bool` for visited or fixed-reservation nodes; supports partial re-optimization.
+- `subgroups`, `subgroup_members`, `split_sessions` — branch assignments, rendezvous point (`geog`), convergence time.
+- `mobility_options` — computed Fastest / Budget / Scenic legs with cost, duration, and `weather_sensitive bool`.
+- `expenses`, `expense_shares` — receipt-OCR ledger; deterministic split; append-only with reversing entries.
+- `packing_items` — checklist rows with `reason` (`weather` | `dress_code` | `medical` | `shared`) and `claimed_by`.
+- `chat_messages` — append-only trip chat: `author_member_id`, `author_kind` (`member` | `assistant` | `system`), `body`, optional `proposal_id` referencing `agent_proposals`, `status`. Broadcast over `trip:{trip_id}`, but visibility enforced by RLS, never by the channel name.
+- `serendipity_log` — surfaced exploration POIs plus accept/dismiss outcome, feeding the diversity and dedupe guardrail.
+- `heal_events` — trigger, diff applied, confirmation state.
+- Redis keys (ephemeral, TTL'd): `trip:{id}:loc:{member}` live location, `trip:{id}:session` state-machine cursor, `trip:{id}:lock` re-optimization mutex.
+- Supabase Realtime presence (ephemeral, never persisted): who is viewing the trip, and typing indicators.
+
+## VII. Hard-constraint gate
+
+A single deterministic function every candidate item — from Gemini, from a solver, from a detour — must pass before it is stored or displayed as approved. It is **never** delegated to an LLM.
+
+| Constraint | Rule |
+| --- | --- |
+| **Dietary** | If an allergen flag is a confirmed trip constraint, any food POI listing that allergen in `allergen_risk` is rejected. `unknown` allergen data on a food POI is **fail** for `severe` flags, **warn** otherwise. |
+| **Halal** | If `halal` is confirmed, food POIs must have `halal_status = verified`. `claimed` is warn-with-confirmation; `unknown` and `no` fail. |
+| **Religious access / dress code** | A POI with a `dress_code` requirement generates a mandatory packing item and a pre-visit reminder. It is never silently scheduled. |
+| **Budget** | The selected set's cost must not exceed total / daily / per-meal caps for **any** affected traveler, including per-branch caps after a split. Cost tiers are estimates; the gate uses the conservative upper bound of the tier. |
+| **Mobility** | Legs exceeding a member's `mobility_threshold_m` are rejected or flagged by severity. |
+| **Time** | No overlap, no midnight crossing, and arrival at the consensus anchor no later than the convergence time. |
+
+Gate output is `pass` | `warn` (needs explicit human confirmation) | `fail` (never shown as approved). Every `warn` and `fail` is logged with a machine-readable reason for audit.
+
+## VIII. Complete execution lifecycle
 
 ```text
-Travel coordination MVP
-├─ Web setup
-│  ├─ Destination
-│  ├─ Dates
-│  ├─ Budget tier
-│  ├─ Pace
-│  └─ Group notes
-├─ AI proposal
-│  ├─ Gemini structured output
-│  ├─ Assumptions
-│  ├─ Activity rationale
-│  └─ Contingency notes
-├─ Safety contract
-│  ├─ Server-only API key
-│  ├─ Zod schemas
-│  ├─ Deterministic validation
-│  ├─ Pending state
-│  └─ Explicit confirmation
-├─ Telegram coordination
-│  ├─ Read-only commands
-│  ├─ Preference confirmation
-│  ├─ Split flow
-│  └─ Merge flow
-└─ Trip utilities
-   ├─ Shared expense ledger
-   └─ Offline summary
+[Group-chat setup]
+Amira (Halal, budget-flexible) · Ben (peanut allergy, RM150/day) ·
+Chloe (photography) · Danish (heritage, student RM150/day)
+       │
+       ▼
+[Constraint & budget ingestion]  — Modules 1, 2
+- LLM extracts hard constraints from chat + voice: halal=true, no_peanut=true (severe).
+- Each is shown back for one-tap confirmation before it is enforced.
+- Knapsack ceiling set: average spend per person ≤ RM150/day; per-meal cap derived.
+- Packing list: mosque modesty alert + offline bilingual peanut-allergy card.
+       │
+       ▼
+[Itinerary formulation + serendipity dial]  — Module 4
+- Safe vs. Wildcard offered; the group picks a 20% serendipity blend.
+- Schedule solver returns landmarks plus one hidden artisan alley; the gate clears every item.
+       │
+       ▼
+[Mid-day split & merge]  — Modules 5, 8
+- 14:00–17:30 split window:
+  · Branch 1 (Amira + Chloe): 3D-guided to a high viewpoint; SunCalc targets 17:10 golden hour.
+  · Branch 2 (Ben + Danish): colonial heritage district; student concession pricing applied.
+- 18:00 anchor: both branches converge at a verified-Halal, nut-free restaurant (RM35 pp).
+       │
+       ▼
+[Dynamic in-trip self-healing]  — Modules 9, 6
+- 16:15: weather radar shows 85% thunderstorm probability.
+- Partial DAG retopology: outdoor photo leg → sheltered historic arcade 200 m away.
+- Rideshare evaluator: one 4-seat ride-hail at RM14 total beats four transit fares, and stays dry.
+- Healed plan is pushed to the group; the original stays active until confirmed.
+       │
+       ▼
+[On-site multimodal interaction]  — Modules 10, 2
+- Dinner: Ben photographs an unfamiliar dessert. VQA flags crushed-peanut garnish → urgent alert.
+- Bill: Amira uploads the receipt. OCR + deterministic split update the ledger, zero manual math.
 ```
 
-## Wireframes
+## Architectural moats
 
-These wireframes define the MVP design target. Final visual styling should follow the existing app structure in `components/trip-setup-dashboard.tsx` and `app/globals.css`: calm dashboard layout, compact controls, clear state labels, and no profile/provider/weather surfaces.
+1. **Closed-loop adaptation over static agendas.** Traditional apps produce read-only itineraries. This system runs a continuous feedback loop that actively recovers from weather spikes, budget overruns, and impromptu detours.
+2. **Mathematical coordination over majority compromise.** Modeling group dynamics as clustered multi-vehicle routing with time windows preserves individual agency without fragmenting the shared journey.
+3. **Intuitive spatial immersion over abstract 2D lines.** 3D extruded urban canvases, salient visual landmarks, and exact ground-level camera placements replace confusing map dots with human-scale navigation.
+4. **Controlled serendipity over algorithmic echo chambers.** The dual exploration–exploitation model hits the must-see items while continuously surfacing unscripted, authentic experiences — always inside the safety gate.
 
-Frontend design must not use emoji as interface decoration, status markers, icons, or visual emphasis. Use text labels, layout, color, and proper icon components instead.
+---
 
-### 1. Trip setup screen
+## Delivered foundation (do not rebuild)
+
+Phase 0/1 of the earlier plan is implemented on `main` and is the baseline WanderSync builds on. Extend it; do not re-implement it.
+
+- Magic-link Supabase auth, SSR sessions, protected routes, `middleware.ts`.
+- Authenticated trip repository (`lib/repositories/supabase-trip-repository.ts`) with RLS-enforced isolation, revision checks, and per-user/per-trip rate limits.
+- Gemini structured-proposal contract (`lib/gemini/*`), Zod schemas, deterministic schedule validation, pending-proposal persistence, owner-only confirm/reject with atomic activation.
+- Proposal-review UI (`components/gemini-proposal-review.tsx`).
+- Local test suite: Vitest + PGlite (real SQL and RLS execution), Playwright component tests. See `docs/testing/phase-0-1.md`.
+- Retirement migration `202609050001_retire_telegram_surface.sql` drops `trip_members.telegram_user_id` and narrows the retired `constraints.source` domain.
+
+**Open baseline items, carried forward (close before Phase 1 exit):**
+
+- [ ] Hosted end-to-end verification of create → generate → confirm → reload against a disposable Supabase project (`docs/testing/phase-0-1.md`, Live Service Gate).
+- [ ] Full multi-role HTTP RLS matrix from `tests/database/live-rls.md`.
+- [ ] Abandon `origin/codex/phase-0-1`. Its only unmerged content is the retired Telegram link-token/webhook work; delete the branch rather than merging it. Its mock-account e2e harness may be cherry-picked if still useful.
+- [ ] Add GitHub Actions CI (`.github/workflows/ci.yml`) running the full [verification standard](#verification-standard) for both the Node app and the Python service.
+- [ ] Remove the stray untracked `web/` scaffold. Keep or drop the uncommitted `@supabase/phoenix` dependency deliberately — `@supabase/realtime-js` already ships transitively with `@supabase/supabase-js`, so a direct dependency is only warranted if Task 3.1 needs to pin it.
+
+**Scope changes vs. the earlier plan:** the retired "scope lock" and the non-goals covering per-member profiles, allergen and dietary data, weather/Plan-B logic, and split/merge are **lifted**. Handling requirements for that data now live in [Section IX](#ix-data-privacy--safety-appendix). The MBTI quiz, the provider-status dashboard, and autonomous booking/payments remain out of scope — see [Explicit non-goals](#explicit-non-goals).
+
+---
+
+## Phase 1 — Intent & hard-constraint extraction (Module 1)
+
+**Priority: highest.** Every downstream optimization depends on a correct, confirmed constraint set, and the dietary and religious constraints are safety-critical. Nothing else should start before the gate exists.
+
+### Task 1.1: Constraint & profile schema
+
+**Files:** create `supabase/migrations/2026090X0001_traveler_profiles_constraints.sql`, `lib/domain/constraints.ts`, `tests/domain/constraints.test.ts`, `tests/database/constraints-rls.test.ts`. Enable the `postgis` and `vector` extensions.
+
+- [ ] Add `traveler_profiles`, `trip_constraints`, and `poi_catalog` with trip-scoped RLS matching the existing policies.
+- [ ] `trip_constraints` rows are inert until `confirmed_at` is set; enforcement reads go through a view that filters `confirmed_at is not null`.
+- [ ] Typed enums for `dietary` / `religious_access` / `mobility` flags and for `severity`; reject free text in flag columns at the database level.
+- [ ] Contract and PGlite RLS tests: owner/planner write, member read, unrelated denial, unconfirmed rows excluded from the enforcement view.
+- [ ] Run lint, test, build.
+
+### Task 1.2: Multi-source context ingestion
+
+**Files:** create `lib/ingestion/{chat,voice,social}.ts`, `lib/ingestion/extract.ts`, `app/api/trips/[tripId]/ingest/route.ts`, `tests/ingestion/*.test.ts`.
+
+- [ ] Chat: read the trip's own `chat_messages` history, and accept pasted text from an outside group chat.
+- [ ] Voice: accept audio, transcribe via Gemini, feed the text to the extractor.
+- [ ] Social: fetch Instagram / TikTok / Xiaohongshu URLs through a pluggable fetcher interface with per-host adapters. **Caption and oEmbed text only**; respect robots and rate limits; no login-walled scraping. Store only derived interest tags, never raw third-party content.
+- [ ] `extract.ts`: one Gemini call → structured JSON (`interestTags[]`, `candidateConstraints[]` with `kind` / `flag` / `severity` / `evidence`) → Zod. A deterministic post-filter maps evidence phrases to enum flags; anything unmapped becomes a manual review item and is never auto-enforced.
+- [ ] Fake-client tests: valid extraction, malformed JSON, ambiguous evidence, and prompt injection inside ingested text (must not create a constraint or exfiltrate trip data).
+- [ ] Rate-limit ingestion per user and per trip.
+
+### Task 1.3: Confirmation & interest-vector build
+
+**Files:** create `components/constraint-review.tsx`, `lib/domain/interest-vector.ts`, `app/actions/constraints.ts`, `tests/components/constraint-review.test.tsx`, `tests/domain/interest-vector.test.ts`.
+
+- [ ] UI lists each candidate constraint with its evidence and a one-tap Confirm / Edit / Reject. Nothing is enforced until an authorized member confirms.
+- [ ] `severe` flags require confirmation from the affected member, or from the owner acting on their behalf with the actor logged.
+- [ ] Deterministic embedding of confirmed interest tags into `interest_vector` via a fixed tag→dimension map. No LLM in the write path.
+- [ ] Tests: confirm enforces, reject discards, edit re-maps, unauthorized actor denied, severe flag cannot be confirmed by an unrelated member.
+
+### Task 1.4: Hard-constraint gate
+
+**Files:** create `lib/domain/constraint-gate.ts`, `tests/domain/constraint-gate.test.ts`. Modify `lib/domain/gemini-proposal-validation.ts`.
+
+- [ ] Implement the gate exactly as [Section VII](#vii-hard-constraint-gate): `pass` | `warn` | `fail` with a machine-readable reason.
+- [ ] `unknown` allergen or halal data fails closed for `severe` flags and warns otherwise.
+- [ ] Pure function over `(item, confirmedConstraints, travelerCaps)`; no I/O, no clock reads.
+- [ ] Exhaustive table tests for dietary, halal, dress code, budget upper bound, mobility, and time.
+- [ ] Wire the gate into the existing proposal-validation path so today's Gemini proposals also pass through it.
+
+**Phase 1 exit criteria:** ingested chat, voice, and social input produce candidate constraints; only human-confirmed constraints are enforced; the gate rejects a peanut-risk food POI and an unverified-halal POI in an automated test; the open baseline items above are closed.
+
+---
+
+## Phase 2 — Optimization service boundary & budget scheduling (Module 2)
+
+**Priority: high.** Introduces the Python service and the first real optimization. Every later phase reuses this boundary, so the contract must be right here.
+
+### Task 2.1: Stand up the Python optimization service
+
+**Files:** create `services/optimizer/` (`pyproject.toml`, `app/main.py`, `app/schemas.py`, `app/solvers/`, `tests/`), `services/optimizer/Dockerfile`, `services/optimizer/README.md`. Modify `.env.example`; create `docker-compose.yml`.
+
+- [ ] FastAPI app with `GET /healthz` and shared-secret auth middleware (`OPT_SERVICE_TOKEN`); reject a missing or wrong token with 401.
+- [ ] Pydantic request/response models carrying `schema_version`; respond 409 on mismatch.
+- [ ] Enforce statelessness: no database driver, no Redis client, and no outbound HTTP in the dependency graph. Add a CI check that fails if one appears.
+- [ ] `pytest`, `ruff`, and `mypy` green with a coverage gate.
+- [ ] `docker-compose` brings up Next.js, the optimizer, and Redis together for local development.
+
+### Task 2.2: Next.js → optimizer client
+
+**Files:** create `lib/optimizer/client.ts`, `lib/optimizer/payloads.ts`, `lib/optimizer/errors.ts`, `tests/optimizer/client.test.ts`.
+
+- [ ] Typed client with Zod validation in both directions and a hard timeout.
+- [ ] `payloads.ts` builds **anonymized** payloads (opaque traveler handles, enum flags, POI ids only). Unit-test that a payload contains no names, emails, or free text.
+- [ ] Map solver failure, timeout, and infeasibility to a stable `OptimizerError`; callers leave active state untouched.
+- [ ] Fake-server tests for success, 5xx, timeout, infeasible, and schema mismatch.
+
+### Task 2.3: Multi-objective Knapsack scheduler
+
+**Files:** create `services/optimizer/app/solvers/schedule.py`, `services/optimizer/tests/test_schedule.py`, `app/api/trips/[tripId]/schedule/route.ts`, `tests/api/schedule.test.ts`.
+
+- [ ] OR-Tools model maximizing aggregated interest-match utility subject to total, daily, and per-meal cost caps, with a paid/free balance term so free local gems are not crowded out.
+- [ ] Return the selected activity set plus remaining slack per cap; deterministic under a supplied seed.
+- [ ] Python tests: caps respected, infeasible when caps are too tight, free-gem substitution when a paid option is dropped, stable output under a fixed seed.
+- [ ] Next.js route: authorized actor → build payload → solve → run every returned item through the [gate](#vii-hard-constraint-gate) → persist as a **pending** proposal. Never auto-activate.
+
+### Task 2.4: Receipt-OCR expense ledger
+
+**Files:** create `supabase/migrations/2026090X0002_expense_ledger.sql`, `lib/domain/ledger.ts`, `lib/ocr/receipt.ts`, `app/api/trips/[tripId]/expenses/route.ts`, `tests/domain/ledger.test.ts`, `tests/ocr/receipt.test.ts`.
+
+- [ ] `expenses` and `expense_shares` with RLS; append-only with reversing entries rather than destructive edits.
+- [ ] Gemini VQA extracts line items and total from a receipt image → Zod; the uploader confirms before it posts.
+- [ ] Deterministic split math in `ledger.ts` (equal, weighted, subgroup-only). **No LLM in the arithmetic path**; rounding reconciled to the cent.
+- [ ] Tests: equal-split rounding, subgroup-only cost, duplicate submission idempotency, unauthorized creation denied, balance correct after a reversal.
+
+**Phase 2 exit criteria:** the optimizer runs under `docker-compose`; a budget-bounded schedule solve returns a gate-clean pending proposal for the reference trip; a receipt produces a correct ledger split with no manual arithmetic.
+
+---
+
+## Phase 3 — Collaborative workspace: realtime chat & flashcard timeline (client layer)
+
+**Priority: high.** This is the product's only interface. Every later module surfaces through it, so
+the realtime, authorization, and confirmation primitives established here are reused everywhere.
+
+The workspace lives at `/trips/[tripId]/workspace` as a dual-layer contextual surface: the **top
+60%** is the Mapbox 3D spatial map, the **bottom 40%** is the realtime chatroom and action sheet.
+Pre-trip mode replaces the whole surface with the full-screen **timeline jigsaw**, because drag
+bargaining needs the horizontal room. See `docs/features/collaborative-workspace.md`.
+
+### Task 3.0: Level 0 bargaining engine and jigsaw panel — DELIVERED
+
+**Files:** `lib/domain/jigsaw.ts`, `lib/domain/debt-simplify.ts`, `features/timeline/jigsaw-panel.tsx`,
+`features/workspace/workspace-shell.tsx`, `app/globals.css`, `tests/domain/jigsaw.test.ts`,
+`tests/domain/debt-simplify.test.ts`, `tests/components/jigsaw-panel.test.tsx`.
+
+- [x] Pure four-step pipeline: `partitionAnchors`, `paretoFill`, `roundRobinVeto`, `shouldSplitCut`.
+- [x] Minimax regret via `evaluateTeam`, measuring each member against their own best case.
+- [x] 30-minute grid with `snapToGrid`, elastic anchor magnetism via `magneticSnap`, and
+      `detectConflicts` / `trilemmaOptions` for the shorten/replace/split banner.
+- [x] Block geometry and texture (`blockWidthSlots`, `blockTexture`): width proportional to
+      duration, solid green consensus, orange-striped AI fill, blue-dotted personal wish.
+- [x] Exact-integer debt graph simplification (`simplifyDebts`) so a settled trip needs at most
+      n-1 transfers. No floating point, no LLM, in the money path.
+- [x] `JigsawPanel` with pointer drag, keyboard drag, per-member satisfaction meters, conflict
+      banner, split suggestion, and the unaccommodated wish pool.
+- [x] `WorkspaceShell` 60/40 surface with the full-screen jigsaw toggle.
+- [x] 53 tests across the engine and the panel.
+- [ ] Persist drags through a revision-checked server write (folds into Task 3.4).
+- [ ] Multiplayer presence cursors during a drag (folds into Task 3.2).
+
+### Task 3.1: Chat persistence & Realtime transport
+
+**Files:** create `supabase/migrations/2026090X0005_chat_messages.sql`, `lib/chat/repository.ts`,
+`lib/realtime/channel.ts`, `tests/chat/repository.test.ts`, `tests/database/chat-rls.test.ts`.
+
+- [ ] `chat_messages` per `docs/database-structure.md`: append-only, `author_kind` in
+      (`member`, `assistant`, `system`), optional `proposal_id`, trip-scoped RLS.
+- [ ] Subscribe to `trip:{tripId}` via `supabase.channel(...)`. **Visibility is enforced by RLS, not
+      by the channel name** — add a test proving a non-member subscribing to another trip's channel
+      receives no rows.
+- [ ] Reconnect and backfill: on resubscribe, fetch messages newer than the last seen id so a dropped
+      socket cannot silently lose messages. Fall back to polling when the socket will not connect.
+- [ ] Tests: append-only enforcement, non-member denied read and write, backfill after gap, ordering
+      stable under concurrent inserts.
+
+### Task 3.2: Chat UI with presence and avatars
+
+**Files:** create `features/chat/` (`chat-pane.tsx`, `message-list.tsx`, `message-item.tsx`,
+`composer.tsx`, `presence-bar.tsx`, `use-trip-channel.ts`), `tests/components/chat/*.test.tsx`.
+
+- [ ] Render each message with the author's avatar, display name, and timestamp; group consecutive
+      messages from one author. Assistant and system turns are visually distinct from member turns.
+- [ ] Presence bar shows who is currently viewing the trip, from the channel presence payload.
+      Typing indicators are ephemeral presence state and are never persisted.
+- [ ] Optimistic send with a pending state; a failed write surfaces a retry rather than dropping text.
+- [ ] Accessible: keyboard-navigable, live region for incoming messages, focus retained on send.
+- [ ] Style with the existing `app/globals.css` tokens and `lucide-react` icons. No emoji as
+      interface chrome, per the standing frontend rule.
+- [ ] Tests: renders authors and avatars, presence join/leave, optimistic send and failure retry,
+      assistant turn styling, no cross-trip message leakage in props.
+
+### Task 3.3: Embedded AI assistant
+
+**Files:** create `lib/chat/assistant.ts`, `app/api/trips/[tripId]/chat/assistant/route.ts`,
+`features/chat/assistant-proposal-card.tsx`, `tests/chat/assistant.test.ts`.
+
+- [ ] The assistant answers only when addressed — an `@ai` mention or the assistant composer — never
+      on every message.
+- [ ] Context is the trip record plus a **bounded** recent-message window. Never send another trip's
+      history. Reuse the existing `lib/gemini` client and Zod validation rather than a new path.
+- [ ] The assistant **cannot mutate state**. When it suggests an itinerary change it writes an
+      `agent_proposals` row and posts a message referencing it via `proposal_id`; the message renders
+      as an inline proposal card that an authorized member accepts or dismisses.
+- [ ] Chat text is untrusted input: test that an injected instruction in a member message cannot make
+      the assistant activate a plan, leak another trip, or bypass the constraint gate.
+- [ ] Rate-limit assistant invocations per user and per trip.
+- [ ] Tests: responds only when addressed, proposal card round-trip, accept requires authorization,
+      provider failure leaves the active itinerary unchanged.
+
+### Task 3.4: Persist and synchronise jigsaw drags
+
+**Files:** create `features/timeline/` (`timeline-pane.tsx`, `day-column.tsx`, `activity-card.tsx`,
+`use-drag-commit.ts`), `app/api/trips/[tripId]/itinerary/reorder/route.ts`,
+`tests/components/timeline/*.test.tsx`, `tests/api/itinerary-reorder.test.ts`.
+
+- [ ] Extend the delivered `JigsawPanel` to multi-day: flashcards grouped by day, dragging across
+      days as well as within one.
+- [ ] Drop applies an optimistic local update, then a server-validated write. **Every reorder is
+      revalidated** by the existing deterministic schedule rules and the Phase 1 constraint gate
+      before persistence; a refusal rolls the card back and shows the reason on the card.
+- [ ] Card states are visually distinct: active, pending proposal, AI-suggested, conflicted.
+- [ ] Writes carry the trip revision. A stale revision loses and the client refetches, so two members
+      dragging at once cannot silently clobber each other.
+- [ ] Remote reorders from other members animate into place over the same `trip:{tripId}` channel,
+      with multiplayer presence cursors so asynchronous negotiation is visible. Target: all
+      members see a resolved conflict within 500 ms.
+- [ ] Tests: reorder within a day, move across days, rejected drop rolls back with a reason,
+      stale-revision write is refused, overlap and midnight-crossing refused, keyboard drag works.
+
+### Task 3.5: Workspace shell & confirmation primitive
+
+**Files:** create `app/trips/[tripId]/workspace/page.tsx`, `features/workspace/workspace-shell.tsx`,
+`lib/domain/confirm.ts`, `tests/components/workspace-shell.test.tsx`, `tests/domain/confirm.test.ts`.
+
+- [ ] Dual-pane layout with a responsive tab collapse below the tablet breakpoint.
+- [ ] One reusable confirmation primitive: propose → render a confirm affordance → single-use token →
+      authorized-actor check → apply → acknowledge. Every later mutating flow (split/merge, expense,
+      detour, self-heal, track switch) uses this instead of rolling its own.
+- [ ] Tests: replay, expiry, wrong actor, double-accept, and responsive collapse.
+
+**Phase 3 exit criteria:** two signed-in members of the same trip see each other's messages and
+presence live; the assistant answers an `@ai` question and posts a proposal card that only an
+authorized member can accept; dragging a card between days persists for both members and is refused
+with a visible reason when it breaks a schedule or constraint rule.
+
+---
+
+## Phase 4 — Group routing, split & merge, mobility (Modules 5 & 6)
+
+### Task 4.1: Traveler clustering
+
+**Files:** create `services/optimizer/app/solvers/cluster.py`, `services/optimizer/tests/test_cluster.py`, `app/api/trips/[tripId]/subgroups/suggest/route.ts`, `tests/api/subgroups.test.ts`.
+
+- [ ] K-Means / GMM over `interest_vector` plus normalized budget capacity; configurable branch count (2–3).
+- [ ] Deterministic under a seed. Return the assignment plus per-branch feature weights; the human-readable rationale is generated in Next.js, not the solver.
+- [ ] Tests: separable interests cluster cleanly, an all-similar group falls back to a single branch, a budget outlier is not isolated alone unless interests also diverge.
+
+### Task 4.2: m-VRPTW routing with a consensus anchor
+
+**Files:** create `services/optimizer/app/solvers/route.py`, `services/optimizer/tests/test_route.py`, `app/api/trips/[tripId]/route-plan/route.ts`, `tests/api/route-plan.test.ts`.
+
+- [ ] OR-Tools routing: per-branch ordered waypoints, time windows, a travel-time matrix supplied by Next.js from Mapbox/Google Routes, and a shared rendezvous node every branch must reach by the convergence time.
+- [ ] Return arrival times and slack; report infeasible if a branch cannot make the anchor.
+- [ ] Tests: two branches converge on time, a tightened window becomes infeasible rather than silently late, an added stop reflows downstream arrivals.
+
+### Task 4.3: Split / merge flow
+
+**Files:** create `supabase/migrations/2026090X0003_subgroups.sql`, `lib/domain/subgroups.ts`, `lib/domain/merge-recommendation.ts`, `features/workspace/split-merge-panel.tsx`, `tests/domain/{subgroups,merge-recommendation}.test.ts`, `tests/components/split-merge.test.tsx`.
+
+- [ ] `subgroups`, `subgroup_members`, and `split_sessions` with trip-scoped RLS; rendezvous stored as PostGIS `geog`.
+- [ ] The split panel proposes branches from Task 4.1 behind the Task 3.5 confirmation primitive; members may move themselves between branches before confirming. Gemini may suggest branches but must never assign people.
+- [ ] Deterministic ETA guidance bands on merge:
 
 ```text
-┌────────────────────────────────────────────────────────────┐
-│ Trip setup                                                  │
-│ One focused form for the shared trip.                       │
-├──────────────────────────────┬─────────────────────────────┤
-│ Destination                  │ Dates                       │
-│ [ Bangkok               ]    │ [ Sep 12 ] to [ Sep 15 ]    │
-│                              │                             │
-│ Budget tier                  │ Pace                        │
-│ [ Value ▼ ]                  │ [ Relaxed | Balanced | Full ]│
-│                              │                             │
-│ Group notes                                                │
-│ [ food markets, temples, low walking on day one        ]   │
-│                                                            │
-│ [ Generate plan ]                                          │
-└──────────────────────────────┴─────────────────────────────┘
-```
-
-### 2. Proposal generation loading state
-
-```text
-┌────────────────────────────────────────────────────────────┐
-│ Creating proposal                                           │
-├────────────────────────────────────────────────────────────┤
-│ Validating trip dates                                       │
-│ Sending trip-level context to Gemini                        │
-│ Checking returned schedule, budget, and schema              │
-│                                                            │
-│ [ progress indicator ]                                     │
-└────────────────────────────────────────────────────────────┘
-```
-
-### 3. Proposal review screen
-
-```text
-┌────────────────────────────────────────────────────────────┐
-│ Pending itinerary proposal                                  │
-│ Gemini suggested this plan. It is not active yet.           │
-├──────────────────────┬─────────────────────────────────────┤
-│ Day 1                │ Summary                             │
-│ 09:30 Temple visit   │ Balanced culture and food route      │
-│ 12:00 Lunch market   │                                     │
-│ 15:00 Riverside walk │ Assumptions                          │
-│                      │ - Uses value budget tier             │
-│                      │ - Keeps walking moderate             │
-│                      │                                     │
-│                      │ [ Confirm itinerary ] [ Reject ]     │
-└──────────────────────┴─────────────────────────────────────┘
-```
-
-### 4. Telegram chat interaction
-
-```text
-Group chat
-──────────────────────────────────────────────────────────────
-User: /status
-Bot: Bangkok trip, Sep 12-15. Active itinerary confirmed.
-     Next: Temple visit at 09:30. Pending proposals: none.
-
-User: prefer more food stops
-Bot: Add "more food stops" as an ordinary group preference?
-     [ Confirm ] [ Ignore ]
-```
-
-### 5. Split and merge flow
-
-```text
-Group chat
-──────────────────────────────────────────────────────────────
-User: /split Market team: Ana, Jo | Museum team: Lee, Sam
-Bot: Create two subgroups with Central Pier as rendezvous?
-     [ Confirm split ] [ Cancel ]
-
-User: /merge Market team ETA 25
-Bot: ETA difference is 25 minutes.
-     Suggested action: choose a low-commitment nearby pause.
-     [ Mark merged ] [ Keep split active ]
-```
-
-### 6. Offline summary
-
-```text
-┌────────────────────────────────────────────────────────────┐
-│ Offline trip summary                                        │
-├────────────────────────────────────────────────────────────┤
-│ Bangkok, Sep 12-15                                          │
-│ Day-by-day active itinerary                                 │
-│ Rendezvous instructions                                     │
-│ Confirmed subgroup notes                                    │
-│ Expense balance summary                                     │
-│                                                            │
-│ [ Download HTML ]                                           │
-└────────────────────────────────────────────────────────────┘
-```
-
-## Phase 0 — Narrow the prototype and establish persistence
-
-**Implementation status (2026-09-04):** Phase 0 and 1 application code is implemented on `main`. Local unit, component, API, PostgreSQL, browser, and production-build checks are recorded in `docs/testing/phase-0-1.md`. All forward migrations are applied to the authorized disposable Supabase project; a rollback-only database role matrix and a server-only Gemini smoke request passed. Real browser sign-in plus the complete authenticated create/generate/decide/reload workflow remain pending, so neither phase's live exit gate is marked complete. The separate proposed commits below are consolidated into `feat: implement authenticated trip planning and Gemini proposals` at the user's request.
-
-**Contract clarifications:** Each activity includes a `date` for multi-day validation. Trips cover 1-14 days. Owners/planners may edit and generate; only the owner may confirm/reject. Confirmation revalidates the proposal against the current trip revision in a database transaction.
-
-### Task 0.1: Remove aborted prototype surfaces
-
-**Files:** Modify `components/trip-setup-dashboard.tsx`, `features/planning/demo-data.ts`, `app/globals.css`, and related tests.
-
-**Deliverable:** The visible web app contains Trip Setup and Plan views only. It does not show People, consent toggles, provider health, profile-specific copy, or weather/Plan B controls.
-
-- [x] Write a failing state/component test confirming only setup and proposal actions are rendered.
-- [x] Remove the People tab, consent mutation handlers, provider-health block, and profile-specific demo data.
-- [x] Replace profile-driven candidates with non-sensitive trip-level sample activities.
-- [x] Remove profile-specific tests; retain date, budget, pace, schedule, and proposal authorization tests.
-- [x] Run `npm run lint`, `npm test`, and `npm run build`.
-- [ ] Commit: `refactor: narrow trip planner MVP scope`.
-
-### Task 0.2: Connect Supabase and apply migrations
-
-**Files:** Modify `.env.example`; create `lib/supabase/server.ts`, `supabase/migrations/202609030004_narrow_trip_scope.sql`, `tests/database/live-rls.md`, and a migration contract test.
-
-**Deliverable:** A development Supabase project has authenticated trip storage limited to trips, members, itinerary days/items, proposals, and ordinary trip preferences.
-
-- [x] Add server-only `GEMINI_API_KEY` and `GEMINI_MODEL` placeholders to `.env.example`.
-- [x] Add a forward-only migration that prevents the narrowed application from exposing unused sensitive profile data. Do not rewrite committed migrations.
-- [ ] Apply all migrations to a disposable development Supabase project.
-- [ ] Verify owner, planner, member, and unrelated-user access manually; record commands and results without secrets.
-- [x] Add a migration contract test for the new migration, extended with executable PostgreSQL permission and transaction tests.
-- [ ] Commit: `feat: connect narrowed trip schema to Supabase`.
-
-### Task 0.3: Add authentication and authenticated trip repository
-
-**Files:** Create `middleware.ts`, `app/login/page.tsx`, `app/auth/callback/route.ts`, `lib/repositories/supabase-trip-repository.ts`, and `tests/repositories/supabase-trip-repository.test.ts`. Modify `lib/repositories/planning-repository.ts` and `components/trip-setup-dashboard.tsx`.
-
-**Interface:**
-
-```ts
-type TripInput = {
-  destinationName: string;
-  startDate: string;
-  endDate: string;
-  budgetTier: BudgetTier;
-  pace: PaceLevel;
-  notes?: string;
-};
-
-interface TripRepository {
-  createTrip(input: TripInput): Promise<TripRecord>;
-  getTrip(tripId: string): Promise<TripRecord>;
-  updateTrip(tripId: string, input: TripInput): Promise<TripRecord>;
-}
-```
-
-- [x] Write failing tests for authenticated creation, loading, updating, and cross-trip denial.
-- [x] Implement Supabase SSR sessions and protected routes.
-- [x] Implement the repository with server-side Supabase clients and RLS-protected tables.
-- [x] Replace `LocalPlanningRepository` as the default application storage.
-- [ ] Run hosted repository integration tests. Local repository/Auth-adapter tests, PostgreSQL tests, `npm test`, and `npm run build` pass; hosted verification still requires a disposable project.
-- [ ] Commit: `feat: persist authenticated trips in Supabase`.
-
-**Phase 0 exit criteria:** An authenticated owner can create and reload a trip, an unrelated account cannot read or update it, and none of the five aborted surfaces appear in the web app.
-
-## Phase 1 — Gemini itinerary proposal engine
-
-### Task 1.1: Define the structured proposal contract
-
-**Files:** Create `lib/gemini/schemas.ts`, `lib/gemini/types.ts`, and `tests/gemini/schemas.test.ts`.
-
-**Interfaces:**
-
-```ts
-type GeminiTripRequest = {
-  destinationName: string;
-  startDate: string;
-  endDate: string;
-  budgetTier: BudgetTier;
-  pace: PaceLevel;
-  notes?: string;
-};
-
-type GeminiActivity = {
-  title: string;
-  category: "culture" | "food" | "nature" | "shopping" | "transit";
-  date: string;
-  startTime: string;
-  durationMinutes: number;
-  estimatedCostTier: BudgetTier;
-  rationale: string;
-  contingencyNote: string | null;
-};
-
-type GeminiTripProposal = {
-  summary: string;
-  activities: GeminiActivity[];
-  assumptions: string[];
-};
-```
-
-- [x] Define Zod request and response schemas.
-- [x] Add tests rejecting malformed times, unsupported categories, invalid tiers, and missing rationale.
-- [x] Add a pure mapper from Gemini output to internal itinerary candidates.
-- [ ] Commit: `feat: define Gemini trip proposal contract`.
-
-### Task 1.2: Implement the server-only Gemini adapter
-
-**Files:** Create `lib/gemini/client.ts`, `lib/gemini/trip-planner.ts`, and `tests/gemini/trip-planner.test.ts`. Modify `package.json` and `.env.example`.
-
-- [x] Add `@google/genai` and `zod`.
-- [x] Write fake-client tests for valid JSON, invalid JSON, schema mismatch, provider failure, and timeout behavior.
-- [x] Build a prompt that requests only candidate itinerary suggestions and forbids factual guarantees, booking, or state mutation.
-- [x] Configure Gemini structured JSON output with the proposal schema.
-- [x] Parse returned JSON through Zod and map errors to a stable `GeminiPlanningError`.
-- [ ] Commit: `feat: add structured Gemini trip planner`.
-
-### Task 1.3: Validate and persist pending proposals
-
-**Files:** Create `lib/domain/gemini-proposal-validation.ts`, `app/api/trips/[tripId]/proposals/route.ts`, `app/actions/proposals.ts`, `tests/domain/gemini-proposal-validation.test.ts`, and `tests/api/trip-proposals.test.ts`.
-
-- [x] Write failing tests for invalid date range, time, duration, budget mismatch, and unauthorized actor.
-- [x] Validate output with strict date and schedule helpers before persistence.
-- [x] Store proposal JSON, validation outcome, generated timestamp, model identifier, and expiry in `agent_proposals`.
-- [x] Return only a pending proposal or clear validation errors; never activate an itinerary from generation.
-- [x] Add per-user and per-trip rate limiting.
-- [ ] Commit: `feat: persist validated Gemini trip proposals`.
-
-### Task 1.4: Build the focused proposal-review UI
-
-**Files:** Modify `components/trip-setup-dashboard.tsx` and `app/globals.css`. Create `components/gemini-proposal-review.tsx` and `tests/components/gemini-proposal-review.test.tsx`.
-
-- [x] Write UI tests for loading, successful proposal, Gemini failure, validation error, and owner-only confirmation.
-- [x] Add a Generate Plan action that calls the authenticated proposal route.
-- [x] Display summary, activities, rationale, assumptions, and contingency notes as pending proposal content.
-- [x] Keep the five aborted website surfaces absent.
-- [x] Run lint, test, coverage, and production build.
-- [ ] Commit: `feat: review Gemini trip proposals on web`.
-
-**Phase 1 exit criteria:** An authenticated owner can submit trip-level inputs, receive a schema-valid Gemini proposal, inspect its assumptions, and confirm or reject it without Gemini directly changing itinerary state.
-
-## Phase 2 — Telegram trip coordinator
-
-### Task 2.1: Link Telegram users to trips
-
-**Files:** Create `lib/telegram/link-tokens.ts`, `app/api/telegram/webhook/route.ts`, `tests/telegram/link-tokens.test.ts`, and `tests/api/telegram-webhook.test.ts`.
-
-- [ ] Add hashed, expiring, single-use link tokens in Supabase.
-- [ ] Test expiration, replay, wrong-trip access, and successful linking.
-- [ ] Verify incoming requests with `TELEGRAM_WEBHOOK_SECRET`.
-- [ ] Persist only Telegram identifier and confirmed trip relationship.
-- [ ] Commit: `feat: link Telegram users to trips`.
-
-### Task 2.2: Implement read-only commands
-
-**Files:** Create `lib/telegram/commands.ts`, `lib/telegram/messages.ts`, and `tests/telegram/commands.test.ts`.
-
-```text
-/plan   — active itinerary
-/route  — next activity and timing
-/status — trip summary and pending proposal state
-```
-
-- [ ] Write tests for linked, unlinked, and unauthorized users.
-- [ ] Implement the three commands from persisted data.
-- [ ] Ensure bot messages never expose another trip's data.
-- [ ] Commit: `feat: add Telegram trip status commands`.
-
-### Task 2.3: Add confirmation-first coordination
-
-**Files:** Create `lib/telegram/callbacks.ts`, `lib/telegram/preference-proposals.ts`, and `tests/telegram/callbacks.test.ts`.
-
-- [ ] Limit Telegram preferences to ordinary interests, pace, and budget sentiment.
-- [ ] Test callback replay, expiry, authorization, approval, and rejection.
-- [ ] Use inline confirmation for every proposed change.
-- [ ] Route approval through the same backend proposal-confirmation action as the web app.
-- [ ] Commit: `feat: add confirmed Telegram coordination`.
-
-**Phase 2 exit criteria:** Linked Telegram users can read the active plan and confirm ordinary trip decisions without direct database access.
-
-## Phase 3 — Group split and merge
-
-### Task 3.1: Persist subgroup sessions
-
-**Files:** Create `supabase/migrations/202609030005_subgroup_sessions.sql`, `lib/domain/subgroups.ts`, and `tests/domain/subgroups.test.ts`.
-
-- [ ] Add `subgroups`, `subgroup_members`, and `split_sessions` with trip-scoped RLS.
-- [ ] Test duplicate members, missing rendezvous data, non-member assignment, and unauthorized split creation.
-- [ ] Implement deterministic split validation. Gemini may suggest branches but cannot assign members.
-- [ ] Commit: `feat: persist secure subgroup sessions`.
-
-### Task 3.2: Add `/split` and `/merge`
-
-**Files:** Modify `lib/telegram/commands.ts`. Create `lib/domain/merge-recommendation.ts`, `tests/domain/merge-recommendation.test.ts`, and `tests/telegram/split-merge.test.ts`.
-
-```text
-0–20 minutes: wait at the named rendezvous anchor
+0–20 minutes:  wait at the named rendezvous anchor
 21–60 minutes: suggest a low-commitment nearby pause
-61+ minutes: continue to the next fixed commitment
+61+ minutes:   continue to the next fixed commitment
 ```
 
-- [ ] Write tests for the three ETA ranges and unauthorized actions.
-- [ ] Add inline confirmation for split assignment and merge completion.
-- [ ] Keep routes text-based; maps and live tracking are out of scope.
-- [ ] Commit: `feat: coordinate Telegram subgroup splits`.
+- [ ] Per-branch budget caps enforced by the [gate](#vii-hard-constraint-gate) after assignment.
+- [ ] Tests: the three ETA bands, non-member assignment rejected, unauthorized split rejected, merge completion is confirmation-first.
 
-**Phase 3 exit criteria:** A group can make one confirmed split and merge through Telegram with a named rendezvous and deterministic ETA guidance.
+### Task 4.4: Multi-modal mobility decisions
 
-## Phase 4 — Expense ledger and offline summary
+**Files:** create `lib/mobility/breakeven.ts`, `lib/mobility/options.ts`, `app/api/trips/[tripId]/legs/[legId]/mobility/route.ts`, `tests/mobility/*.test.ts`.
 
-### Task 4.1: Implement a minimal shared expense ledger
+- [ ] Rideshare break-even: compare a 3–4-passenger ride-hail fare estimate against summed transit fares for the branch size. Deterministic given quoted prices.
+- [ ] Emit Fastest / Budget / Scenic-Walk options with cost and duration from Google Routes & Transit.
+- [ ] A rain trigger (from the Phase 7 monitor or a manual flag) marks weather-sensitive legs and prefers covered or indoor connections.
+- [ ] Keep routes text- and map-based; no live vehicle tracking.
+- [ ] Tests: break-even flips at the expected party size, the scenic option only appears when it fits the time budget, the rain pivot changes the recommendation.
 
-**Files:** Create `supabase/migrations/202609030006_expense_ledger.sql`, `lib/domain/ledger.ts`, and `tests/domain/ledger.test.ts`. Modify `lib/telegram/commands.ts`.
+**Phase 4 exit criteria:** the reference trip produces two interest-clustered branches routed to a shared 18:00 anchor with feasible arrival times; a merge request returns the correct ETA-band guidance; a leg shows all three mobility options with a rideshare break-even.
 
-- [ ] Add expenses and expense-share records with RLS.
-- [ ] Test equal split rounding, subgroup-only costs, duplicate callbacks, and unauthorized expense creation.
-- [ ] Implement deterministic balance calculation. Do not use Gemini for money arithmetic.
-- [ ] Add owner-confirmed `/expense <amount> <description>`.
-- [ ] Commit: `feat: add confirmed shared expenses`.
+---
 
-### Task 4.2: Generate an offline trip summary
+## Phase 5 — Serendipity & exploration engine (Module 5)
 
-**Files:** Create `app/api/trips/[tripId]/offline-summary/route.ts`, `lib/export/offline-summary.ts`, and `tests/export/offline-summary.test.ts`. Modify `lib/telegram/commands.ts`.
+### Task 5.1: ε-greedy recommender
 
-- [ ] Test authorization and cross-trip data isolation.
-- [ ] Generate lightweight HTML first; add PDF only if time remains.
-- [ ] Add `/offline` to send the attachment or secure link.
-- [ ] Commit: `feat: export offline trip summary`.
+**Files:** create `lib/serendipity/recommender.ts`, `lib/serendipity/diversity.ts`, `tests/serendipity/*.test.ts`.
 
-**Phase 4 exit criteria:** A group can log one confirmed shared expense and retrieve a compact offline itinerary summary through Telegram.
+- [ ] Exploitation set: rank POIs by interest-vector similarity and constraint fit. Exploration set: sample high-variance POIs (low similarity, distinct tags, still gate-`pass`) with probability ε, default 0.2 and configurable per trip.
+- [ ] Every exploration candidate runs through the [gate](#vii-hard-constraint-gate); a `fail` is dropped and resampled, never surfaced with a warning.
+- [ ] Diversity metric plus dedupe against `serendipity_log` history so the same surprise is not re-shown.
+- [ ] Deterministic under a seed. Tests cover ε=0 (pure exploitation), ε=1 (all exploration, still constraint-safe), dedupe, and an allergen-risk POI being filtered out of the exploration pool.
 
-## Phase 5 — Testing, deployment, and demo
+### Task 5.2: Safe / Local / Wildcard variants
 
-### Task 5.1: End-to-end acceptance path
+**Files:** create `lib/serendipity/tracks.ts`, `app/api/trips/[tripId]/tracks/route.ts`, `features/timeline/track-switcher.tsx`, `tests/serendipity/tracks.test.ts`.
 
-**Files:** Create `tests/e2e/trip-lifecycle.spec.ts` and `docs/demo-walkthrough.md`.
+- [ ] Generate three itinerary variants from the same constraint set: Safe (high verification and popularity), Local (low `tourist_density`, resident-frequented tags), Wildcard (different theme, maximum diversity within constraints).
+- [ ] The workspace switcher swaps the day plan's flashcards with one click; each variant is a **pending** proposal until confirmed.
+- [ ] Tests: all three respect caps and dietary flags, Wildcard is measurably more diverse by the Task 5.1 metric, switching never activates a plan.
 
-- [ ] Sign in as owner and create a trip.
-- [ ] Generate and confirm a Gemini proposal.
-- [ ] Link a Telegram account.
-- [ ] Run `/plan` and `/status`.
-- [ ] Create one confirmed split and merge.
-- [ ] Log one expense and request `/offline`.
+### Task 5.3: Spontaneous detour engine
 
-### Task 5.2: Deployment readiness
+**Files:** create `lib/serendipity/detours.ts`, `app/api/trips/[tripId]/detours/scan/route.ts`, `features/chat/detour-card.tsx`, `tests/serendipity/detours.test.ts`.
 
-**Files:** Create `Dockerfile`, `.github/workflows/deploy.yml`, and `docs/deployment.md`.
+- [ ] Detect buffer windows on the active DAG: a gap at or above a configurable threshold before the next fixed commitment.
+- [ ] Proximity scan of `poi_catalog` (PostGIS radius) for gate-`pass` POIs matching the group vector; rank by interest × proximity × rarity.
+- [ ] Offer as an assistant proposal card in chat via the Task 3.5 confirmation primitive, showing the buffer math. Accept calls the Phase 4 solver to reflow remaining waypoints; dismiss logs the outcome and suppresses the POI for the day.
+- [ ] Tests: no offer when the buffer is too small, the offer respects the dinner reservation, accepting keeps the anchor arrival feasible.
 
-- [ ] Document only server-side Supabase, Gemini, and Telegram variables.
-- [ ] Add production webhook configuration, a health endpoint, and structured logs without prompt payloads or secrets.
-- [ ] Deploy the Next.js service and configure the Telegram webhook.
-- [ ] Run production smoke tests using non-sensitive demo data.
+**Phase 5 exit criteria:** the reference trip's 20% blend yields at least one gate-clean out-of-profile POI; Safe, Local, and Wildcard variants all satisfy Ben's allergy flag and Amira's Halal constraint; a simulated 30-minute buffer produces a detour offer that still makes the 18:00 anchor.
 
-**Phase 5 exit criteria:** The team can demonstrate the authenticated web-to-Gemini-to-Telegram path in under three minutes.
+---
+
+## Phase 6 — On-site execution: navigation, photo, packing (Modules 3, 7, 8)
+
+### Task 6.1: 3D landmark navigation
+
+**Files:** create `features/workspace/nav-3d.tsx`, `lib/nav/landmarks.ts`, `lib/nav/orientation-cues.ts`, `tests/nav/*.test.ts`.
+
+- [ ] Mapbox GL 3D building extrusion at a 60° pitch, camera following the active leg, with the next turn landmark highlighted from `poi_catalog` and Mapbox POI data.
+- [ ] Conversational cue generation (Gemini) grounded strictly in the supplied map context: "walk toward the clock tower, turn right at the McDonald's." Cues are advisory text; routing stays deterministic.
+- [ ] Tests: a cue references only a real feature present in the passed context, no cue is invented when no landmark exists, pitch and marker state render correctly.
+
+### Task 6.2: Photo spot & lighting engine
+
+**Files:** create `services/optimizer/app/solvers/sun.py`, `services/optimizer/tests/test_sun.py`, `lib/photo/spots.ts`, `app/api/trips/[tripId]/photo-spots/route.ts`, `features/workspace/photo-card.tsx`, `tests/photo/*.test.ts`.
+
+- [ ] `/solve/sun`: SunCalc azimuth and elevation for coordinates plus date, returning golden-hour and blue-hour windows.
+- [ ] "Golden Footprints": exact stand-here coordinates per spot, with focal-length and framing guide text.
+- [ ] The scheduler prefers placing photo spots inside their golden or blue window whenever the DAG has slack.
+- [ ] Tests: a known latitude/longitude/date matches reference sun angles, a spot is scheduled into its window when slack exists, guide text is always present.
+
+### Task 6.3: Context-aware packing checklist
+
+**Files:** create `supabase/migrations/2026090X0004_packing_items.sql`, `lib/packing/generate.ts`, `lib/weather/forecast.ts`, `app/api/trips/[tripId]/packing/route.ts`, `features/workspace/packing-list.tsx`, `tests/packing/*.test.ts`.
+
+- [ ] Pull hourly forecast and UV index (OpenWeatherMap) for the trip dates; add rain gear and sun-protection items with a `weather` reason.
+- [ ] Add dress-code items with a `dress_code` reason for every planned POI that requires modest attire.
+- [ ] Generate a bilingual (English + Malay for the reference region) emergency allergy card from confirmed allergen flags, downloadable and offline-capable.
+- [ ] Shared-item claims so one power bank is not packed four times.
+- [ ] Tests: forecast rain adds an umbrella, a mosque in the plan adds a dress-code item, the allergy card reflects confirmed flags only, a claim assigns exactly one owner.
+
+**Phase 6 exit criteria:** the workspace shows a 3D navigation view with a grounded orientation cue; a photo spot lists a golden-hour window and a stand-here point; the packing list reflects the real forecast, a dress-code POI, and Ben's allergy card.
+
+---
+
+## Phase 7 — Environmental self-healing (Module 9)
+
+### Task 7.1: Trigger monitors
+
+**Files:** create `lib/heal/monitors.ts`, `app/api/internal/heal/tick/route.ts`, `tests/heal/monitors.test.ts`. Add a Redis-backed schedule (cron route or worker).
+
+- [ ] Monitors: precipitation probability above 70% during an outdoor leg's window, projected budget overrun, and a member-initiated ad-hoc detour.
+- [ ] Debounce, and lock per trip (`trip:{id}:lock`) so only one heal runs at a time.
+- [ ] Tests: a threshold crossing fires exactly once, a sub-threshold reading does not fire, concurrent ticks serialize.
+
+### Task 7.2: DAG retopology
+
+**Files:** create `services/optimizer/app/solvers/reoptimize.py`, `services/optimizer/tests/test_reoptimize.py`, `lib/heal/retopology.ts`, `tests/heal/retopology.test.ts`.
+
+- [ ] `/solve/reoptimize`: given the DAG, a trigger, and a locked set (visited or fixed-reservation nodes), return a **minimal diff** — swap outdoor nodes for `indoor` equivalents from `poi_catalog`, rebalance budget slack, and reflow only the affected sub-branches.
+- [ ] Every swapped-in node passes the [gate](#vii-hard-constraint-gate).
+- [ ] Document and measure a latency budget for a single-day DAG; assert it in tests.
+- [ ] Tests: rain swaps the photo leg to the arcade while keeping the anchor arrival, a budget-overrun trigger drops the lowest-utility paid item, locked nodes never move.
+
+### Task 7.3: Confirmation-first healed plan
+
+**Files:** create `lib/heal/apply.ts`, `features/workspace/heal-banner.tsx`, `tests/heal/apply.test.ts`.
+
+- [ ] Push the diff to every connected member over the trip channel as a workspace banner plus a chat proposal card, using the Task 3.5 confirmation primitive and showing what changes and why.
+- [ ] The current active itinerary stays active until an authorized member confirms. On reject, log and keep the original.
+- [ ] `heal_events` records the trigger, the diff, and the outcome.
+- [ ] Tests: an unconfirmed heal does not mutate the active plan, confirmation applies atomically, rejection is logged.
+
+**Phase 7 exit criteria:** an 85%-precipitation trigger on the reference trip produces a confirmable diff that swaps the outdoor photo leg for a sheltered arcade, rebalances the budget, keeps the 18:00 anchor, and changes nothing until confirmed.
+
+---
+
+## Phase 8 — Multimodal on-site VQA (Module 10)
+
+### Task 8.1: Food allergen VQA
+
+**Files:** create `lib/vqa/food.ts`, `app/api/trips/[tripId]/vqa/food/route.ts`, `features/workspace/vqa-food.tsx`, `tests/vqa/food.test.ts`.
+
+- [ ] Gemini VQA on a food photo → structured `{ likelyIngredients[], allergenHits[], cuisineOrigin, confidence }` → Zod.
+- [ ] Deterministic overlay: any `allergenHits` intersecting a confirmed `severe` flag raises an **urgent** alert regardless of model confidence. Low confidence plus a severe flag also raises urgent "cannot confirm safe."
+- [ ] Every response carries a "not a substitute for asking staff" disclaimer.
+- [ ] Tests: peanut garnish → urgent alert, clean dish → informational, low-confidence severe case → urgent caution, malformed JSON handled without crashing the flow.
+
+### Task 8.2: Heritage architecture VQA
+
+**Files:** create `lib/vqa/heritage.ts`, `app/api/trips/[tripId]/vqa/heritage/route.ts`, `features/workspace/vqa-heritage.tsx`, `tests/vqa/heritage.test.ts`.
+
+- [ ] VQA → `{ style, era, historicalContext, relatedPOIs[] }`, enriched from `poi_catalog` where a match exists.
+- [ ] Tests: a recognizable style returns context, an unrecognizable image returns an honest "not identifiable," and no POI link is fabricated.
+
+### Task 8.3: VQA safety review
+
+**Files:** modify `lib/vqa/*`; create `docs/features/vqa-safety.md`.
+
+- [ ] Audit and test that VQA output can never downgrade or clear a hard constraint. It may only add caution.
+- [ ] Rate-limit per user and trip; strip location EXIF from stored images; images are trip-scoped under RLS.
+- [ ] Document the failure posture: on any VQA error, default to "ask staff, treat as unsafe" for severe flags.
+
+**Phase 8 exit criteria:** photographing a peanut-garnished dessert on the reference trip raises an urgent allergy alert with the model's reasoning and the staff-check disclaimer; a heritage facade returns style and context with no invented references.
+
+---
+
+## Phase 9 — End-to-end, deployment, demo
+
+### Task 9.1: Full-lifecycle acceptance path
+
+**Files:** create `tests/e2e/wandersync-lifecycle.spec.ts`, `docs/demo-walkthrough.md`.
+
+- [ ] Automate [Section VIII](#viii-complete-execution-lifecycle): ingest constraints → confirm → budget schedule → serendipity blend → split into two branches → self-heal on a weather trigger → merge at the anchor → food VQA alert → receipt ledger split.
+- [ ] Mix Playwright with API-level steps. Drive the multi-user path with two concurrent browser contexts so realtime fan-out, presence, and drag-commit conflicts are actually exercised.
+
+### Task 9.2: Deployment readiness
+
+**Files:** create `Dockerfile` (Next.js), `docker-compose.prod.yml`, `.github/workflows/{ci,deploy}.yml`, `docs/deployment.md`. The optimizer `Dockerfile` comes from Task 2.1.
+
+- [ ] Document only server-side secrets: Supabase URL and anon key, `GEMINI_API_KEY`, `GEMINI_MODEL`, `OPT_SERVICE_TOKEN`, `MAPBOX_TOKEN`, `GOOGLE_ROUTES_KEY`, `OPENWEATHER_KEY`, `REDIS_URL`. No secret ever gets a `NEXT_PUBLIC_` prefix.
+- [ ] The optimizer service is network-isolated and reachable only from the Next.js service.
+- [ ] Health endpoints for both services; structured logs with no prompt payloads, no secrets, and no raw personal data.
+- [ ] Configure the Supabase Realtime quotas and allowed origins; run a production smoke test with non-sensitive demo data and two concurrent sessions.
+- [ ] CI runs the full [verification standard](#verification-standard) for both services on every pull request.
+
+### Task 9.3: Demo
+
+**Files:** `docs/demo-walkthrough.md`.
+
+- [ ] A scripted sub-three-minute run of the reference trip that hits constraint safety, split/merge math, self-healing, and on-site VQA.
+
+**Phase 9 exit criteria:** the team can demonstrate the ingest → optimize → split → heal → merge → VQA → ledger path end to end in under three minutes, with both services deployed and CI green.
+
+---
+
+## IX. Data privacy & safety appendix
+
+This system deliberately handles data the earlier plan avoided: dietary, religious-access, mobility, interest profiles, and live location. These handling requirements are binding.
+
+**Data minimization and scope**
+
+- Collect only what a module needs. Dietary, religious-access, and mobility constraints are stored as **typed enum flags**, never free-text medical histories. No diagnoses, no medication lists, and no disability categories beyond a coarse mobility threshold the traveler sets themselves.
+- The Python optimization service receives **anonymized** payloads only: opaque traveler handles and enum flags. It never sees names, contact details, message content, or images.
+- Social-media ingestion stores **derived interest tags only**, never raw third-party post content, and only from public or oEmbed surfaces.
+
+**Consent and control**
+
+- A constraint is inert until an authorized member confirms it (Task 1.3). `severe` flags require the affected member's confirmation, or the owner acting on their behalf with the actor recorded.
+- Each member can view and delete their own `traveler_profile`, constraints, and interest vector. Deletion removes them from future optimization; `heal_events` and `serendipity_log` retain only anonymized references.
+- Live location (`trip:{id}:loc:*`) is Redis-only with a short TTL, never persisted to Postgres, and cleared on trip end or member opt-out. Location is shared only during an active split window.
+
+**Safety posture**
+
+- The [hard-constraint gate](#vii-hard-constraint-gate) is deterministic and the single choke point. No LLM output is trusted to clear a dietary or religious-access constraint.
+- Unknown allergen or halal data fails closed for `severe` flags.
+- All VQA and LLM dietary output carries a "not a substitute for asking staff" disclaimer and may only add caution, never remove it.
+- Emergency allergy cards are bilingual and offline-capable.
+- Ingested third-party text (chat, captions, transcripts) is untrusted input. Prompt-injection resistance is a tested requirement in Task 1.2, and extraction output can only ever propose a constraint for human confirmation.
+
+**Retention and logging**
+
+- Structured logs exclude prompt payloads, images, secrets, and raw personal data.
+- Images (receipts, VQA) are trip-scoped under RLS, EXIF-stripped, and deleted with the trip.
+- A data-subject deletion runbook is documented in `docs/deployment.md`.
 
 ## Explicit non-goals
 
-- Per-member profile editor or website consent controls.
-- MBTI/personality quiz.
-- Niche discovery feed or destination comparison.
-- Dedicated weather/Plan B website UI.
-- Provider status dashboard.
-- Medical, disability, severe-allergy, or individual religious-profile collection.
-- Autonomous booking, rebooking, payments, emergency dispatch, location tracking, or automatic chat-derived mutations.
-- Real-time transit routing, flight status, hotel availability, crowd feeds, or price-drop monitoring.
+- Autonomous booking, rebooking, payments, or ticketing. The system plans and coordinates; humans transact.
+- Real-time emergency dispatch or medical advice. Allergy handling is preventative and informational, not clinical.
+- Continuous background location tracking, or location sharing outside an active split window.
+- MBTI or personality quizzes, and provider-health/status dashboards. These are retired directions; do not revive them.
+- Telegram bots, Telegram Mini Apps, bot webhooks, chat-platform link tokens, or any other third-party chat client. The collaborative workspace is the only interface; this direction is retired and must not be revived.
+- Flight status, hotel availability, crowd feeds, or price-drop monitoring.
+- Storing sensitive personal data beyond the coarse enum flags defined in Section IX: no medical records, and no religious-profile detail beyond an access and dress-code flag.
+- Making the Python service stateful. It gets no database, no Redis, and no external calls; if a solver needs data, Next.js passes it in the payload.
+- Emoji as interface decoration, status markers, icons, or visual emphasis. Use text labels, layout, color, and proper icon components.
 
 ## Verification standard
 
-Every completed task must provide:
+Every completed task must provide evidence for each stack it touches.
 
 ```text
+# Next.js / TypeScript
 npm run lint
 npm test
 npm run test:coverage
 npm run build
+npx playwright test          # component, workspace, and multi-client e2e where applicable
 git diff --check
+
+# Python optimization service (services/optimizer)
+ruff check .
+mypy .
+pytest --cov
 ```
 
-Tasks that add Supabase or Telegram behavior must also include focused integration tests against a disposable development environment. No phase is complete until its exit criteria and required tests have evidence in the repository.
+- Tasks that add Supabase behavior include PGlite SQL/RLS tests plus an entry in `tests/database/live-rls.md` for the hosted matrix.
+- Tasks that add solver behavior include deterministic seeded Python tests plus a Next.js fake-server integration test.
+- Tasks that add realtime or external-provider behavior include focused tests against a disposable environment or a recorded fake. Realtime tasks must be tested with at least two concurrent clients.
+- Tasks that touch the constraint gate must extend `tests/domain/constraint-gate.test.ts`. The gate is never bypassed for expedience.
+- No phase is complete until its exit criteria and required tests have evidence in the repository, and CI is green for both services.

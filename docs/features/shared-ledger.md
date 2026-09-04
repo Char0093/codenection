@@ -6,7 +6,7 @@ The shared ledger records trip expenses, supports subgroup-aware cost attributio
 
 ## MVP Behavior
 
-- Add expenses from web UI or Telegram confirmation flow.
+- Add expenses from the workspace, via the chat assistant proposal or the ledger form.
 - Support local currency amount, paid-by member, category, note, receipt attachment, and exchange rate metadata.
 - Split expenses equally, by custom weights, by declared budget tier, or by subgroup membership.
 - Show per-person running balances in trip currency and each member home currency.
@@ -29,12 +29,11 @@ Use:
 - `trip_members`
 - `subgroups`
 
-## Telegram Commands
+## Chat Entry
 
-- `/expense 25 taxi`
-- `/splitcost dinner 120`
-
-Telegram-created expenses must be pending until confirmed with an inline button.
+Members can describe an expense in trip chat ("dinner 120, split four ways") and the assistant
+proposes a structured entry. Chat- or assistant-created expenses must stay pending until an
+authorized member confirms them in the workspace.
 
 ## Non-Goals
 

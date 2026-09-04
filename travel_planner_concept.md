@@ -1,3 +1,11 @@
+> **Historical concept document — superseded.** This is the original ideation record and is kept for
+> provenance only. `Implementation_Plan.md` is the binding specification. Every Telegram-based
+> mechanism described below (chat intent mining via a bot, inline-button confirmations, `/expense`
+> style commands, split/merge over chat, and the Telegram platform-dependency risk) is **retired**.
+> Those capabilities now live in the native in-app collaborative workspace: a multi-user realtime
+> chat with an embedded AI assistant plus a draggable flashcard itinerary timeline. See
+> `docs/features/collaborative-workspace.md`.
+
 Trip-Planning Command Center: Comprehensive Concept
 The web platform serves as the trip-planning command center, handling itinerary setup, visual mapping, and complex constraint optimization. Users input core travel parameters—destination, travel dates, budget tier, and preferred pace ranging from relaxed to high-intensity. An integrated accessibility and dietary profile factors in mobility constraints, chronic health conditions, sensory sensitivities, severe allergies, and halal dining, guaranteeing that every generated recommendation is viable for all members of the party.
 

@@ -6,7 +6,7 @@ Privacy and safety rules protect sensitive traveler data and prevent the MVP fro
 
 ## Consent
 
-- Each member must explicitly consent before their profile or Telegram-derived preferences influence planning.
+- Each member must explicitly consent before their profile or chat-derived preferences influence planning.
 - Consent status must be visible on the dashboard.
 - Members can revoke consent, update profile data, export data, or request deletion.
 
@@ -25,7 +25,7 @@ Treat these as sensitive:
 ## Storage Rules
 
 - Persist confirmed structured preferences.
-- Keep raw Telegram message content only in short-lived pending confirmation events.
+- Trip chat is stored under RLS and deleted with the trip. Constraints derived from chat are proposals until a member confirms them.
 - Apply RLS to all trip, profile, itinerary, ledger, bot, and provider data.
 - Deleting a trip must remove or anonymize associated trip data according to the chosen retention policy.
 

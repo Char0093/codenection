@@ -18,11 +18,11 @@ The concept file describes a broad future platform. Do not treat every concept i
 The MVP must deliver:
 
 - Responsive web app for one active trip per group.
-- Supabase-backed trip, member, itinerary, split/merge, Telegram, provider, and ledger data.
+- Supabase-backed trip, member, itinerary, split/merge, chat, provider, and ledger data.
 - Constraint-aware itinerary generation with deterministic scoring.
-- Map, weather, currency, and Telegram integration adapters.
+- Map, weather, and currency integration adapters.
 - Mock adapters for booking, availability, price drops, flight status, and transit disruption.
-- Explicit user confirmation before Telegram-derived changes mutate trip state.
+- Explicit user confirmation before chat-derived or AI-proposed changes mutate trip state.
 - Privacy controls for consent, sensitive profile data, trip export, and trip deletion.
 
 ## Required Docs
@@ -35,7 +35,7 @@ The MVP must deliver:
 - `features/itinerary-planning.md`: scoring, hard constraints, explanations, and itinerary generation.
 - `features/map-coordination.md`: map display, rendezvous anchors, and split/merge coordination.
 - `features/shared-ledger.md`: expenses, subgroup attribution, currency conversion, and settlement.
-- `features/telegram-bot.md`: commands, confirmation flow, and chat-intent boundaries.
+- `features/collaborative-workspace.md`: realtime group chat, embedded AI assistant, draggable flashcard timeline, and confirmation boundaries.
 - `features/provider-adapters.md`: real and mock provider contracts.
 - `features/privacy-safety.md`: consent, retention, RLS, export/delete, and safety boundaries.
 
@@ -44,7 +44,7 @@ The MVP must deliver:
 - Do not add native mobile apps in the MVP.
 - Do not implement autonomous emergency dispatch.
 - Do not implement full booking/rebooking automation in the MVP.
-- Do not persist raw Telegram chat logs beyond short-lived pending confirmation payloads.
+- Trip chat is persisted under RLS and deleted with the trip. Send the assistant only the current trip's context and a bounded recent-message window.
 - Do not let AI/NLP inferred actions directly mutate itinerary, expense, subgroup, or profile state.
 - Do not bypass hard safety constraints for severe allergies or accessibility blockers.
 - Do not couple UI code directly to third-party APIs; use provider adapters.

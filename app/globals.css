@@ -142,3 +142,63 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; scroll-behavior: auto !important; }
 }
+
+/* ---------- Collaborative workspace: dual-layer surface ---------- */
+
+.workspace { display: flex; flex-direction: column; height: 100dvh; background: var(--canvas); }
+.workspace-bar { display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.workspace-bar h1 { margin: 0; font-size: 15px; font-weight: 600; }
+.workspace-presence { display: flex; gap: 4px; margin-left: auto; }
+.workspace-avatar { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; color: #fff; font-size: 12px; font-weight: 600; }
+.workspace-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--surface); }
+.workspace-toggle[aria-pressed="true"] { background: var(--teal-soft); border-color: var(--teal); color: var(--teal-dark); }
+
+/* Top 60% spatial map, bottom 40% chatroom and action sheet. */
+.workspace-panes { display: grid; grid-template-rows: 60fr 40fr; flex: 1; min-height: 0; }
+.workspace-map { border-bottom: 1px solid var(--line); min-height: 0; overflow: hidden; }
+.workspace-chat { min-height: 0; overflow: hidden; display: flex; flex-direction: column; background: var(--surface); }
+.workspace-jigsaw { flex: 1; min-height: 0; overflow: auto; padding: 16px; }
+.workspace-placeholder { height: 100%; display: grid; place-content: center; justify-items: center; gap: 8px; color: var(--muted); }
+.workspace-placeholder p { margin: 0; }
+
+/* ---------- Timeline jigsaw ---------- */
+
+.jigsaw { display: flex; flex-direction: column; gap: 14px; }
+.jigsaw-scroll { overflow-x: auto; padding-bottom: 4px; }
+.jigsaw-ruler { position: relative; height: 20px; }
+.jigsaw-tick { position: absolute; top: 0; font-size: 11px; color: var(--muted); transform: translateX(-50%); }
+.jigsaw-track { position: relative; height: 76px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+
+.jigsaw-block { position: absolute; top: 8px; height: 60px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; padding: 6px 10px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); overflow: hidden; text-align: left; touch-action: none; }
+.jigsaw-block:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.jigsaw-block-title { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.jigsaw-block-time { font-size: 11px; color: var(--muted); }
+
+/* Solid green = full consensus, orange stripes = AI flexible fill, blue dots = personal wish. */
+.jigsaw-block[data-texture="consensus"] { background: var(--teal-soft); border-color: var(--teal); }
+.jigsaw-block[data-texture="ai-fill"] { background: repeating-linear-gradient(45deg, #fdf1e3, #fdf1e3 6px, #f7e2c8 6px, #f7e2c8 12px); border-color: #d79a4b; }
+.jigsaw-block[data-texture="wishlist"] { background: radial-gradient(circle at 3px 3px, #c7d8ec 1.5px, #f2f7fc 1.6px) 0 0 / 8px 8px; border-color: var(--blue); }
+.jigsaw-block[data-anchored="true"] { border-color: var(--error); border-width: 2px; background: #fdeff1; cursor: not-allowed; }
+.jigsaw-block[data-conflict="true"] { box-shadow: 0 0 0 2px var(--error); }
+.jigsaw-block[data-dragging="true"] { opacity: 0.85; }
+
+.jigsaw-alert { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border: 1px solid var(--error); border-radius: 8px; background: #fdeff1; color: #7a2130; }
+.jigsaw-trilemma { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+.jigsaw-trilemma button { padding: 5px 10px; border: 1px solid var(--error); border-radius: 6px; background: var(--surface); color: #7a2130; font-size: 12px; }
+
+.jigsaw-meters { display: flex; flex-direction: column; gap: 6px; }
+.jigsaw-meter { display: grid; grid-template-columns: 90px 1fr 44px; align-items: center; gap: 10px; font-size: 12px; }
+.jigsaw-meter-name { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jigsaw-meter-bar { display: block; height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.jigsaw-meter-fill { display: block; height: 100%; border-radius: 4px; }
+.jigsaw-meter-fill[data-low="true"] { background: var(--error) !important; }
+.jigsaw-meter-value { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.jigsaw-split { display: flex; align-items: center; gap: 8px; margin: 0; padding: 8px 12px; border: 1px solid #d79a4b; border-radius: 8px; background: #fdf1e3; color: #7a4a12; font-size: 13px; }
+.jigsaw-pool h3 { margin: 0 0 6px; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.jigsaw-pool ul { margin: 0; padding-left: 18px; font-size: 13px; color: var(--muted); }
+
+@media (max-width: 720px) {
+  .workspace-panes { grid-template-rows: 50fr 50fr; }
+  .jigsaw-meter { grid-template-columns: 70px 1fr 40px; }
+}

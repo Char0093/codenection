@@ -13,7 +13,6 @@ UI, route handlers, and domain modules must not call third-party APIs directly. 
 - Maps and geocoding.
 - Weather.
 - Currency exchange rates.
-- Telegram Bot API.
 
 ## Mock MVP Adapters
 
@@ -40,7 +39,7 @@ Every provider call should emit a `provider_events` row for observability.
 - Weather unavailable: keep itinerary usable and label weather-sensitive recommendations as unverified.
 - Currency unavailable: use last known rate if present, otherwise require manual rate entry.
 - Maps unavailable: show saved coordinates and text instructions.
-- Telegram unavailable: keep web UI fully usable.
+- Realtime unavailable: fall back to polling so the workspace stays usable, and label live presence as stale.
 - Mock booking unavailable: show demo/degraded status without blocking core trip planning.
 
 ## Non-Goals

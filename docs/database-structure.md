@@ -10,7 +10,7 @@ This file defines the MVP Supabase/Postgres structure for the Travel Planner app
 - `auth.users.id` is the source user identity.
 - `trip_members.id` is the source traveler identity inside a trip.
 - Sensitive profile data stays in `member_profiles`, protected by RLS.
-- Telegram and provider integrations write structured event records; they do not own business state.
+- Provider integrations write structured event records; they do not own business state.
 - Money is stored as integer minor units plus currency code.
 - Timestamps are `timestamptz`.
 
@@ -27,7 +27,7 @@ Recommended Postgres enums:
 - `constraint_severity`: `preference`, `important`, `hard_blocker`
 - `split_session_status`: `proposed`, `active`, `merging`, `completed`, `cancelled`
 - `expense_split_method`: `equal`, `budget_tier`, `custom_weight`, `subgroup`
-- `bot_event_status`: `pending_confirmation`, `confirmed`, `rejected`, `expired`, `failed`
+- `chat_message_status`: `sent`, `edited`, `deleted`
 - `provider_status`: `ok`, `degraded`, `mocked`, `failed`
 
 ## Tables
@@ -67,7 +67,7 @@ Required columns:
 - `display_name text not null`
 - `role trip_role not null default 'member'`
 - `consent_status consent_status not null default 'pending'`
-- `telegram_user_id text null`
+- `avatar_url text null`
 - `home_currency char(3) not null default 'USD'`
 - `joined_at timestamptz not null default now()`
 - `created_at timestamptz not null default now()`
@@ -76,7 +76,6 @@ Required columns:
 Constraints:
 
 - Unique `(trip_id, user_id)` where `user_id is not null`.
-- Unique `(trip_id, telegram_user_id)` where `telegram_user_id is not null`.
 
 ### `member_profiles`
 
@@ -198,7 +197,7 @@ Required columns:
 Rules:
 
 - Member-derived constraints require `trip_member_id`.
-- Telegram-derived constraints require confirmation before `confirmed_at` is set.
+- Chat-derived constraints require confirmation before `confirmed_at` is set.
 
 ### `subgroups`
 
@@ -274,7 +273,7 @@ Required columns:
 
 Rules:
 
-- Telegram-created expenses remain pending until `confirmed_at` is set.
+- Chat- or assistant-created expenses remain pending until `confirmed_at` is set.
 
 ### `expense_shares`
 
@@ -313,29 +312,29 @@ Rules:
 
 - Settlement rows are derived data and may be regenerated.
 
-### `bot_events`
+### `chat_messages`
 
-Telegram command, intent, and confirmation records.
+Multi-user trip chat, including assistant turns and inline proposals.
 
 Required columns:
 
 - `id uuid primary key default gen_random_uuid()`
-- `trip_id uuid null references trips(id) on delete cascade`
-- `telegram_chat_id text not null`
-- `telegram_user_id text null`
-- `event_type text not null`
-- `status bot_event_status not null default 'pending_confirmation'`
-- `payload jsonb not null default '{}'`
-- `raw_message_excerpt text null`
-- `expires_at timestamptz null`
-- `confirmed_by_member_id uuid null references trip_members(id)`
-- `confirmed_at timestamptz null`
+- `trip_id uuid not null references trips(id) on delete cascade`
+- `author_member_id uuid null references trip_members(id) on delete set null`
+- `author_kind text not null check (author_kind in ('member', 'assistant', 'system'))`
+- `body text not null`
+- `proposal_id uuid null references agent_proposals(id) on delete set null`
+- `status chat_message_status not null default 'sent'`
 - `created_at timestamptz not null default now()`
 
 Rules:
 
-- `raw_message_excerpt` must be short and temporary.
-- Confirmed actions should mutate domain tables in a transaction with the bot event status update.
+- Append-only. Edits and deletions are new rows, not in-place mutation.
+- `author_member_id` is required when `author_kind = 'member'` and null for assistant/system turns.
+- A message never mutates trip state. When the assistant proposes a change it writes an
+  `agent_proposals` row and references it through `proposal_id`; a member must confirm it separately.
+- Realtime broadcast is scoped to `trip:{trip_id}`, but visibility is enforced by RLS, not the
+  channel name.
 
 ### `provider_events`
 
@@ -369,8 +368,7 @@ Required columns:
 - `expenses(trip_id, created_at)`
 - `expense_shares(expense_id)`
 - `settlements(trip_id, computed_at)`
-- `bot_events(trip_id, status)`
-- `bot_events(telegram_chat_id, created_at)`
+- `chat_messages(trip_id, created_at)`
 - `provider_events(trip_id, provider_kind, created_at)`
 - `agent_jobs(trip_id, status, created_at)`
 - `agent_proposals(trip_id, status, created_at)`
@@ -401,7 +399,7 @@ Baseline access rules:
 7. Create `constraints`.
 8. Create `subgroups`, `subgroup_members`, and `split_sessions`.
 9. Create `expenses`, `expense_shares`, and `settlements`.
-10. Create `bot_events` and `provider_events`.
+10. Create `chat_messages` and `provider_events`.
 11. Create agentic support tables from `docs/agentic-architecture.md` if the agentic layer is in scope.
 12. Add indexes.
 13. Enable RLS and policies.

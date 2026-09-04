@@ -11,7 +11,7 @@ The trip dashboard is the command center for one active group trip. It shows set
 - Show itinerary generation status and top conflicts.
 - Show current split/merge state if the group is branched.
 - Show ledger summary with per-person balances and unsettled expenses.
-- Show provider health for maps, weather, exchange rates, Telegram, and mock booking feeds.
+- Show provider health for maps, weather, exchange rates, realtime, and mock booking feeds.
 
 ## Data
 
