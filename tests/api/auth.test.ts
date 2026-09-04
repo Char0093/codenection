@@ -22,6 +22,7 @@ import { authenticationError } from "@/lib/supabase/auth";
 import { SupabaseTripRepository } from "@/lib/repositories/supabase-trip-repository";
 import { GET as callback } from "@/app/auth/callback/route";
 import { POST as signout } from "@/app/auth/signout/route";
+import { POST as mockSignIn } from "@/app/auth/mock/route";
 
 let store: ResponseCookies;
 
@@ -112,11 +113,17 @@ describe("middleware with Supabase SSR", () => {
     expect(response.headers.get("set-cookie")).toBeNull();
   });
 
-  it.each([["/api/trips", 401], ["/", 307], ["/login", 200], ["/auth/callback", 200]] as const)("handles missing sessions at %s", async (path, status) => {
+  it.each([["/api/trips", 401], ["/", 200], ["/login", 200], ["/auth/callback", 200]] as const)("handles missing sessions at %s", async (path, status) => {
     const response = await middleware(new NextRequest(`https://trip.test${path}`));
     expect(response.status).toBe(status);
     expect(mocks.fetch).not.toHaveBeenCalled();
-    if (status === 307) expect(response.headers.get("location")).toBe("https://trip.test/login");
+    expect(response.headers.get("location")).toBeNull();
+  });
+
+  it("allows missing-session pages to render login without changing the browser host", async () => {
+    const response = await middleware(new NextRequest("http://localhost:3103/", { headers: { Host: "127.0.0.1:3103" } }));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
   });
 
   it("propagates rotated cookies to both downstream request headers and the browser", async () => {
@@ -234,6 +241,48 @@ describe("signout with Supabase SSR", () => {
     const repo = new SupabaseTripRepository(await createClient());
     await expect(repo.listTrips()).rejects.toMatchObject({ status: 401, code: "UNAUTHENTICATED" });
     expect(mocks.fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("mock account auth", () => {
+  beforeEach(() => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
+    vi.stubEnv("ENABLE_MOCK_ACCOUNTS", "true");
+  });
+
+  it("sets a mock account cookie for a selected role", async () => {
+    const form = new FormData();
+    form.set("account", "22222222-2222-4222-8222-222222222222");
+    const response = await mockSignIn(new Request("http://localhost:3001/auth/mock", { method: "POST", headers: { Origin: "http://127.0.0.1:3001" }, body: form }));
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("http://127.0.0.1:3001/");
+    expect(response.headers.get("set-cookie")).toContain("waypoint_mock_account=22222222-2222-4222-8222-222222222222");
+  });
+
+  it("clears mock cookies on signout without contacting Supabase", async () => {
+    const response = await signout(new Request("http://localhost:3001/auth/signout", { method: "POST", headers: { Origin: "http://127.0.0.1:3001" } }));
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("http://127.0.0.1:3001/login");
+    expect(response.headers.get("set-cookie")).toContain("waypoint_mock_account=");
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
+  it("allows a signed-in mock account through middleware without Supabase", async () => {
+    const incoming = new NextRequest("https://trip.test/", {
+      headers: { cookie: "waypoint_mock_account=33333333-3333-4333-8333-333333333333" },
+    });
+    const response = await middleware(incoming);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
+  it("allows unconfigured protected pages to render their disabled login state without redirecting", async () => {
+    const incoming = new NextRequest("http://localhost:3103/", { headers: { Host: "127.0.0.1:3103" } });
+    const response = await middleware(incoming);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
   });
 });
 

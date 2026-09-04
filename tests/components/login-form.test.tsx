@@ -5,6 +5,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { LoginForm } from "@/components/login-form";
+import { mockAccounts } from "@/lib/mock/accounts";
 
 const { signInWithOtp } = vi.hoisted(() => ({ signInWithOtp: vi.fn() }));
 vi.mock("@/lib/supabase/client", () => ({ createClient: () => ({ auth: { signInWithOtp } }) }));
@@ -25,6 +26,13 @@ it("disables submission without configuration", () => {
   expect(screen.getByText("Waypoint")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Send sign-in link" })).toBeDisabled();
   expect(screen.getByText("Sign-in is not configured yet.")).toBeInTheDocument();
+});
+it("renders mock account role choices without Supabase configuration", () => {
+  render(<LoginForm configured={false} mockAccounts={mockAccounts} />);
+  expect(screen.getByRole("status")).toHaveTextContent("Use a mock account to try each role.");
+  for (const account of mockAccounts) {
+    expect(screen.getByRole("button", { name: new RegExp(account.label) })).toHaveAttribute("value", account.id);
+  }
 });
 it("shows expired magic-link errors from the callback", async () => {
   window.history.replaceState(null, "", "/login?error=link_expired");

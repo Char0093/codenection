@@ -1,7 +1,19 @@
 import { AppError } from "./errors";
 
+function sameLoopbackOrigin(origin: URL, target: URL): boolean {
+  const loopback = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+  return origin.protocol === target.protocol
+    && origin.port === target.port
+    && loopback.has(origin.hostname)
+    && loopback.has(target.hostname);
+}
+
 export function requireSameOrigin(request: Request): void {
-  if (request.headers.get("origin") !== new URL(request.url).origin) {
+  const origin = request.headers.get("origin");
+  const target = new URL(request.url);
+  let parsedOrigin: URL | null = null;
+  try { parsedOrigin = origin ? new URL(origin) : null; } catch { /* handled below */ }
+  if (!parsedOrigin || (parsedOrigin.origin !== target.origin && !sameLoopbackOrigin(parsedOrigin, target))) {
     throw new AppError(403, "This request must come from the trip app.", "INVALID_ORIGIN");
   }
 }

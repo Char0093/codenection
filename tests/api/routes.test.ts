@@ -1,14 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AppError } from "@/lib/http/errors";
 
-const mocks = vi.hoisted(() => ({ repository: { listTrips: vi.fn(), createTrip: vi.fn(), getTrip: vi.fn(), listProposals: vi.fn(), updateTrip: vi.fn() }, generate: vi.fn(), decide: vi.fn() }));
+const mocks = vi.hoisted(() => ({ repository: { listTrips: vi.fn(), createTrip: vi.fn(), getTrip: vi.fn(), listProposals: vi.fn(), updateTrip: vi.fn() }, generate: vi.fn(), decide: vi.fn(), createClient: vi.fn(), createTelegramLinkToken: vi.fn() }));
 vi.mock("@/lib/repositories/server", () => ({ tripRepository: async () => mocks.repository }));
 vi.mock("@/app/actions/proposals", () => ({ generateTripProposal: mocks.generate, decideTripProposal: mocks.decide }));
+vi.mock("@/lib/supabase/server", () => ({ createClient: mocks.createClient }));
+vi.mock("@/lib/telegram/link-tokens", () => ({ createTelegramLinkToken: mocks.createTelegramLinkToken }));
 
 import { GET as list, POST as create } from "@/app/api/trips/route";
 import { GET as load, PATCH as update } from "@/app/api/trips/[tripId]/route";
 import { POST as generate } from "@/app/api/trips/[tripId]/proposals/route";
 import { POST as decide } from "@/app/api/trips/[tripId]/proposals/[proposalId]/decision/route";
+import { POST as createTelegramLink } from "@/app/api/trips/[tripId]/telegram-link-tokens/route";
 
 const id = "12345678-1234-4123-8123-123456789012";
 const context = { params: Promise.resolve({ tripId: id, proposalId: id }) };
@@ -83,5 +86,18 @@ describe("trip route handlers", () => {
     const response = await generate(request(), context);
     expect(response.status).toBe(500);
     expect(await response.text()).not.toContain("secret");
+  });
+  it("creates a Telegram link token through authenticated storage", async () => {
+    mocks.createClient.mockResolvedValue({ auth: "client" });
+    mocks.createTelegramLinkToken.mockResolvedValue({ token: "wpt_token", tokenHash: "hash", expiresAt: "2026-09-04T00:15:00.000Z" });
+    const response = await createTelegramLink(request({ memberId: id }), context);
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({ link: { token: "wpt_token", expiresAt: "2026-09-04T00:15:00.000Z" } });
+    expect(mocks.createTelegramLinkToken).toHaveBeenCalledWith({ auth: "client" }, id, id);
+  });
+  it("rejects malformed Telegram link requests before storage", async () => {
+    const response = await createTelegramLink(request({ member: id }), context);
+    expect(response.status).toBe(422);
+    expect(mocks.createTelegramLinkToken).not.toHaveBeenCalled();
   });
 });

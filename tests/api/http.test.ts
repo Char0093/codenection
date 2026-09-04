@@ -6,6 +6,12 @@ describe("HTTP boundaries", () => {
   it("accepts same-origin writes", () => {
     expect(() => requireSameOrigin(new Request("https://trip.test/api/trips", { method: "POST", headers: { Origin: "https://trip.test" } }))).not.toThrow();
   });
+  it("accepts same-port localhost and 127.0.0.1 loopback aliases", () => {
+    expect(() => requireSameOrigin(new Request("http://localhost:3001/api/trips", { method: "POST", headers: { Origin: "http://127.0.0.1:3001" } }))).not.toThrow();
+  });
+  it("blocks loopback aliases on a different port", () => {
+    expect(() => requireSameOrigin(new Request("http://localhost:3001/api/trips", { method: "POST", headers: { Origin: "http://127.0.0.1:3002" } }))).toThrow();
+  });
   it.each(["https://evil.test", "null", ""])("blocks cross-origin or missing origin %s", (origin) => {
     expect(() => requireSameOrigin(new Request("https://trip.test/api/trips", { method: "POST", headers: { Origin: origin } }))).toThrow();
   });

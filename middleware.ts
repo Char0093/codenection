@@ -8,8 +8,7 @@ export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const publicRoute = path === "/login" || path.startsWith("/auth/");
   if (!isSupabaseConfigured()) {
-    if (publicRoute || path.startsWith("/api/")) return NextResponse.next();
-    return NextResponse.redirect(new URL("/login", request.url));
+    return NextResponse.next();
   }
   const pendingCookies = new Map<string, { name: string; value: string; options: CookieOptions }>();
   const client = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
@@ -40,7 +39,7 @@ export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
   if (failure && !publicRoute) {
     response = failure.status === 401 && !path.startsWith("/api/")
-      ? NextResponse.redirect(new URL("/login", request.url))
+      ? NextResponse.next({ request })
       : NextResponse.json({ error: failure.message, code: failure.code }, { status: failure.status });
   }
   cookies.forEach(({ name, value, options }) => response.cookies.set(name, value, options));

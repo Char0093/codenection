@@ -3,11 +3,13 @@
 import { z } from "zod";
 import { tripRepository } from "@/lib/repositories/server";
 import { planTrip } from "@/lib/gemini/trip-planner";
+import { mockAccountsEnabled } from "@/lib/mock/accounts";
+import { mockPlanTrip } from "@/lib/mock/repository";
 import { generateProposal } from "@/lib/services/trip-proposals";
 
 export async function generateTripProposal(tripId: string) {
   z.string().uuid().parse(tripId);
-  return generateProposal(tripId, await tripRepository(), planTrip);
+  return generateProposal(tripId, await tripRepository(), mockAccountsEnabled() ? mockPlanTrip : planTrip);
 }
 
 export async function decideTripProposal(tripId: string, proposalId: string, decision: "accept" | "reject") {

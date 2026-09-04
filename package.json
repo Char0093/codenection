@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:browser": "playwright test"
+    "test:browser": "playwright test",
+    "test:mock:e2e": "playwright test -c playwright.mock.config.ts"
   },
   "dependencies": {
     "@google/genai": "^2.21.0",

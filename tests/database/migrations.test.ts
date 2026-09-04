@@ -66,6 +66,7 @@ beforeAll(async () => {
     alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;`);
   const migrations = readdirSync(migrationDirectory).filter((name) => name.endsWith(".sql")).sort();
   expect(migrations).toContain("202609030004_narrow_trip_scope.sql");
+  expect(migrations).toContain("202609040001_telegram_link_tokens.sql");
   for (const name of migrations) {
     if (name === "202609030004_narrow_trip_scope.sql") {
       await db.exec(`insert into auth.users(id) values ('${owner}'), ('${viewer}');
@@ -633,5 +634,91 @@ describe("shared generation reservations", () => {
         'is_trip_member','can_manage_trip','create_trip_owner_membership','set_updated_at',
         'ordinary_trim','is_validated_gemini_proposal','can_read_gemini_day')`)).rows;
     expect(exposed).toEqual([]);
+  });
+});
+
+describe("Telegram link tokens", () => {
+  async function memberId(user = member) {
+    return (await db.query<{ id: string }>("select id from trip_members where trip_id=$1 and user_id=$2", [trip, user])).rows[0].id;
+  }
+  async function createLink(hash = "a".repeat(64), expiry = "now()+interval '15 minutes'", targetMember?: string) {
+    return (await db.query<{ id: string; token_hash: string }>(
+      `select id,token_hash from public.create_telegram_link_token($1,$2,$3,${expiry})`,
+      [trip, targetMember ?? await memberId(), hash],
+    )).rows[0];
+  }
+  async function redeem(hash: string, telegram = "12345", name = "Amira") {
+    return (await db.query<{ trip_id: string; member_id: string; role: string; display_name: string }>(
+      "select * from public.redeem_telegram_link_token($1,$2,$3)", [hash, telegram, name],
+    )).rows[0];
+  }
+
+  it("lets only owner/planner create hashed, expiring member link tokens", async () => {
+    const token = await createLink();
+    expect(token.token_hash).toBe("a".repeat(64));
+    await actor(planner);
+    await createLink("b".repeat(64));
+    for (const user of [member, viewer, stranger, null]) {
+      await actor(user);
+      await expect(createLink("c".repeat(64))).rejects.toThrow();
+    }
+    await actor(owner);
+    await expect(createLink("not-hex")).rejects.toMatchObject({ code: "22023" });
+    await expect(createLink("c".repeat(64), "now()-interval '1 second'")).rejects.toMatchObject({ code: "22023" });
+    await expect(createLink("c".repeat(64), "now()+interval '8 days'")).rejects.toMatchObject({ code: "22023" });
+    await expect(createLink("c".repeat(64), "now()+interval '15 minutes'", stranger)).rejects.toMatchObject({ code: "P0002" });
+  });
+
+  it("redeems a token once through anon and links the Telegram user to the member", async () => {
+    const targetMember = await memberId();
+    const token = await createLink();
+    await actor(null, "anon");
+    expect(await redeem(token.token_hash, "987654", "  Amira Tan  ")).toEqual({
+      trip_id: trip,
+      member_id: targetMember,
+      role: "member",
+      display_name: "Amira Tan",
+    });
+    await expect(redeem(token.token_hash, "987654", "Amira Tan")).rejects.toMatchObject({ code: "P0002" });
+    await actor(null, "postgres");
+    expect((await db.query<{ telegram_user_id: string; display_name: string }>(
+      "select telegram_user_id,display_name from trip_members where id=$1", [targetMember],
+    )).rows[0]).toEqual({ telegram_user_id: "987654", display_name: "Amira Tan" });
+    expect((await db.query<{ count: number }>("select count(*)::int count from telegram_link_tokens where redeemed_at is not null")).rows[0].count).toBe(1);
+  });
+
+  it("rejects expired, malformed and duplicate Telegram links without partial mutation", async () => {
+    await createLink("d".repeat(64), "now()+interval '1 second'");
+    await actor(null, "postgres");
+    await db.exec("update telegram_link_tokens set created_at=now()-interval '2 minutes', expires_at=now()-interval '1 minute'");
+    await actor(null, "anon");
+    await expect(redeem("d".repeat(64))).rejects.toMatchObject({ code: "P0002" });
+    await expect(redeem("bad")).rejects.toMatchObject({ code: "22023" });
+    await expect(redeem("d".repeat(64), "0")).rejects.toMatchObject({ code: "22023" });
+    await expect(redeem("d".repeat(64), "123", " ")).rejects.toMatchObject({ code: "22023" });
+    await actor(null, "postgres");
+    expect((await db.query("select telegram_user_id from trip_members where user_id=$1", [member])).rows[0]).toEqual({ telegram_user_id: null });
+  });
+
+  it("keeps token rows private and exposes only the narrow RPCs to intended roles", async () => {
+    for (const role of ["anon", "authenticated", "service_role"]) {
+      await actor(owner, role);
+      for (const privilege of ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE"]) {
+        expect((await db.query<{ allowed: boolean }>(
+          "select has_table_privilege(current_user,'public.telegram_link_tokens',$1) allowed", [privilege],
+        )).rows[0].allowed).toBe(false);
+      }
+      await expect(db.exec("select * from public.telegram_link_tokens")).rejects.toThrow(/permission denied/);
+    }
+    await actor(owner);
+    expect((await db.query<{ allowed: boolean }>(`select has_function_privilege(current_user,
+      'public.create_telegram_link_token(uuid, uuid, text, timestamptz)','EXECUTE') allowed`)).rows[0].allowed).toBe(true);
+    expect((await db.query<{ allowed: boolean }>(`select has_function_privilege(current_user,
+      'public.redeem_telegram_link_token(text, text, text)','EXECUTE') allowed`)).rows[0].allowed).toBe(false);
+    await actor(null, "anon");
+    expect((await db.query<{ allowed: boolean }>(`select has_function_privilege(current_user,
+      'public.create_telegram_link_token(uuid, uuid, text, timestamptz)','EXECUTE') allowed`)).rows[0].allowed).toBe(false);
+    expect((await db.query<{ allowed: boolean }>(`select has_function_privilege(current_user,
+      'public.redeem_telegram_link_token(text, text, text)','EXECUTE') allowed`)).rows[0].allowed).toBe(true);
   });
 });

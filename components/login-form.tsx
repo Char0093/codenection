@@ -3,8 +3,9 @@
 import React, { useEffect, useRef, useState, type FormEvent } from "react";
 import { Compass, LoaderCircle, Mail } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import type { MockAccount } from "@/lib/mock/accounts";
 
-export function LoginForm({ configured }: { configured: boolean }) {
+export function LoginForm({ configured, mockAccounts = [] }: { configured: boolean; mockAccounts?: readonly MockAccount[] }) {
   const [email, setEmail] = useState("");
   const [pending, setPending] = useState(false);
   const [sent, setSent] = useState(false);
@@ -43,7 +44,8 @@ export function LoginForm({ configured }: { configured: boolean }) {
     <div className="brand-block"><Compass aria-hidden="true" /><strong>Waypoint</strong></div>
     <h1>Sign in</h1>
     <form className="login-form" onSubmit={submit}>
-    {!configured && <p className="inline-notice" role="status">Sign-in is not configured yet.</p>}
+    {!configured && mockAccounts.length === 0 && <p className="inline-notice" role="status">Sign-in is not configured yet.</p>}
+    {!configured && mockAccounts.length > 0 && <p className="inline-notice" role="status">Supabase sign-in is not configured. Use a mock account to try each role.</p>}
     <label>Email<input name="email" type="email" required autoComplete="email" value={email} disabled={pending || !configured}
       onChange={(event) => { setEmail(event.target.value); setSent(false); setError(null); }} /></label>
     <button className="primary-button" type="submit" disabled={!configured || pending}>
@@ -52,5 +54,12 @@ export function LoginForm({ configured }: { configured: boolean }) {
     {sent && <p className="inline-notice" role="status">Sign-in link sent. Check your email.</p>}
     {error && <p className="error-notice" role="alert">{error}</p>}
     </form>
+    {mockAccounts.length > 0 && <form className="login-form mock-login-form" action="/auth/mock" method="post">
+      <div className="mock-account-grid">
+        {mockAccounts.map((account) => <button key={account.id} className="secondary-button mock-account-button" type="submit" name="account" value={account.id}>
+          <span>{account.label}</span><small>{account.email}</small>
+        </button>)}
+      </div>
+    </form>}
   </main>;
 }

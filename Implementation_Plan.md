@@ -449,10 +449,11 @@ type GeminiTripProposal = {
 
 **Files:** Create `lib/telegram/link-tokens.ts`, `app/api/telegram/webhook/route.ts`, `tests/telegram/link-tokens.test.ts`, and `tests/api/telegram-webhook.test.ts`.
 
-- [ ] Add hashed, expiring, single-use link tokens in Supabase.
-- [ ] Test expiration, replay, wrong-trip access, and successful linking.
-- [ ] Verify incoming requests with `TELEGRAM_WEBHOOK_SECRET`.
-- [ ] Persist only Telegram identifier and confirmed trip relationship.
+- [x] Add hashed, expiring, single-use link tokens in Supabase.
+- [x] Test expiration, replay, wrong-trip access, and successful linking locally through PGlite.
+- [x] Verify incoming requests with `TELEGRAM_WEBHOOK_SECRET`.
+- [x] Persist only Telegram identifier and confirmed trip relationship.
+- [ ] Verify the webhook with a real Telegram update against a disposable Supabase project.
 - [ ] Commit: `feat: link Telegram users to trips`.
 
 ### Task 2.2: Implement read-only commands

@@ -23,13 +23,14 @@ Database tests apply all migrations to PGlite with test roles and an Auth schema
 
 UI tests cover setup, pending review, loading, validation errors, generation failure, owner-only decisions, persistence/reload, and the absence of aborted surfaces. Playwright uses production components with mocked API responses at desktop and mobile sizes.
 
-Recorded verification:
+Recorded verification (rerun on 2026-09-04 against commit `488090c`):
 
-- `npm test`: 325 tests passed across 15 files after review fixes, including 76 PostgreSQL tests and 40 Auth/session tests.
-- `npm run lint`: passed after the review fixes.
-- `npm run test:coverage`: passed at 311 tests during integration, with domain coverage 100% lines/functions/statements and 97.05% branches. The final repeated coverage run was declined; the domain implementation did not change after this coverage result.
-- `npm run build`: passed during integration, with `/` and `/login` dynamically rendered. Final recovery and sign-out changes also pass the full test suite and lint.
-- `npm run test:browser`: four desktop/mobile tests passed during integration; screenshots were inspected. A repeat after the final recovery fixes was declined. Those fixes have component regression tests in the 325-test suite.
+- Full Vitest suite via `npm run test:coverage`: 325 tests passed across 15 files, including 76 PostgreSQL tests and 40 Auth/session tests. No tests failed or were skipped.
+- `npm run lint`: passed.
+- Domain coverage: 100% lines/functions/statements and 97.05% branches. These percentages apply to `lib/domain`, the configured coverage scope, not the entire application.
+- `npm run build`: passed on the final implementation, with `/` and `/login` dynamically rendered.
+- `npm run test:browser`: all four desktop/mobile tests passed on the final implementation. These use the isolated React harness with mocked API responses.
+- Production smoke: started the built Next.js app at `http://127.0.0.1:3100`, verified the root renders the disabled login state when unconfigured, unconfigured API's 503 `NOT_CONFIGURED`, missing callback code redirect, and cross-origin POST's 403 rejection. Real Chromium verified disabled sign-in, no page errors, and no horizontal overflow at 1440x1000 and 390x844. Screenshots are in ignored `test-results/production-login-*.png`; the mobile screenshot was visually inspected. The temporary server was stopped after testing. Later mock-account browser QA also verified that local `127.0.0.1` root navigation keeps the same host instead of redirecting to `localhost`.
 - `git diff --check`: passed; Git reported only Windows LF-to-CRLF conversion notices.
 
 Review fixes cover legacy-row repair, Auth outages without unintended cookie deletion, failed sign-out handling, hidden legacy sensitive outputs, SQL/JavaScript whitespace parity, unavailable-trip navigation, and reconciliation after conflicting or uncertain decisions.
@@ -38,7 +39,7 @@ The local Superpowers repository is tracked as a pinned Git submodule. New check
 
 ## Live Service Gate
 
-This checkout has no `.env.local` Supabase/Gemini credentials. Docker Desktop is installed but its engine was not running. No hosted project was created or modified, no live Gemini request was sent, and no email sign-in was verified.
+Rechecked on 2026-09-04: this checkout has only `.env.example`, and no Supabase URL, Supabase public key, or Gemini API key is configured in the process environment. Docker Desktop is installed but its engine is not running. No hosted project was created or modified, no live Gemini request was sent, and no email sign-in was verified.
 
 Before marking either phase's live exit criteria complete:
 

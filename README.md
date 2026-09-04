@@ -28,12 +28,14 @@ Set the values in `.env.local` using `.env.example` as the environment contract:
 - `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`: your development project's public connection settings.
 - `GEMINI_API_KEY`: server-only API key. Never prefix this with `NEXT_PUBLIC_`.
 - `GEMINI_MODEL`: defaults to `gemini-3.7-flash`; configure a model available to your project.
+- `TELEGRAM_WEBHOOK_SECRET`: shared secret expected in Telegram webhook requests.
+- `TELEGRAM_BOT_TOKEN`: reserved for Phase 2 bot replies; link-token redemption does not require a service-role key.
 
 Apply all SQL migrations in `supabase/migrations/` in filename order to a disposable Supabase project. Use the Supabase CLI with an explicit development project reference (`supabase link --project-ref <development-ref>` then `supabase db push`), or the SQL editor. Do not apply these blindly to a production project. The forward migration preserves old tables but revokes application access to retired profile/provider data.
 
 Enable email sign-in in Supabase Auth. Configure Site URL to the development URL and allow the exact callback URL, for example `http://localhost:3000/auth/callback`. Open the email link in the browser that requested it, since PKCE uses a browser-specific verifier. Use the actual port printed by Next.js if 3000 is occupied.
 
-Without Supabase configuration, the app opens a disabled sign-in screen. It does not fall back to local/demo persistence. No service-role key is needed by the runtime.
+Without Supabase configuration, development builds show mock account buttons for `owner@example.test`, `planner@example.test`, `member@example.test`, and `viewer@example.test`. These accounts use in-memory trip/proposal data so each role can be exercised without Supabase or Gemini. Production builds keep mock accounts disabled unless `ENABLE_MOCK_ACCOUNTS=true` is set explicitly. No service-role key is needed by the runtime.
 
 ## Verification
 
@@ -44,10 +46,13 @@ npm run test:coverage
 npm run build
 npx playwright install chromium
 npm run test:browser
+npm run test:mock:e2e
 git diff --check
 ```
 
-Vitest includes real PostgreSQL execution through PGlite, with a test Auth schema and roles. Browser tests render the production React components in a separate Vite test harness with mocked HTTP responses; they are not a live Supabase/Gemini end-to-end test.
+Vitest includes real PostgreSQL execution through PGlite, with a test Auth schema and roles. Browser tests render the production React components in a separate Vite test harness with mocked HTTP responses. `npm run test:mock:e2e` starts a real Next.js dev server with mock accounts enabled and verifies the owner, planner, member, and viewer paths without Supabase or Gemini.
+
+Telegram link-token tests run locally only. Before marking Phase 2 live, verify the webhook secret, `/start <token>` redemption, replay rejection, and wrong-trip isolation against a disposable Supabase project and a test Telegram bot.
 
 ## Safety boundary
 
