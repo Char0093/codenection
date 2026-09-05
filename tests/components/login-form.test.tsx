@@ -6,9 +6,9 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { LoginForm } from "@/components/login-form";
 
-const { signInWithOtp } = vi.hoisted(() => ({ signInWithOtp: vi.fn() }));
-vi.mock("@/lib/supabase/client", () => ({ createClient: () => ({ auth: { signInWithOtp } }) }));
-afterEach(() => { cleanup(); signInWithOtp.mockReset(); window.history.replaceState(null, "", "/"); });
+const { signInWithOtp, signInWithPassword } = vi.hoisted(() => ({ signInWithOtp: vi.fn(), signInWithPassword: vi.fn() }));
+vi.mock("@/lib/supabase/client", () => ({ createClient: () => ({ auth: { signInWithOtp, signInWithPassword } }) }));
+afterEach(() => { cleanup(); signInWithOtp.mockReset(); signInWithPassword.mockReset(); window.history.replaceState(null, "", "/"); });
 it("sends a magic link to the same-origin callback", async () => {
   const user = userEvent.setup();
   signInWithOtp.mockResolvedValue({ error: null });
@@ -39,4 +39,24 @@ it("shows authentication errors and permits retry", async () => {
   await user.click(screen.getByRole("button", { name: "Send sign-in link" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Too many requests");
   expect(screen.getByRole("button", { name: "Send sign-in link" })).toBeEnabled();
+});
+it("signs in with the dev-only password form", async () => {
+  const user = userEvent.setup();
+  signInWithPassword.mockResolvedValue({ error: null });
+  render(<LoginForm configured />);
+  await user.type(screen.getByLabelText("Dev email"), "dev@example.com");
+  await user.type(screen.getByLabelText("Dev password"), "a-strong-password");
+  await user.click(screen.getByRole("button", { name: "Sign in with password" }));
+  expect(signInWithPassword).toHaveBeenCalledWith({ email: "dev@example.com", password: "a-strong-password" });
+});
+it("shows dev password sign-in errors and permits retry", async () => {
+  const user = userEvent.setup();
+  signInWithPassword.mockResolvedValue({ error: { message: "Invalid login credentials" } });
+  render(<LoginForm configured />);
+  await user.type(screen.getByLabelText("Dev email"), "dev@example.com");
+  await user.type(screen.getByLabelText("Dev password"), "wrong-password");
+  await user.click(screen.getByRole("button", { name: "Sign in with password" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Invalid login credentials");
+  expect(screen.getByRole("button", { name: "Sign in with password" })).toBeEnabled();
+  expect(signInWithOtp).not.toHaveBeenCalled();
 });

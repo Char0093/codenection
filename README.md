@@ -43,6 +43,16 @@ Enable email sign-in in Supabase Auth. Configure Site URL to the development URL
 
 Without Supabase configuration, the app opens a disabled sign-in screen. It does not fall back to local/demo persistence. No service-role key is needed by the runtime.
 
+**Dev-only password sign-in:** magic-link email is rate-limited on Supabase's default mailer (a few sends per hour), which makes it impractical for repeated local testing. In development builds only (`npm run dev`; this form does not render in a production build), the login page also shows a password field. Seed a user once with the service-role key from Project Settings -> API (never committed, never read from `.env.local`):
+
+```bash
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key npm run seed:dev-user -- dev@example.com a-strong-password
+```
+
+(PowerShell: `$env:SUPABASE_SERVICE_ROLE_KEY = "your-service-role-key"; npm run seed:dev-user -- dev@example.com a-strong-password`)
+
+The npm script loads `NEXT_PUBLIC_SUPABASE_URL` from `.env` automatically (via `node --env-file=.env`); only the service-role key needs to be set for this one command, and it is never written to `.env`/`.env.local`. Then sign in at `/login` with that email and password instead of waiting on a magic link.
+
 ## Verification
 
 ```bash

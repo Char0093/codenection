@@ -7,3 +7,4 @@ coverage/
 *.tsbuildinfo
 test-results/
 playwright-report/
+.claude/scheduled_tasks.lock

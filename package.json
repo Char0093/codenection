@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:browser": "playwright test"
+    "test:browser": "playwright test",
+    "seed:dev-user": "node --env-file=.env scripts/create-dev-user.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.21.0",
