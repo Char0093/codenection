@@ -16,7 +16,7 @@ describe("validateGeminiProposal", () => {
     const input = structuredClone(proposal);
     input.activities.reverse();
     const before = structuredClone(input);
-    expect(validateGeminiProposal(request, input, role)).toEqual(before);
+    expect(validateGeminiProposal(request, input, role)).toEqual({ proposal: before, gateWarnings: [] });
     expect(input).toEqual(before);
   });
   it.each(["member", "viewer", "stranger", undefined])("rejects unauthorized role %s", (role) => {
@@ -46,7 +46,7 @@ describe("validateGeminiProposal", () => {
   it("allows adjacent activities and identical times on separate dates", () => {
     expect(validateGeminiProposal(request, { ...proposal, activities: [
       ...proposal.activities, { ...activity, startTime: "11:30", estimatedCostTier: "budget" },
-    ] }, "owner").activities).toHaveLength(3);
+    ] }, "owner").proposal.activities).toHaveLength(3);
   });
   it.each([["relaxed", 240], ["balanced", 360], ["active", 480], ["intense", 600]] as const)("enforces the %s total daily activity duration cap", (pace, cap) => {
     const oneDay = { ...request, endDate: request.startDate, pace };
@@ -61,5 +61,47 @@ describe("validateGeminiProposal", () => {
     expect(validateGeminiProposal({ ...request, endDate: request.startDate }, {
       ...proposal, activities: [{ ...activity, startTime: "23:00", durationMinutes: 60 }],
     }, "owner")).toBeDefined();
+  });
+
+  describe("hard-constraint gate wiring (Task 1.4)", () => {
+    const foodActivity = { ...activity, category: "food" as const };
+
+    it("fails closed on a food activity when a severe allergen is confirmed, since Gemini activities carry no verified allergen data", () => {
+      expect(() => validateGeminiProposal(
+        { ...request, endDate: request.startDate },
+        { ...proposal, activities: [foodActivity] },
+        "owner",
+        [{ kind: "dietary", flag: "no_peanut", severity: "severe" }],
+      )).toThrow(/allergen|unknown/i);
+    });
+
+    it("does not fail a non-food activity even with a severe allergen confirmed", () => {
+      expect(validateGeminiProposal(
+        { ...request, endDate: request.startDate },
+        { ...proposal, activities: [activity] },
+        "owner",
+        [{ kind: "dietary", flag: "no_peanut", severity: "severe" }],
+      )).toBeDefined();
+    });
+
+    it("collects a warn-level gate reason (e.g. a standard-severity allergen on unknown data) without blocking generation", () => {
+      const result = validateGeminiProposal(
+        { ...request, endDate: request.startDate },
+        { ...proposal, activities: [foodActivity] },
+        "owner",
+        [{ kind: "dietary", flag: "no_gluten", severity: "standard" }],
+      );
+      expect(result.proposal).toBeDefined();
+      expect(result.gateWarnings.length).toBeGreaterThan(0);
+    });
+
+    it("fails closed when halal is confirmed and the food activity has no verified halal status", () => {
+      expect(() => validateGeminiProposal(
+        { ...request, endDate: request.startDate },
+        { ...proposal, activities: [foodActivity] },
+        "owner",
+        [{ kind: "dietary", flag: "halal", severity: "standard" }],
+      )).toThrow(/halal/i);
+    });
   });
 });

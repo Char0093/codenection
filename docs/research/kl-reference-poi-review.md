@@ -5,7 +5,8 @@
 > `Implementation_Plan.md` Task 1.1, which requires "40-50 hand-verified `poi_catalog` rows" for the
 > KLCC / Bukit Bintang / Old Town-Melaka corridor.
 
-## Status: 22 of the target 40-50 (second batch added 2026-09-05)
+## Status: 24 of the target 40-50 (a fourth entry -- The Daily Fix -- added 2026-09-05 to reduce the
+Melaka demo trip's chance of landing only on Nancy's Kitchen's honestly-unknown halal status)
 
 This batch prioritizes **verifiable accuracy over hitting the target count**. Each row below is
 backed by a cited source checked on 2026-09-05. Expanding past 22 means repeating this same
@@ -192,6 +193,54 @@ well-documented is necessary but not sufficient; region fit is checked first.
   this is recorded as unknown rather than confidently `no`, despite the circumstantial evidence
   pointing that way.
 - Source: [Nancy's Kitchen review — The Ranting Panda](https://therantingpanda.com/2019/05/25/food-review-nancys-kitchen-restaurant-in-melaka-malaysia-one-of-the-most-popular-peranakan-restaurant-in-the-city/), [aggregator claim](https://www.airial.travel/restaurants/malaysia/melaka/nancys-kitchen-lMNO4jM3)
+
+### Seri Nyonya Restaurant (Hotel Equatorial Melaka)
+- Address: Level 3, Hotel Equatorial Melaka, Jalan Bandar Hilir, 75000 Melaka
+- Coordinates: no independently published building-level coordinate found; approximated to the
+  Stadthuys/Dutch Square cluster coordinate (2.194059, 102.249154) since multiple sources place
+  the hotel within the same Bandar Hilir heritage block (~500m from A Famosa, a 6-minute walk from
+  St Paul's Hill) -- same approximation approach used for Christ Church Melaka above
+- halal_status: **`claimed`, not `verified`** — described as "Halal certified and pork-free" and
+  "the only halal-certified Nyonya restaurant in Melaka" across multiple independent food-blog
+  sources (Rebecca Saw, elanakhong.com, Burpple, holidify), consistent enough to be more than a
+  single unsupported claim, but none of these is JAKIM's own directory or an official statement
+  the way the OldTown White Coffee entry above has. Per this batch's own bar (`verified` requires
+  an official JAKIM/venue-certificate source), this stays at `claimed` until one is found.
+- Source: [Rebecca Saw — "Halal Nyonya food in Melaka"](https://rebeccasaw.com/halal-nyonya-food-in-melaka-seri-nyonya-hotel-equatorial-melaka/), [elanakhong.com](http://www.elanakhong.com/2016/05/authentic-nyonya-cuisines-seri-nyonya.html), [Burpple](https://www.burpple.com/seri-nyonya-restaurant-equatorial-hotel)
+- **Unconfirmed lead, not used to upgrade this entry**: a 2018 Malay Mail report on Melaka Islamic
+  Religious Department (JAIM) data states Equatorial Hotel was among the 34 hotel kitchens in
+  Melaka with recognised halal certification, and a MyHalalXplorer post separately lists Hotel
+  Equatorial Melaka under JAKIM-certified hotel restaurants. Both could arguably justify
+  `verified`, but I could not directly fetch and quote either primary page (both returned HTTP 403
+  / stripped content) -- only a search tool's own paraphrase of it, which is not a citable primary
+  source under this batch's bar. Left at `claimed`; revisit if either page becomes fetchable, or an
+  independent quote of the JAIM list is found.
+
+### The Daily Fix (café)
+- Address: 55, Jalan Hang Jebat (Jonker Street), 75200 Melaka -- inside the Next KK
+  batik/souvenir shop
+- Coordinates: 2.196307, 102.246768, per Wanderlog's place listing for this address
+- Popular café (Tripadvisor: #7 of 732 Melaka restaurants at time of writing), known for pandan
+  and gula melaka pancakes
+- halal_status: **`claimed`, not `verified`** — independently described as a "halal-certified
+  café" by multiple unofficial travel sources (SGMYTRIPS, Klook, Holidify, Rucksackinn,
+  Tours-Malaysia) with no contradicting claim found, but none of these is JAKIM's own directory or
+  an official statement. Recorded at the same bar as Seri Nyonya above, not upgraded to `verified`.
+- Source: [SGMYTRIPS — "Top 12 Halal Food Stops in Melaka"](https://sgmytrips.com/halal-food-in-melaka/), [Klook — "10 Best Halal Restaurants In Melaka"](https://www.klook.com/en-MY/blog/halal-restaurants-melaka/), [Holidify — "Halal Food in Melaka"](https://www.holidify.com/pages/halal-food-in-melaka-4972.html)
+
+### Discarded halal claims (Jonker Street area)
+Two further Jonker Street venues were researched and explicitly **not** added despite initially
+looking like good candidates, per this batch's own "never infer from cuisine type or an
+unsupported secondary claim" rule:
+- **Jonker 88**: widely called "Muslim-friendly"/"no pork" by casual travel blogs, but
+  [Halalketak](https://halalketak.com/brands/jonker-88/) — a Malaysian halal-verification
+  publisher that specifically checked JAKIM's e-Halal portal — found **no active or expired
+  halal certificate** for this premise. This is direct evidence against the popular claim, not
+  merely an absence of evidence; excluded entirely rather than added as `unknown`.
+- **Cottage Spices Nyonya Restaurant**: sources directly contradict each other -- one describes
+  it as merely "Muslim-friendly (no pork/alcohol, not officially certified)" while another claims
+  "halal-certified ingredients." Contradictory unofficial claims do not clear the `claimed` bar
+  (which requires corroboration, not dispute); excluded rather than guessed.
 
 ## Next steps to reach 40-50
 

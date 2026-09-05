@@ -1,6 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { paceDailyDurationCaps } from "@/lib/domain/itinerary";
+import type { CandidatePoi } from "@/lib/domain/poi-resolution";
 import { createGeminiClient, type GeminiClient } from "./client";
 import { GeminiPlanningError } from "./errors";
 import { toGeminiResponseSchema } from "./json-schema";
@@ -28,7 +29,7 @@ function isRateLimited(error: unknown): boolean {
 }
 
 export function createTripPlanner(options: TripPlannerOptions = {}) {
-  return async function plan(input: GeminiTripRequest): Promise<GeminiPlanningResult> {
+  return async function plan(input: GeminiTripRequest, candidatePois: readonly CandidatePoi[] = []): Promise<GeminiPlanningResult> {
     // Parse before constructing the provider client. Zod errors contain validation
     // issues, and can be mapped to 422 by the caller without sending any input.
     const request = geminiTripRequestSchema.parse(input);
@@ -70,6 +71,10 @@ export function createTripPlanner(options: TripPlannerOptions = {}) {
               `The requested pace allows at most ${paceDailyDurationCaps[request.pace]} summed activity minutes per day.`,
               "Use only ordinary trip-level preferences. Do not infer personal health or religious profiles.",
               "The server independently validates the proposal; only the trip owner can confirm it.",
+              ...(candidatePois.length > 0 ? [
+                `For every food-category activity, name one of these known local venues exactly if it fits the plan: ${candidatePois.map((poi) => poi.name).join("; ")}.`,
+                "Only propose a different food venue if none of the listed ones suit the activity's theme, timing, or budget tier.",
+              ] : []),
             ].join("\n"),
           },
         })),
@@ -98,6 +103,6 @@ export function createTripPlanner(options: TripPlannerOptions = {}) {
   };
 }
 
-export async function planTrip(input: GeminiTripRequest): Promise<GeminiPlanningResult> {
-  return createTripPlanner()(input);
+export async function planTrip(input: GeminiTripRequest, candidatePois: readonly CandidatePoi[] = []): Promise<GeminiPlanningResult> {
+  return createTripPlanner()(input, candidatePois);
 }

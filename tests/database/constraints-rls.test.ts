@@ -187,6 +187,34 @@ describe("traveler_profiles RLS", () => {
   });
 });
 
+describe("trip_member_budget_mobility_caps (Task 1.4 gate support)", () => {
+  it("lets any trip member read every member's numeric caps, but never social_role", async () => {
+    await actor(member);
+    await db.query(`insert into traveler_profiles(trip_id,trip_member_id,budget_daily_cap,mobility_threshold_m,social_role)
+      values ($1,$2,150,800,'gourmand')`, [trip, memberMemberId]);
+    await actor(otherMember);
+    await db.query(`insert into traveler_profiles(trip_id,trip_member_id,budget_total_cap)
+      values ($1,$2,900)`, [trip, otherMemberId]);
+    await actor(planner);
+    const rows = (await db.query<{ trip_member_id: string; budget_daily_cap: string | null; budget_total_cap: string | null; mobility_threshold_m: number | null }>(
+      "select * from trip_member_budget_mobility_caps($1) order by trip_member_id", [trip])).rows;
+    expect(rows).toHaveLength(2);
+    expect(Object.keys(rows[0]).sort()).toEqual(["budget_daily_cap", "budget_total_cap", "mobility_threshold_m", "trip_member_id"]);
+    const memberRow = rows.find((r) => r.trip_member_id === memberMemberId);
+    expect(memberRow?.budget_daily_cap).toBe("150");
+    expect(memberRow?.mobility_threshold_m).toBe(800);
+  });
+
+  it("returns nothing for a caller who is not a member of the trip", async () => {
+    await actor(member);
+    await db.query(`insert into traveler_profiles(trip_id,trip_member_id,budget_daily_cap)
+      values ($1,$2,150)`, [trip, memberMemberId]);
+    await actor(stranger);
+    const rows = (await db.query("select * from trip_member_budget_mobility_caps($1)", [trip])).rows;
+    expect(rows).toHaveLength(0);
+  });
+});
+
 describe("poi_catalog RLS", () => {
   beforeEach(async () => {
     await actor(null, "postgres");

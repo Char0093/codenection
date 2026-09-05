@@ -25,9 +25,10 @@ function activity(overrides: Record<string, unknown> = {}) {
 function payload(activities = [activity(), activity({ date: "2026-10-02" })]) {
   return { summary: "Two days of local culture", activities, assumptions: ["Tickets available"] };
 }
-async function actor(user: string | null, role = "authenticated") {
+async function actor(user: string | null, role = "authenticated", email = "") {
   await db.exec("reset role");
   await db.query("select set_config('request.jwt.claim.sub', $1, false)", [user ?? ""]);
+  await db.query("select set_config('request.jwt.claim.email', $1, false)", [email]);
   await db.exec(`set role ${role}`);
 }
 async function save(body: unknown = payload(), revision = 1, target = trip) {
@@ -61,7 +62,8 @@ beforeAll(async () => {
     create function auth.uid() returns uuid language sql stable as
       $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
     create function auth.jwt() returns jsonb language sql stable as
-      $$ select jsonb_build_object('sub', auth.uid(), 'email', 'test@example.invalid') $$;
+      $$ select jsonb_build_object('sub', auth.uid(),
+        'email', coalesce(nullif(current_setting('request.jwt.claim.email', true), ''), 'test@example.invalid')) $$;
     grant usage on schema public, auth to anon, authenticated, service_role;
     grant execute on all functions in schema auth to anon, authenticated, service_role;
     alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
@@ -624,6 +626,17 @@ describe("shared generation reservations", () => {
     await db.exec("update generation_reservations set created_at=now()-interval '61 minutes'");
     await actor(owner);
     await reserve(otherTrip);
+  });
+
+  it("exempts the seeded dev_test@gmail.com account from the rate limit, others unaffected", async () => {
+    await reserve();
+    await reserve();
+    await reserve();
+    await actor(owner, "authenticated", "dev_test@gmail.com");
+    await reserve();
+    await reserve();
+    await actor(owner);
+    await expect(reserve()).rejects.toMatchObject({ code: "P0003" });
   });
 
   it("rejects unauthorized users and exposes only authenticated RPC execution", async () => {

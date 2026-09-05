@@ -20,7 +20,7 @@
 | Area | Status | Summary |
 | --- | --- | --- |
 | Delivered foundation | Delivered locally | Auth, trip CRUD, Gemini itinerary proposals, deterministic schedule validation, proposal confirmation, RLS, revisions, and rate reservations. |
-| Phase 1: preferences and safety | Partial | Full typed constraint schema (dietary/religious_access/mobility), `traveler_profiles`, and `poi_catalog` with RLS now exist, with a first researched-and-cited batch of 14 (of 40-50) seed POIs. Context extraction, hybrid preference signals, the compact survey, and the deterministic hard-constraint gate do not yet exist. |
+| Phase 1: preferences and safety | Partial | Full typed constraint schema, `traveler_profiles`/`poi_catalog` with RLS, 24 (of 40-50) researched-and-cited seed POIs, the deterministic hard-constraint gate (wired into Gemini proposal validation), and constraint-aware POI grounding (Task 1.1/5.x pulled forward) now exist -- live-verified both blocking (no verified venue) and succeeding (a verified venue exists). Context extraction, hybrid preference signals, the compact survey, and pre-generation daily planning windows do not yet exist. Gate `warn`s are computed but not yet surfaced in the UI; `claimed`-status venues cannot yet be safely suggested pending that UI. |
 | Phase 2: optimizer and ledger | Not started, except math helper | No Python service, optimizer client, Knapsack solver, Redis integration, or receipt ledger persistence. |
 | Phase 3: collaborative workspace | Partial, substantial | Jigsaw engine, chat, assistant proposals, responsive workspace, and persistent timeline drags exist. Presence, confirmation wiring, PWA behavior, and some synchronization details remain. |
 | Phases 4–9 | Not started | Routing, split/merge execution, serendipity, on-site tools, self-healing, VQA, deployment, and full demo path remain. |
@@ -126,17 +126,125 @@ Missing:
 - Deterministic explicit survey vector, separate contextual vector, and read-time weighting.
 - Signal expiry/dismissal behavior and tests proving inference cannot overwrite the survey baseline.
 
-### Task 1.4 — Hard-constraint gate: Not started — highest-priority blocker
+### Task 1.4 — Hard-constraint gate: Delivered and hosted-verified, with two documented scope limits
 
-Missing:
+Live-verified 2026-09-05 against the hosted Supabase project (not just PGlite): an unconstrained
+trip generates a proposal successfully (201). A confirmed `halal` constraint's outcome now depends
+on real `poi_catalog` grounding data (see "POI resolution and safety grounding" below) rather than
+always refusing -- both outcomes are live-verified.
 
-- The pure `pass | warn | fail` gate for dietary, halal, dress code, budget, mobility, and time.
-- Fail-closed handling for unknown allergen/halal data when severity is severe.
-- Integration into the existing Gemini proposal-validation path.
-- Exhaustive decision-table tests.
+Implemented 2026-09-05:
 
-Do not treat the current schedule/budget-tier validation as this gate. It does not enforce the new
-confirmed constraint model against verified POI safety data.
+- `lib/domain/constraint-gate.ts`: pure `evaluateConstraintGate(item, confirmedConstraints,
+  travelerCaps)` -- no I/O, no clock reads. Covers all six Section VII dimensions: dietary
+  (allergen match against `allergen_risk` fails regardless of severity; unknown allergen data
+  fails closed for severe flags, warns otherwise), halal (verified passes, claimed warns,
+  unknown/no fails), dress code (a `modest` requirement always warns -- "never silently
+  scheduled"), budget (item cost vs. each traveler's precomputed remaining headroom), mobility
+  (leg distance vs. threshold, fail if a severe mobility constraint is confirmed, warn otherwise),
+  and time (overlap/midnight/consensus-anchor flags, precomputed by the caller from full-schedule
+  context). 35 exhaustive table tests in `tests/domain/constraint-gate.test.ts`.
+- Wired into `lib/domain/gemini-proposal-validation.ts`: the gate is now the single authority for
+  overlap/midnight decisions too (replacing a second, separate implementation of the same checks),
+  plus the new dietary/halal enforcement. A `fail` throws `GeminiProposalValidationError` (blocks
+  the whole proposal, matching today's all-or-nothing behavior); a `warn` is collected into the
+  function's new return shape (`{ proposal, gateWarnings }`) but does not block. Since a
+  Gemini-authored activity has no `poi_catalog` link yet, every `food`-category activity is
+  conservatively treated as `halalStatus: "unknown"` / `allergenDataUnknown: true` -- this
+  correctly fails closed whenever a severe dietary constraint is confirmed for the trip, which is
+  the safety-critical behavior the plan repeatedly emphasizes.
+- `TripRepository` gained `listConfirmedConstraints` and `listTravelerCaps`; `generateProposal`
+  fetches both before validating. `listTravelerCaps` calls a new security-definer function,
+  `trip_member_budget_mobility_caps` (migration `202609050007_traveler_caps_view.sql`), because
+  Task 1.1's `traveler_profiles` RLS is deliberately self-read-only to protect `social_role` --
+  a plain view would have been re-filtered by that same restrictive policy and returned nothing
+  for other members. The function bypasses per-row RLS but projects only the four numeric-cap
+  columns the gate needs, never `social_role`/`pace`/`interest_vector`. 2 new RLS/contract tests
+  cover group-wide read and non-member denial.
+- 4 new tests in `tests/domain/gemini-proposal-validation.test.ts` prove the end-to-end wiring:
+  a severe allergen fails closed on a food activity, a non-food activity is unaffected, a
+  standard-severity match warns without blocking, and confirmed halal without a verified status
+  fails closed.
+
+Two scope limits, both deliberate and documented in code comments (not silently under-built):
+
+- **Per-item numeric Budget/Mobility enforcement is inert against live data.** The gate itself
+  supports it (see the exhaustive tests, which use synthetic numbers), but the current wiring
+  passes `remainingBudget: null` and `legDistanceM: null` for every real activity, because Gemini
+  activities carry only a cost *tier* (no numeric estimate) and no leg-distance data -- inventing
+  a tier-to-currency conversion table would be exactly the kind of fabricated number this project
+  has been avoiding. This becomes real once Task 2.3's Knapsack pricing and POI-linked distances
+  exist.
+- **Gate `warn`s are computed but not yet surfaced to a human reviewer anywhere in the UI.** They
+  are returned from `validateGeminiProposal` and simply not read further today. A follow-up should
+  either display them on the proposal review UI or fold them into the assistant-proposal-card flow
+  -- not required by Task 1.4's own checklist, but worth closing before Phase 1 exit.
+- **Vegetarian/vegan/other dietary flags are not enforced by this gate.** Section VII's Dietary
+  rule only names "an allergen flag," not the full dietary vocabulary; enforcing vegetarian/vegan
+  would need `poi_catalog` to carry a distinct meat/dairy-content fact it does not have. Documented
+  in the gate's own source and covered by an explicit test asserting the current (non-)behavior.
+
+### Task 1.1/5.x pulled forward — POI resolution and safety grounding: Delivered and hosted-verified
+
+Directed 2026-09-05: proposal validation is all-or-nothing, so a Gemini food activity with no
+verified safety link was rejecting every proposal for a halal/severe-allergen-confirmed trip, not
+just the unsafe item. POI resolution was pulled forward ahead of the broader Task 5.x discovery
+engine to fix this.
+
+- `lib/domain/poi-resolution.ts`: `inferPoiRegion()` maps a free-text destination to one of the
+  three reference-corridor regions (KLCC / Bukit Bintang / Old Town-Melaka) or `null` elsewhere;
+  `matchPoiByName()` deterministically matches a Gemini-written activity title against the trip's
+  candidate POIs (conservative one-directional substring match on a parenthetical-stripped core
+  name, ignoring names too short to be a meaningful signal); `filterCandidatePoisForConstraints()`
+  narrows the candidate list down to only what's safe to *suggest* to Gemini given the trip's
+  confirmed constraints. 33 tests in `tests/domain/poi-resolution.test.ts`.
+- `lib/services/trip-proposals.ts`'s `generateProposal` fetches confirmed constraints first, then
+  the region's full candidate POIs, then computes a **filtered** hint list for the Gemini planner
+  (which never sees a venue the constraint already rules out) while still validating every activity
+  against the **full, unfiltered** candidate list -- so the gate remains the sole authority on
+  safety and the hint is only ever a suggestion, never a trust boundary.
+- Constraint-aware hint filtering (directed 2026-09-05, after live testing showed adding more
+  `claimed` POIs alone did not help -- Gemini tends to use every named candidate across a trip's
+  meal slots rather than picking only the safe ones): for a confirmed `halal` constraint, only
+  `halal_status: "verified"` venues are suggested (`claimed` is excluded until a warn-and-confirm
+  UI exists to surface it safely); for a confirmed **severe** allergen constraint, venues with
+  `allergen_data_unknown: true` or a matching `allergen_risk` entry are excluded. The two filters
+  are independent (a confirmed allergen alone never narrows by halal_status and vice versa), and a
+  standard-severity allergen constraint does not filter the hint, matching the gate's own warn-only
+  treatment at that severity. If filtering leaves no eligible venue, no hint is sent at all rather
+  than a fallback venue being invented -- Gemini then names an unlinked venue on its own, which
+  correctly fails the gate closed with a clear reason, never a silently-trusted guess.
+- `lib/gemini/trip-planner.ts`'s system instruction conditionally names the filtered candidate
+  venues for food activities when any exist, without revealing why they were chosen.
+- Live-verified against the hosted Supabase project 2026-09-05, both outcomes: the reference
+  Melaka demo trip (confirmed `halal`) still correctly refuses (422) because Melaka's seeded
+  catalog has zero `verified` halal venues (Nancy's Kitchen: `unknown`; Seri Nyonya Restaurant and
+  The Daily Fix: `claimed`) -- an accurate, not overcautious, result. A fresh Bukit Bintang trip
+  with confirmed `halal` succeeded (201): Gemini's only food activity named the region's one
+  `verified` venue (OldTown White Coffee), matched, and passed the gate.
+- POI catalog grew from 22 to 24 rows (`docs/research/kl-reference-poi-review.md`,
+  `scripts/seed_kl_reference.ts`): Seri Nyonya Restaurant and The Daily Fix, both Melaka,
+  `claimed` halal per multiple independent unofficial sources. Two further Jonker Street
+  candidates (Jonker 88, Cottage Spices) were researched and explicitly excluded -- one has
+  direct evidence against the popular halal claim (a dedicated JAKIM-portal-checking source found
+  no certificate), the other has self-contradicting sources -- see the review doc's "Discarded
+  halal claims" note.
+- Two pre-existing migration bugs found and fixed while seeding: `202609050006`'s blanket
+  `revoke all ... from service_role` on `poi_catalog` never granted write access back
+  (`202609050008` fixes this), and `202609030004`'s equivalent revoke on `ordinary_trim(text)`
+  (used by `poi_catalog`'s own check constraint) had the same gap (`202609050009` fixes this).
+  Neither was caught by the PGlite test harness, since it runs migrations as a superuser, not as
+  `service_role`.
+- `202609050010_dev_generation_rate_limit_exemption.sql`: exempts the seeded `dev_test@gmail.com`
+  account from `reserve_generation`'s anti-abuse rate limit (3 reservations per trip per 10
+  minutes, 5 per user per hour), so manual testing isn't throttled. A literal-email carve-out in a
+  security-definer function, acceptable only because this project has no real users yet -- remove
+  before any production launch.
+
+Remaining: a warn-and-confirm UI so `claimed` (not just `verified`) halal venues can be safely
+suggested and accepted with an explicit warning shown to the user; more `verified`-tier POI
+coverage (Melaka currently has none); non-reference-corridor destinations still get no grounding
+at all, by honest design, not a bug.
 
 ### Task 1.5 — Blind preference alignment: Not started
 
@@ -154,13 +262,31 @@ Missing:
 - Explicit baseline writes for vibe, constraints, pace, budget, social role, and surprise tolerance.
 - Private social-role access control, overwrite behavior, and Group Conductor summary.
 - Clear separation preventing chat-derived signals from modifying survey fields.
+- Always-available post-onboarding preference editor with revision-checked individual-field updates.
+- Safety-edit confirmation and supersession audit trail, privacy-safe Realtime notice, and immediate
+  review marking for affected active items.
+- Future-only application versus a user-requested, confirmable current-itinerary diff; neither path
+  may silently rewrite the active itinerary.
+
+### Task 1.7 — Daily planning windows before generation: Not started
+
+Missing:
+
+- Destination-local per-day `available_from`, soft `preferred_start`, and optional hard
+  `finish_by` persistence with RLS and revision checks.
+- Preset/custom time controls, copy-to-all-days, visible defaults, and pre-generation validation.
+- Group hard-availability intersection, soft-preference explanations, and confirmable early-bird
+  branch suggestions.
+- Propagation into the scheduler/router plus timezone, infeasibility, and authorization tests.
 
 ### Phase 1 completion gate
 
 Claude should not mark Phase 1 complete until the survey baseline, contextual signals, constraint
-review, POI reference data, and deterministic safety gate work together. The acceptance path must
-show that a live-jazz message changes attraction ranking while a severe peanut constraint still
-rejects an unsafe or unknown food POI.
+review, POI reference data, daily planning windows, and deterministic safety gate work together.
+The acceptance path must show that a live-jazz message changes attraction ranking while a severe
+peanut constraint still rejects an unsafe or unknown food POI, that a later soft-preference edit
+changes future suggestions without mutating the active itinerary, and that generation respects
+each day's hard time bounds while explaining a material deviation from the preferred start.
 
 ## Phase 2 — Optimization service and budget scheduling
 
@@ -168,7 +294,7 @@ rejects an unsafe or unknown food POI.
 | --- | --- | --- |
 | Task 2.1 Python optimization service | Not started | FastAPI `/healthz`, token middleware, versioned Pydantic models, stateless-dependency CI rule, Python quality gates, Dockerfile, and Compose. |
 | Task 2.2 Next.js optimizer client | Not started | Bidirectional Zod validation, anonymized payload builder, hard timeout, stable error mapping, and fake-server tests. |
-| Task 2.3 Multi-objective Knapsack | Not started | OR-Tools scheduler, cap/slack outputs, deterministic seed, gate pass, and pending-proposal route. |
+| Task 2.3 Multi-objective Knapsack | Not started | OR-Tools scheduler, cap/slack outputs, daily hard-window packing, soft preferred-start penalty/explanation, deterministic seed, gate pass, and pending-proposal route. |
 | Task 2.4 Receipt-OCR ledger | Partial foundation only | `lib/domain/debt-simplify.ts` implements equal splitting, balances, and simplified transfers. Expenses tables/RLS, OCR, confirmation, weighted/subgroup splitting, reversals, and ledger UI/API are missing. |
 
 ## Phase 3 — Collaborative workspace
@@ -242,6 +368,11 @@ Implemented:
 
 Missing:
 
+- The newly specified Calendar-style vertical 24-hour view, collapsed overnight presentation,
+  duration-proportional vertical geometry, 15-minute pointer/keyboard resizing, explicit travel
+  blocks, and locked-anchor unlock/confirmation flow.
+- Revalidation of resize operations against opening hours, transit time, daily planning windows,
+  pace, budget, and rendezvous deadlines; existing persistence covers movement only.
 - Designed animation of remote changes rather than an immediate refetch replacement.
 - Complete visual states for active, pending proposal, AI-suggested, and conflicted cards.
 - Full specified test matrix, including two-member collision behavior and remote animation.
@@ -337,9 +468,22 @@ in a production-like environment, one stable contract release, and evidence of m
    `docs/research/kl-reference-poi-review.md`, then run `npm run seed:kl-reference` against a real
    Supabase project once `SUPABASE_SERVICE_ROLE_KEY` is available. (`trip_interest_signals` is
    Task 1.2's own migration, not part of this task.)
-3. Implement Task 1.4's hard-constraint gate and wire it into existing Gemini validation before
-   exposing any new attraction recommender.
-4. Implement the compact survey portion of Task 1.6 and the candidate confirmation UI in Task 1.3.
+3. Task 1.4's hard-constraint gate done 2026-09-05: pure gate, 35 tests, wired into Gemini
+   proposal validation (fails closed on unknown allergen/halal data). Task 1.1/5.x's POI
+   resolution and constraint-aware safety grounding was then pulled forward (see that task's own
+   section above) once live testing showed the gate blocked every food activity for any
+   halal/severe-allergen-confirmed trip, not just unsafe ones. Migrations `202609050006` through
+   `202609050010` are applied to the hosted Supabase project and verified live, both outcomes: an
+   unconstrained trip generates successfully (201); a halal-confirmed trip generates successfully
+   (201) when a `verified` venue exists in its region (Bukit Bintang) and correctly refuses (422)
+   when only `claimed`/`unknown` venues exist (Melaka) -- an accurate result of the catalog's real
+   coverage, not a bug.
+   Remaining: surface gate `warn`s in the proposal review UI; a warn-and-confirm flow so `claimed`
+   halal venues can be suggested and accepted safely; wire real numeric cost/distance data once
+   Task 2.3 exists, so Budget/Mobility per-item enforcement stops being inert; grow `verified`-tier
+   POI coverage, especially for Melaka, which currently has none.
+4. Implement Task 1.7's pre-generation daily planning windows, then the compact survey portion of
+   Task 1.6 and the candidate confirmation UI in Task 1.3.
 5. Implement Task 1.2 contextual chat extraction, expiry/dismissal, and the separate contextual
    vector. Demonstrate that inference changes ranking but never changes confirmed facts.
 6. Finish Task 3.2 presence and Task 3.5 confirmation/focus/touch gaps; resolve ordinary-member

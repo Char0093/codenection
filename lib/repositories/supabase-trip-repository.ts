@@ -6,11 +6,34 @@ import { verifiedUser } from "@/lib/supabase/auth";
 import { AppError, databaseError } from "@/lib/http/errors";
 import { geminiTripProposalSchema } from "@/lib/gemini/schemas";
 import type { GeminiTripProposal } from "@/lib/gemini/types";
+import type { ConfirmedConstraintFlag, TravelerCapRow } from "@/lib/domain/constraint-gate";
+import type { CandidatePoi, PoiCatalogRegion } from "@/lib/domain/poi-resolution";
 import type { TripRecord, ProposalRecord, TripRepository } from "./planning-repository";
 
 const tripColumns = "id,owner_user_id,destination_name,start_date,end_date,budget_tier,pace,notes,revision,active_proposal_id";
 const proposalColumns = "id,trip_id,status,payload,model_identifier,created_at,expires_at,trip_revision";
 const roleSchema = z.enum(["owner", "planner", "member", "viewer"]);
+
+const confirmedConstraintRowSchema = z.object({
+  kind: z.enum(["dietary", "religious_access", "mobility"]),
+  flag: z.string(),
+  severity: z.enum(["severe", "standard"]),
+});
+
+const travelerCapRowSchema = z.object({
+  trip_member_id: z.string().uuid(),
+  budget_daily_cap: z.coerce.number().nullable(),
+  budget_total_cap: z.coerce.number().nullable(),
+  mobility_threshold_m: z.number().int().nullable(),
+});
+
+const candidatePoiRowSchema = z.object({
+  name: z.string(),
+  halal_status: z.enum(["verified", "claimed", "unknown", "no"]),
+  allergen_risk: z.array(z.string()),
+  allergen_data_unknown: z.boolean(),
+  dress_code: z.enum(["none", "modest"]),
+});
 
 // Read historical rows without applying today's input limits, so owners can repair them.
 const persistedTripSchema = z.object({
@@ -117,6 +140,36 @@ export class SupabaseTripRepository implements TripRepository {
     await this.userId();
     const { error } = await this.client.rpc("reserve_generation", { target_trip_id: tripId });
     if (error) databaseError(error);
+  }
+
+  async listConfirmedConstraints(tripId: string): Promise<ConfirmedConstraintFlag[]> {
+    await this.userId();
+    const { data, error } = await this.client
+      .from("confirmed_trip_constraints").select("kind,flag,severity").eq("trip_id", tripId);
+    if (error) databaseError(error);
+    return (data ?? []).map((row) => confirmedConstraintRowSchema.parse(row));
+  }
+
+  async listTravelerCaps(tripId: string): Promise<TravelerCapRow[]> {
+    await this.userId();
+    const { data, error } = await this.client.rpc("trip_member_budget_mobility_caps", { target_trip_id: tripId });
+    if (error) databaseError(error);
+    return ((data ?? []) as unknown[]).map((row) => {
+      const value = travelerCapRowSchema.parse(row);
+      return { tripMemberId: value.trip_member_id, budgetDailyCap: value.budget_daily_cap, budgetTotalCap: value.budget_total_cap, mobilityThresholdM: value.mobility_threshold_m };
+    });
+  }
+
+  async listPoisByRegion(region: PoiCatalogRegion): Promise<CandidatePoi[]> {
+    await this.userId();
+    const { data, error } = await this.client
+      .from("poi_catalog").select("name,halal_status,allergen_risk,allergen_data_unknown,dress_code")
+      .eq("region", region).contains("tags", ["food"]).limit(50);
+    if (error) databaseError(error);
+    return (data ?? []).map((row) => {
+      const value = candidatePoiRowSchema.parse(row);
+      return { name: value.name, halalStatus: value.halal_status, allergenRisk: value.allergen_risk, allergenDataUnknown: value.allergen_data_unknown, dressCode: value.dress_code };
+    });
   }
 
   async saveProposal(trip: TripRecord, payload: GeminiTripProposal, model: string): Promise<ProposalRecord> {

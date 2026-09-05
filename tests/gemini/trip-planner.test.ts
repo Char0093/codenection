@@ -25,6 +25,19 @@ describe("Gemini trip planner", () => {
     expect(call.config.systemInstruction).toContain("15 to 480");
     expect(call.config.systemInstruction).toContain("at most 360 summed activity minutes per day");
   });
+  it("hints at known local venues only when candidate POIs are supplied", async () => {
+    const generateContent = vi.fn().mockResolvedValue({ text: JSON.stringify(proposal) });
+    const planner = createTripPlanner({ client: { generateContent }, model: "test-model" });
+    await planner(request);
+    expect(generateContent.mock.calls[0][0].config.systemInstruction).not.toMatch(/known local venues/i);
+
+    await planner(request, [
+      { name: "Seri Nyonya Restaurant", halalStatus: "claimed", allergenRisk: [], allergenDataUnknown: false, dressCode: "none" },
+    ]);
+    const withCandidates = generateContent.mock.calls[1][0].config.systemInstruction;
+    expect(withCandidates).toMatch(/known local venues/i);
+    expect(withCandidates).toContain("Seri Nyonya Restaurant");
+  });
   it("public planTrip uses the server client and default model", async () => {
     vi.stubEnv("GEMINI_API_KEY", "fake-test-key");
     vi.stubEnv("GEMINI_MODEL", "");

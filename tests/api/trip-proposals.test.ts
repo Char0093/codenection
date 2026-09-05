@@ -10,6 +10,8 @@ function repository(overrides: Partial<TripRecord> = {}) {
   const repo = {
     getTrip: async () => ({ ...trip, ...overrides }),
     reserveGeneration: vi.fn(async () => {}),
+    listConfirmedConstraints: async () => [],
+    listTravelerCaps: async () => [],
     saveProposal: async (_trip: TripRecord, value: typeof payload, model: string) => {
       const record = { id: "proposal", tripId: trip.id, status: "pending" as const, payload: value, model, tripRevision: 1, createdAt: "2026-09-03T00:00:00Z", expiresAt: "2026-09-04T00:00:00Z" };
       persisted.push(record);

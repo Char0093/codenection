@@ -230,6 +230,24 @@ const REFERENCE_POIS: PoiSeedRow[] = [
     sourceNote: "Multiple secondary travel-blog sources describe this as a traditional pork-serving Peranakan restaurant, and one aggregator (airial.travel) labels it 'Non Halal', but none traces to an official halal-authority statement or the venue's own declaration -- recorded as unknown, not 'no', per instruction not to infer from cuisine type or secondary claims. Coordinate approximated to Jonker Street (mid-way along it per sources); no independent building-level coordinate found.",
     verifiedAt: "2026-09-05",
   },
+  {
+    name: "Seri Nyonya Restaurant (Hotel Equatorial Melaka)", region: "Old Town/Melaka", lat: 2.194059, lng: 102.249154,
+    costTier: "premium", tags: ["food", "peranakan", "nyonya", "halal_claimed"],
+    halalStatus: "claimed", allergenRisk: [], allergenDataUnknown: true,
+    indoor: true, dressCode: "none", touristDensity: "medium", heightM: null, landmarkClass: null,
+    sourceUrl: "https://rebeccasaw.com/halal-nyonya-food-in-melaka-seri-nyonya-hotel-equatorial-melaka/",
+    sourceNote: "Multiple independent food-blog sources (Rebecca Saw, elanakhong.com, Burpple) consistently describe this as halal-certified/pork-free, calling it the only halal-certified Nyonya restaurant in Melaka -- more corroborated than a single claim, but no JAKIM directory listing or official statement found, so halalStatus stays 'claimed' not 'verified'. Coordinate approximated to the Stadthuys/Dutch Square cluster (~500m/6-min walk per sources); no independent building-level coordinate found.",
+    verifiedAt: "2026-09-05",
+  },
+  {
+    name: "The Daily Fix", region: "Old Town/Melaka", lat: 2.196307, lng: 102.246768,
+    costTier: "standard", tags: ["food", "cafe", "halal_claimed"],
+    halalStatus: "claimed", allergenRisk: [], allergenDataUnknown: true,
+    indoor: true, dressCode: "none", touristDensity: "high", heightM: null, landmarkClass: null,
+    sourceUrl: "https://sgmytrips.com/halal-food-in-melaka/",
+    sourceNote: "Independently described as a halal-certified cafe by multiple unofficial travel sources (SGMYTRIPS, Klook, Holidify, Rucksackinn, Tours-Malaysia) with no contradicting claim found, consistent enough for 'claimed'; none of these is JAKIM's own directory or an official statement, so not 'verified'. Address 55 Jalan Hang Jebat (Jonker Street); coordinates per Wanderlog's place listing for that address.",
+    verifiedAt: "2026-09-05",
+  },
 ];
 
 async function main() {

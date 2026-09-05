@@ -1,6 +1,8 @@
 import type { TripInput } from "@/lib/domain/trip";
 import type { TripRole } from "@/lib/domain/proposal";
 import type { GeminiTripProposal } from "@/lib/gemini/types";
+import type { ConfirmedConstraintFlag, TravelerCapRow } from "@/lib/domain/constraint-gate";
+import type { CandidatePoi, PoiCatalogRegion } from "@/lib/domain/poi-resolution";
 
 export type { TripInput } from "@/lib/domain/trip";
 
@@ -30,6 +32,13 @@ export interface TripRepository {
   listTrips(): Promise<TripRecord[]>;
   listProposals(tripId: string): Promise<ProposalRecord[]>;
   reserveGeneration(tripId: string): Promise<void>;
+  /** Group-wide confirmed constraints (Implementation_Plan.md Task 1.4's hard-constraint gate). */
+  listConfirmedConstraints(tripId: string): Promise<ConfirmedConstraintFlag[]>;
+  /** Group-wide numeric budget/mobility caps only -- never social_role, pace, or interest_vector. */
+  listTravelerCaps(tripId: string): Promise<TravelerCapRow[]>;
+  /** Reference-corridor POIs for grounding a Gemini-proposed food activity against verified safety
+   * data. Empty outside the three named regions -- see lib/domain/poi-resolution.ts. */
+  listPoisByRegion(region: PoiCatalogRegion): Promise<CandidatePoi[]>;
   saveProposal(trip: TripRecord, payload: GeminiTripProposal, model: string): Promise<ProposalRecord>;
   decideProposal(tripId: string, proposalId: string, decision: "accept" | "reject"): Promise<ProposalRecord>;
 }
