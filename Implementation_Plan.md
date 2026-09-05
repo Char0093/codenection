@@ -21,6 +21,7 @@ WanderSync is an **end-to-end adaptive collaborative travel system** for group t
 - [What this does](#what-this-does)
 - [I. Target users](#i-target-users)
 - [II. The eleven core modules](#ii-the-eleven-core-modules)
+- [II-a. Onboarding: the Travel DNA questionnaire](#ii-a-onboarding-the-travel-dna-questionnaire)
 - [II-b. Conflict resolution framework](#ii-b-progressive-conflict-resolution-framework)
 - [III. Deep-dive: Module 5 — serendipity & dynamic exploration engine](#iii-deep-dive-module-5--serendipity--dynamic-exploration-engine)
 - [IV. End-to-end system architecture](#iv-end-to-end-system-architecture)
@@ -86,6 +87,40 @@ The reference scenario is a four-person friend group on a 3-day city trip in Mal
 | | **9. Photo spot & lighting engine** | Pinpoints exact ground coordinates ("Golden Footprints"); uses SunCalc to compute sun azimuth and elevation to schedule spots during Golden and Blue Hours; provides focal length and framing guides. | Eliminates bad lighting, crowded framing, and tourist-trap vantage points. |
 | | **10. Environmental self-healing** | Triggers sub-second DAG retopology when precipitation exceeds 70%, budgets run over, or ad-hoc detours occur — swapping outdoor routes for indoor equivalents and rebalancing financial headroom. | Keeps itineraries resilient against weather disruption and sudden change. |
 | | **11. Multimodal on-site VQA** | Ingests snapshots of local food to screen for allergen cross-contamination and detail culinary origins; analyzes heritage architecture to identify styles and historical context. | Protects dietary safety on the spot while delivering rich cultural storytelling. |
+
+## II-a. Onboarding: the Travel DNA questionnaire
+
+A first-launch, five-step questionnaire, under 90 seconds, completed once per member before group
+bargaining starts. Its purpose is narrow: give the modules above real signal from the first minute
+instead of inferring everything from chat text. A "Quick mode" (dealbreakers and budget only, the
+rest defaulted) sits alongside the full flow for members happy to trust the defaults. When a group
+leader invites members, each invite carries the same prompt, so onboarding scales with the group
+rather than being a solo setup step.
+
+Two visibility tiers apply throughout: a **public** answer is visible to the rest of the group for
+coordination; a **private** answer (the social-role step, by default) is visible only to the
+arbiter logic server-side, never returned to another member's client -- the same social-face
+protection Task 1.5's blind-preference ballot already gives budget answers.
+
+| Step | UI | Feeds | Mechanism |
+| --- | --- | --- | --- |
+| 1. Travel vibe | Single-select image cards: heritage, food, nature, urban. | Module 5 exploration engine | Seeds the exploitation-set weighting of `interest_vector` before any chat text exists. |
+| 2. Dealbreaker vault | Multi-select toggle chips: halal, vegetarian/vegan, named allergens, mobility access, a walking-distance cap. | Task 1.1 `trip_constraints` | Each chip is a direct, self-confirmed write to the existing typed dietary/mobility enum -- the same self-confirmation model the dietary picker already uses, not a second constraint system. |
+| 3. Energy & wallet | Two sliders: budget lean, pace. | Module 2 Knapsack; the existing `pace_level` enum | Pace reuses the trip's existing relaxed/balanced/active/intense scale and `paceDailyDurationCaps` rather than inventing a second one; budget seeds the member's personal cost-tier lean inside the group's shared Knapsack objective. |
+| 4. Social role | Single-select carousel (Navigator, Chronicler, Gourmand, Go-with-the-flow, Negotiator); private by default. | Level 0 jigsaw minimax regret | A per-member regret-weight multiplier on `evaluateTeam`'s scoring -- see the Task 3.0 addendum below. |
+| 5. Surprise dial | A single 1-5 dial. | Module 5 `ε`-greedy recommender | Sets the per-trip `ε` (already spec'd in Task 5.1 as "default 0.2, configurable per trip") directly from the dial position, mapped linearly across 0.0-0.3. |
+
+**Group Conductor:** once three or more members complete the questionnaire, the leader sees an
+aggregate "Harmony Compass" -- overlapping vibe choices, a pace-mismatch warning ("2 Marathoners
+vs. 1 Snail -- expect a Level 2 micro-split"), and a consensus forecast. This is a read-only
+summary over already-confirmed `trip_constraints` and `traveler_profiles` rows; it opens no new
+write path and no new trust boundary.
+
+**Safety note:** none of this bypasses [Section VII](#vii-hard-constraint-gate). The dealbreaker
+vault writes the exact typed-enum rows the hard-constraint gate already enforces, not a second,
+competing constraint system. The vibe check and surprise dial only ever bias which gate-`pass`
+candidates get suggested first -- a `fail` from Section VII is terminal regardless of onboarding
+answers.
 
 ## II-b. Progressive conflict resolution framework
 
@@ -196,7 +231,7 @@ Humans confirm every state change.
 | `POST /solve/cluster` | K-Means / GMM over interest vectors + budget capacity; returns branch assignments. |
 | `POST /solve/route` | m-VRPTW with time windows, sub-branches, and a consensus anchor; returns ordered waypoints + arrival times per branch. |
 | `POST /solve/sun` | SunCalc azimuth/elevation for coordinates + date; returns golden- and blue-hour windows. |
-| `POST /solve/reoptimize` | Partial DAG retopology given a trigger and a locked set; returns a minimal diff. |
+| `POST /solve/reoptimize` | Partial DAG retopology given a trigger and a locked set; returns a minimal diff. Accepts `accumulated_cost` and `remaining_budget_cap`; when `remaining_budget_cap < planned_cost` for the unvisited tail, runs a budget-recovery pass instead of only a weather/detour diff (Task 7.2). |
 | `GET /healthz` | Liveness. |
 
 **Contract rules**
@@ -212,9 +247,9 @@ Humans confirm every state change.
 
 New tables extend the existing `trips` / `trip_members` / itinerary schema. All are trip-scoped with RLS mirroring the current policies (`can_view_trip`, `can_manage_trip`, owner-only activation). Requires the `postgis` and `vector` extensions.
 
-- `traveler_profiles` — per member: `interest_vector vector(64)` (pgvector), `budget_daily_cap numeric`, `budget_total_cap numeric`, `pace`, `mobility_threshold_m int`. **No free-text medical data.**
+- `traveler_profiles` — per member: `interest_vector vector(64)` (pgvector), `budget_daily_cap numeric`, `budget_total_cap numeric`, `pace`, `mobility_threshold_m int`, `serendipity_epsilon numeric` (0.0-0.3, Task 1.6's surprise dial), `social_role` enum (Task 1.6; private -- never returned in a cross-member API response). **No free-text medical data.**
 - `trip_constraints` — hard constraints as typed rows: `kind` (`dietary` | `religious_access` | `mobility`), `flag` (enum), `severity` (`severe` | `standard`), `source` (`chat` | `voice` | `social` | `manual`), `confirmed_by`, `confirmed_at`. Nothing is enforced until `confirmed_at` is set.
-- `poi_catalog` — cached POIs: `geog geography(Point,4326)` (PostGIS), `cost_tier`, `tags text[]`, `halal_status` (`verified` | `claimed` | `unknown` | `no`), `allergen_risk text[]`, `indoor bool`, `dress_code` enum, `tourist_density` enum.
+- `poi_catalog` — cached POIs: `geog geography(Point,4326)` (PostGIS), `cost_tier`, `tags text[]`, `halal_status` (`verified` | `claimed` | `unknown` | `no`), `allergen_risk text[]`, `indoor bool`, `dress_code` enum, `tourist_density` enum, `height_m numeric` (nullable), `landmark_class` (`prominent_structure` | `global_storefront` | `architectural_typology` | null) for deterministic landmark grounding (Task 6.1).
 - `itinerary_dag` — nodes (activities, transits) + edges with time windows; `locked bool` for visited or fixed-reservation nodes; supports partial re-optimization.
 - `subgroups`, `subgroup_members`, `split_sessions` — branch assignments, rendezvous point (`geog`), convergence time.
 - `mobility_options` — computed Fastest / Budget / Scenic legs with cost, duration, and `weather_sensitive bool`.
@@ -223,7 +258,7 @@ New tables extend the existing `trips` / `trip_members` / itinerary schema. All 
 - `chat_messages` — append-only trip chat: `author_member_id`, `author_kind` (`member` | `assistant` | `system`), `body`, optional `proposal_id` referencing `agent_proposals`, `status`. Broadcast over `trip:{trip_id}`, but visibility enforced by RLS, never by the channel name.
 - `serendipity_log` — surfaced exploration POIs plus accept/dismiss outcome, feeding the diversity and dedupe guardrail.
 - `heal_events` — trigger, diff applied, confirmation state.
-- Redis keys (ephemeral, TTL'd): `trip:{id}:loc:{member}` live location, `trip:{id}:session` state-machine cursor, `trip:{id}:lock` re-optimization mutex.
+- Redis keys (ephemeral, TTL'd): `trip:{id}:loc:{member}` live location, `trip:{id}:session` state-machine cursor, `trip:{id}:lock` re-optimization mutex, `trip:{id}:blind:{salted_ref}` a salt-hashed blind-preference ballot (`budget_tier`, hidden dislikes) keyed by a per-session salt rather than the member id, so the arbiter can read the set without attributing any single ballot (Task 1.5).
 - Supabase Realtime presence (ephemeral, never persisted): who is viewing the trip, and typing indicators.
 
 ## VII. Hard-constraint gate
@@ -318,12 +353,13 @@ Phase 0/1 of the earlier plan is implemented on `main` and is the baseline Wande
 
 ### Task 1.1: Constraint & profile schema
 
-**Files:** create `supabase/migrations/2026090X0001_traveler_profiles_constraints.sql`, `lib/domain/constraints.ts`, `tests/domain/constraints.test.ts`, `tests/database/constraints-rls.test.ts`. Enable the `postgis` and `vector` extensions.
+**Files:** create `supabase/migrations/2026090X0001_traveler_profiles_constraints.sql`, `lib/domain/constraints.ts`, `tests/domain/constraints.test.ts`, `tests/database/constraints-rls.test.ts`, `supabase/seed.sql`, `scripts/seed_kl_reference.ts`. Enable the `postgis` and `vector` extensions.
 
 - [ ] Add `traveler_profiles`, `trip_constraints`, and `poi_catalog` with trip-scoped RLS matching the existing policies.
 - [ ] `trip_constraints` rows are inert until `confirmed_at` is set; enforcement reads go through a view that filters `confirmed_at is not null`.
 - [ ] Typed enums for `dietary` / `religious_access` / `mobility` flags and for `severity`; reject free text in flag columns at the database level.
 - [ ] Contract and PGlite RLS tests: owner/planner write, member read, unrelated denial, unconfirmed rows excluded from the enforcement view.
+- [ ] Bootstrap seed harness: a deterministic script (`scripts/seed_kl_reference.ts`, invoked via `supabase/seed.sql` for local resets) pre-populates 40–50 hand-verified `poi_catalog` rows for the reference corridor (KLCC, Bukit Bintang, Old Town/Melaka), with real `halal_status`, `allergen_risk`, `indoor`, `dress_code`, and (Task 6.1) `landmark_class` values — commercial map APIs do not carry these fields, so every downstream feature needs this ground truth rather than synthetic mocks. Idempotent: re-running does not duplicate rows.
 - [ ] Run lint, test, build.
 
 ### Task 1.2: Multi-source context ingestion
@@ -356,7 +392,46 @@ Phase 0/1 of the earlier plan is implemented on `main` and is the baseline Wande
 - [ ] Exhaustive table tests for dietary, halal, dress code, budget upper bound, mobility, and time.
 - [ ] Wire the gate into the existing proposal-validation path so today's Gemini proposals also pass through it.
 
-**Phase 1 exit criteria:** ingested chat, voice, and social input produce candidate constraints; only human-confirmed constraints are enforced; the gate rejects a peanut-risk food POI and an unverified-halal POI in an automated test; the open baseline items above are closed.
+### Task 1.5: Blind preference alignment
+
+**Files:** create `lib/domain/blind-preferences.ts`, `lib/redis/blind-ballot.ts`, `app/api/trips/[tripId]/blind-preferences/route.ts`, `components/blind-preference-drawer.tsx`, `tests/domain/blind-preferences.test.ts`, `tests/chat/blind-arbiter.test.ts`.
+
+Public confirmation (Task 1.3) works for facts a member is willing to say out loud. It does not cover social friction: nobody wants to be the one who says a restaurant is too expensive or admits fatigue in a channel the whole group can read.
+
+- [ ] Ballots (`budget_tier: "BUDGET" | "COMFORT" | "LUXURY"`, plus optional hidden dislikes) are written to the salt-hashed `trip:{id}:blind:{salted_ref}` Redis key from [Section VI](#vi-persistence-model), never to a row an authorized member can attribute back to a person. The salt is per trip-session and is never logged alongside the member id.
+- [ ] Arbiter logic is a pure conservative-intersection reducer: the team's anchor dining/activity ceiling locks to the **lowest** `budget_tier` present in the ballot set, and any hidden dislike removes matching candidates from the pool the same way a confirmed constraint would, without the dislike itself ever being surfaced.
+- [ ] The assistant states only the aggregate outcome in chat — "Based on combined group criteria, here are 3 matching options" — and never the ballot count, the per-member values, or who dissented. Test that no chat message, log line, or API response can be used to reconstruct an individual ballot from the aggregate.
+- [ ] Ballots are advisory input to Task 2.3's Knapsack ceiling and Task 5.1's exploitation ranking; they never bypass the [hard-constraint gate](#vii-hard-constraint-gate), which stays keyed to confirmed, non-anonymous `trip_constraints`.
+- [ ] Tests: lowest tier wins regardless of submission order, a hidden dislike filters candidates without leaking into any response, ballots expire with the Redis TTL, re-submission overwrites rather than duplicates a member's own ballot.
+
+### Task 1.6: Onboarding questionnaire (Travel DNA)
+
+**Files:** create `supabase/migrations/2026090X0006_onboarding_profile.sql`, `components/onboarding-wizard.tsx`, `app/actions/onboarding.ts`, `app/trips/[tripId]/onboarding/page.tsx`, `app/api/trips/[tripId]/onboarding/summary/route.ts`, `tests/components/onboarding-wizard.test.tsx`, `tests/database/onboarding-rls.test.ts`.
+
+See [Section II-a](#ii-a-onboarding-the-travel-dna-questionnaire) for the five-step design and its
+mapping onto the modules above.
+
+- [ ] Five-step wizard plus a "Quick mode" toggle on step one (dealbreakers and budget only, the
+      rest defaulted); no free-text fields, under 90 seconds to complete.
+- [ ] Steps 1, 3, and 5 write `traveler_profiles` (`interest_vector` seed, `pace`,
+      `serendipity_epsilon`); step 2 writes `trip_constraints` rows through the existing
+      self-confirmed path from Task 1.1, not a second constraint system; step 4 writes
+      `traveler_profiles.social_role`, defaulting to private.
+- [ ] `pace` reuses the trip's existing `pace_level` enum. This step does not introduce a second
+      pace scale.
+- [ ] `social_role` is never included in any API response readable by a member other than its
+      owner; only server-side jigsaw evaluation logic (Task 3.0's regret-weight addendum) reads it.
+- [ ] Redoing the questionnaire overwrites the previous answer per field; it never accumulates
+      history.
+- [ ] "Group Conductor" summary endpoint: vibe overlap, a pace-mismatch flag (both an
+      `active`/`intense` and a `relaxed` pace present among confirmed members), and a consensus
+      percentage, computed read-only from already-confirmed rows.
+- [ ] Tests: quick mode skips steps 3-5 with sane defaults, each step's answer lands in the field
+      the Section II-a table specifies, `social_role` never appears in a cross-member response,
+      redoing the questionnaire replaces rather than duplicates rows, the pace-mismatch flag fires
+      only when both extremes are present among confirmed members.
+
+**Phase 1 exit criteria:** ingested chat, voice, and social input produce candidate constraints; only human-confirmed constraints are enforced; the gate rejects a peanut-risk food POI and an unverified-halal POI in an automated test; a blind ballot set with one `BUDGET` vote locks the group ceiling to `BUDGET` without exposing who voted it; a completed onboarding questionnaire seeds `interest_vector`, `pace`, `serendipity_epsilon`, and a private `social_role` without leaking the latter to other members; the reference-corridor seed data loads cleanly; the open baseline items above are closed.
 
 ---
 
@@ -435,6 +510,9 @@ bargaining needs the horizontal room. See `docs/features/collaborative-workspace
 - [x] 53 tests across the engine and the panel.
 - [ ] Persist drags through a revision-checked server write (folds into Task 3.4).
 - [ ] Multiplayer presence cursors during a drag (folds into Task 3.2).
+- [ ] Per-member regret-weight multiplier on `evaluateTeam`, sourced from the Task 1.6 onboarding
+      social-role answer, so a Gourmand's meal anchor and a Navigator's minor preference are not
+      weighed as if they mattered equally to both people (folds into Task 1.6).
 
 ### Task 3.1: Chat persistence & Realtime transport
 
@@ -508,18 +586,33 @@ bargaining needs the horizontal room. See `docs/features/collaborative-workspace
 ### Task 3.5: Workspace shell & confirmation primitive
 
 **Files:** create `app/trips/[tripId]/workspace/page.tsx`, `features/workspace/workspace-shell.tsx`,
-`lib/domain/confirm.ts`, `tests/components/workspace-shell.test.tsx`, `tests/domain/confirm.test.ts`.
+`lib/domain/confirm.ts`, `lib/workspace/focus-bus.ts`, `lib/offline/itinerary-snapshot.ts`,
+`tests/components/workspace-shell.test.tsx`, `tests/domain/confirm.test.ts`, `tests/offline/itinerary-snapshot.test.ts`.
 
 - [ ] Dual-pane layout with a responsive tab collapse below the tablet breakpoint.
 - [ ] One reusable confirmation primitive: propose → render a confirm affordance → single-use token →
       authorized-actor check → apply → acknowledge. Every later mutating flow (split/merge, expense,
       detour, self-heal, track switch) uses this instead of rolling its own.
-- [ ] Tests: replay, expiry, wrong actor, double-accept, and responsive collapse.
+- [ ] **Active focus event bus:** tapping a POI card or proposal bubble in the chat pane dispatches an
+      event the map pane subscribes to, driving `map.flyTo` the target coordinate and highlighting the
+      extruded building. Chat and map stay decoupled — the map never reads chat DOM state directly.
+- [ ] **Touch arbitration:** the 60/40 split is two independent gesture surfaces. When the bottom chat
+      sheet is dragged past 40% height, the map is set `interactive: false` (no pan, pinch, or drag)
+      until the sheet settles back, so a chat scroll can never bleed into a map drag.
+- [ ] **Offline itinerary snapshot (PWA):** the active day's DAG state and each member's emergency
+      contacts are mirrored to client-side storage (IndexedDB) on every successful load, so a signal
+      drop mid-transit still shows the current plan and who to call, read-only, with a visible
+      "offline — last synced HH:MM" banner rather than a blank or stale-looking screen.
+- [ ] Tests: replay, expiry, wrong actor, double-accept, responsive collapse, map ignores pointer
+      events while the chat sheet is expanded past 40%, offline snapshot renders the last-synced plan
+      with airplane mode simulated in a Playwright test.
 
 **Phase 3 exit criteria:** two signed-in members of the same trip see each other's messages and
 presence live; the assistant answers an `@ai` question and posts a proposal card that only an
 authorized member can accept; dragging a card between days persists for both members and is refused
-with a visible reason when it breaks a schedule or constraint rule.
+with a visible reason when it breaks a schedule or constraint rule; tapping a chat POI card flies the
+map to it while the map ignores gestures whenever the chat sheet is expanded past 40%; simulated
+airplane mode still renders the last-synced itinerary and emergency contacts.
 
 ---
 
@@ -543,10 +636,12 @@ with a visible reason when it breaks a schedule or constraint rule.
 
 ### Task 4.3: Split / merge flow
 
-**Files:** create `supabase/migrations/2026090X0003_subgroups.sql`, `lib/domain/subgroups.ts`, `lib/domain/merge-recommendation.ts`, `features/workspace/split-merge-panel.tsx`, `tests/domain/{subgroups,merge-recommendation}.test.ts`, `tests/components/split-merge.test.tsx`.
+**Files:** create `supabase/migrations/2026090X0003_subgroups.sql`, `lib/domain/subgroups.ts`, `lib/domain/merge-recommendation.ts`, `lib/domain/micro-zone-split.ts`, `features/workspace/split-merge-panel.tsx`, `tests/domain/{subgroups,merge-recommendation,micro-zone-split}.test.ts`, `tests/components/split-merge.test.tsx`.
 
 - [ ] `subgroups`, `subgroup_members`, and `split_sessions` with trip-scoped RLS; rendezvous stored as PostGIS `geog`.
 - [ ] The split panel proposes branches from Task 4.1 behind the Task 3.5 confirmation primitive; members may move themselves between branches before confirming. Gemini may suggest branches but must never assign people.
+- [ ] **Level 2 micro-zone split:** a lower-impact mode for energy or pace mismatches inside a single 300 m radius (the [conflict-resolution framework's](#ii-b-progressive-conflict-resolution-framework) Level 2, distinct from the macro Level 3 split above). The low-energy member is routed to a nearby climate-controlled cafe or bench from `poi_catalog` while the rest of the group keeps moving within the same zone; `split_sessions.kind = 'micro_zone'` enforces a walking-time-to-rendezvous cap (2 minutes) instead of the wider merge-anchor math, so nobody is routed out of casual reach.
+- [ ] **Rendezvous mission metadata:** every `split_sessions` row (both micro-zone and the macro Task 4.1/4.2 split) carries an optional short, human-written goal per branch (e.g. "sample local pastries for dinner" / "scout the sunset vantage point"), surfaced on the split-merge panel and the reunion proposal card. This is copy, not a scored objective — it gives the branches something to compare notes on at reunion instead of the split reading as one person being sidelined.
 - [ ] Deterministic ETA guidance bands on merge:
 
 ```text
@@ -556,7 +651,7 @@ with a visible reason when it breaks a schedule or constraint rule.
 ```
 
 - [ ] Per-branch budget caps enforced by the [gate](#vii-hard-constraint-gate) after assignment.
-- [ ] Tests: the three ETA bands, non-member assignment rejected, unauthorized split rejected, merge completion is confirmation-first.
+- [ ] Tests: the three ETA bands, non-member assignment rejected, unauthorized split rejected, merge completion is confirmation-first, a micro-zone split's rendezvous is refused if it exceeds the 2-minute walking cap, mission metadata round-trips onto the reunion card.
 
 ### Task 4.4: Multi-modal mobility decisions
 
@@ -568,7 +663,7 @@ with a visible reason when it breaks a schedule or constraint rule.
 - [ ] Keep routes text- and map-based; no live vehicle tracking.
 - [ ] Tests: break-even flips at the expected party size, the scenic option only appears when it fits the time budget, the rain pivot changes the recommendation.
 
-**Phase 4 exit criteria:** the reference trip produces two interest-clustered branches routed to a shared 18:00 anchor with feasible arrival times; a merge request returns the correct ETA-band guidance; a leg shows all three mobility options with a rideshare break-even.
+**Phase 4 exit criteria:** the reference trip produces two interest-clustered branches routed to a shared 18:00 anchor with feasible arrival times; a merge request returns the correct ETA-band guidance; a leg shows all three mobility options with a rideshare break-even; a simulated energy mismatch produces a Level 2 micro-zone split within the 2-minute rendezvous cap, with mission metadata attached to both branches.
 
 ---
 
@@ -611,8 +706,19 @@ with a visible reason when it breaks a schedule or constraint rule.
 **Files:** create `features/workspace/nav-3d.tsx`, `lib/nav/landmarks.ts`, `lib/nav/orientation-cues.ts`, `tests/nav/*.test.ts`.
 
 - [ ] Mapbox GL 3D building extrusion at a 60° pitch, camera following the active leg, with the next turn landmark highlighted from `poi_catalog` and Mapbox POI data.
-- [ ] Conversational cue generation (Gemini) grounded strictly in the supplied map context: "walk toward the clock tower, turn right at the McDonald's." Cues are advisory text; routing stays deterministic.
-- [ ] Tests: a cue references only a real feature present in the passed context, no cue is invented when no landmark exists, pitch and marker state render correctly.
+- [ ] **Deterministic landmark pre-filtering (`lib/nav/landmarks.ts`), before any Gemini call:** run a
+      spatial query against `poi_catalog` / Mapbox POI layers within `r <= 50m` of the upcoming
+      turn/intersection coordinate, filtered to `landmark_class` in (`prominent_structure` with
+      `height_m > 30`, `global_storefront`, `architectural_typology`). This candidate list, not the raw
+      map tile, is what reaches the LLM — an empty result means no landmark candidate at all.
+- [ ] Conversational cue generation (Gemini) is **strictly grounded**: the prompt supplies only the
+      pre-filtered candidate list, and the response is Zod-validated against a schema that permits
+      referencing only entities from that list. "Walk toward the clock tower, turn right at the
+      McDonald's" is valid only when both named features are in the candidate set for that coordinate;
+      an empty candidate list yields plain distance/direction phrasing with no invented landmark name.
+- [ ] Tests: a cue references only a real feature present in the passed context, no cue is invented
+      when the deterministic pre-filter returns nothing, a candidate outside the 50 m radius or below
+      the height threshold is never offered to the LLM, pitch and marker state render correctly.
 
 ### Task 6.2: Photo spot & lighting engine
 
@@ -625,15 +731,16 @@ with a visible reason when it breaks a schedule or constraint rule.
 
 ### Task 6.3: Context-aware packing checklist
 
-**Files:** create `supabase/migrations/2026090X0004_packing_items.sql`, `lib/packing/generate.ts`, `lib/weather/forecast.ts`, `app/api/trips/[tripId]/packing/route.ts`, `features/workspace/packing-list.tsx`, `tests/packing/*.test.ts`.
+**Files:** create `supabase/migrations/2026090X0004_packing_items.sql`, `lib/packing/generate.ts`, `lib/weather/forecast.ts`, `lib/offline/allergy-card-cache.ts`, `app/api/trips/[tripId]/packing/route.ts`, `features/workspace/packing-list.tsx`, `tests/packing/*.test.ts`.
 
 - [ ] Pull hourly forecast and UV index (OpenWeatherMap) for the trip dates; add rain gear and sun-protection items with a `weather` reason.
 - [ ] Add dress-code items with a `dress_code` reason for every planned POI that requires modest attire.
 - [ ] Generate a bilingual (English + Malay for the reference region) emergency allergy card from confirmed allergen flags, downloadable and offline-capable.
+- [ ] The generated allergy card is cached client-side (service worker precache plus a `localStorage` fallback) the moment it is generated, so it renders instantly in airplane mode rather than depending on a live fetch — this is the one artifact in the product that must never wait on a network round trip.
 - [ ] Shared-item claims so one power bank is not packed four times.
-- [ ] Tests: forecast rain adds an umbrella, a mosque in the plan adds a dress-code item, the allergy card reflects confirmed flags only, a claim assigns exactly one owner.
+- [ ] Tests: forecast rain adds an umbrella, a mosque in the plan adds a dress-code item, the allergy card reflects confirmed flags only, a claim assigns exactly one owner, the card still renders from cache with the network mocked offline.
 
-**Phase 6 exit criteria:** the workspace shows a 3D navigation view with a grounded orientation cue; a photo spot lists a golden-hour window and a stand-here point; the packing list reflects the real forecast, a dress-code POI, and Ben's allergy card.
+**Phase 6 exit criteria:** the workspace shows a 3D navigation view with a grounded orientation cue that never names a landmark outside the deterministic candidate list; a photo spot lists a golden-hour window and a stand-here point; the packing list reflects the real forecast, a dress-code POI, and Ben's allergy card, which still renders with the network disabled.
 
 ---
 
@@ -652,9 +759,10 @@ with a visible reason when it breaks a schedule or constraint rule.
 **Files:** create `services/optimizer/app/solvers/reoptimize.py`, `services/optimizer/tests/test_reoptimize.py`, `lib/heal/retopology.ts`, `tests/heal/retopology.test.ts`.
 
 - [ ] `/solve/reoptimize`: given the DAG, a trigger, and a locked set (visited or fixed-reservation nodes), return a **minimal diff** — swap outdoor nodes for `indoor` equivalents from `poi_catalog`, rebalance budget slack, and reflow only the affected sub-branches.
+- [ ] **Budget-recovery pass:** the payload carries `accumulated_cost` (from the Task 2.4 ledger) and `remaining_budget_cap`. When `remaining_budget_cap < planned_cost` for the unvisited tail of the DAG, the solver does not just drop the lowest-utility paid item — it runs a substitution pass over the remaining Knapsack candidates, preferring a high-utility `cost_tier = 'free'` alternative from `poi_catalog` (public skywalks, open-air heritage quarters, and similarly tagged free POIs) over simply removing a node, so the day stays full rather than just cheaper. The consensus anchor and any `locked` node are never touched by this pass.
 - [ ] Every swapped-in node passes the [gate](#vii-hard-constraint-gate).
 - [ ] Document and measure a latency budget for a single-day DAG; assert it in tests.
-- [ ] Tests: rain swaps the photo leg to the arcade while keeping the anchor arrival, a budget-overrun trigger drops the lowest-utility paid item, locked nodes never move.
+- [ ] Tests: rain swaps the photo leg to the arcade while keeping the anchor arrival, a budget-overrun trigger prefers a free-tier substitution over deletion when one gate-passes, deletion remains the fallback when no adequate free substitute exists, locked nodes never move.
 
 ### Task 7.3: Confirmation-first healed plan
 
@@ -665,7 +773,7 @@ with a visible reason when it breaks a schedule or constraint rule.
 - [ ] `heal_events` records the trigger, the diff, and the outcome.
 - [ ] Tests: an unconfirmed heal does not mutate the active plan, confirmation applies atomically, rejection is logged.
 
-**Phase 7 exit criteria:** an 85%-precipitation trigger on the reference trip produces a confirmable diff that swaps the outdoor photo leg for a sheltered arcade, rebalances the budget, keeps the 18:00 anchor, and changes nothing until confirmed.
+**Phase 7 exit criteria:** an 85%-precipitation trigger on the reference trip produces a confirmable diff that swaps the outdoor photo leg for a sheltered arcade, rebalances the budget, keeps the 18:00 anchor, and changes nothing until confirmed; a simulated overspend against `remaining_budget_cap` produces a diff that substitutes a free-tier POI ahead of the anchor rather than just deleting a node.
 
 ---
 

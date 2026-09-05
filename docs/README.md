@@ -9,9 +9,6 @@ When instructions conflict, use this order:
 1. Direct user request for the current task.
 2. `Implementation_Plan.md`.
 3. Files in this `docs/` directory.
-4. `travel_planner_concept.md` as background only.
-
-The concept file describes a broad future platform. Do not treat every concept item as MVP scope.
 
 ## MVP Scope
 
