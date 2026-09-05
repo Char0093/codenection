@@ -45,7 +45,7 @@ test("saved trip, proposal review, confirmation and reload", async ({ page }, te
 test("unconfigured sign-in renders clearly at both sizes", async ({ page }, testInfo) => {
   await page.goto("/?view=login");
   await expect(page.getByLabel("Email", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: /send.*link|sign in/i })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Send sign-in link" })).toBeDisabled();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath("login.png"), fullPage: true });
 });

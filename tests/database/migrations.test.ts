@@ -1,6 +1,8 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
+import { postgis } from "@electric-sql/pglite-postgis";
+import { vector } from "@electric-sql/pglite-pgvector";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 const migrationDirectory = fileURLToPath(new URL("../../supabase/migrations/", import.meta.url));
@@ -50,7 +52,7 @@ async function snapshot() {
 }
 
 beforeAll(async () => {
-  db = new PGlite();
+  db = new PGlite({ extensions: { postgis, vector } });
   await db.exec(`create schema auth;
     create table auth.users(id uuid primary key);
     create role anon nologin;

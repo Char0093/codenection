@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:browser": "playwright test",
-    "seed:dev-user": "node --env-file=.env scripts/create-dev-user.mjs"
+    "seed:dev-user": "node --env-file=.env scripts/create-dev-user.mjs",
+    "seed:kl-reference": "node --env-file=.env --import tsx scripts/seed_kl_reference.ts"
   },
   "dependencies": {
     "@google/genai": "^2.21.0",
@@ -25,6 +26,8 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",
+    "@electric-sql/pglite-pgvector": "^0.0.9",
+    "@electric-sql/pglite-postgis": "^0.2.8",
     "@playwright/test": "^1.62.1",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
@@ -36,6 +39,7 @@
     "eslint": "^9.22.0",
     "eslint-config-next": "^15.2.4",
     "jsdom": "^30.0.1",
+    "tsx": "^4.23.13",
     "typescript": "^5.8.2",
     "vitest": "^3.0.9"
   }
