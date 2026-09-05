@@ -8,7 +8,7 @@ import {
   type TravelerConstraintProfile,
 } from "@/lib/domain/constraint-gate";
 import type { BusinessStatus, OpeningStatus, ProviderOpeningHours } from "@/lib/poi/opening-hours";
-import { openingStatusForDate } from "@/lib/poi/opening-hours";
+import { isSnapshotUsable, openingStatusForDate } from "@/lib/poi/opening-hours";
 
 /**
  * Implementation_Plan.md Task 3.4: the typed candidate pool the day builder drags from. Pure -- no
@@ -112,6 +112,8 @@ export type CuratedPoiRow = {
   businessStatus: BusinessStatus | null;
   providerHours: ProviderOpeningHours | null;
   providerHoursFetchedAt: string | null;
+  /** Past this instant the snapshot is treated as absent, never quietly reused. */
+  providerHoursExpiresAt: string | null;
 };
 
 /** A transient provider result. Never persisted into the owned catalog columns. */
@@ -195,6 +197,9 @@ export type BuildPoolInput = {
   travelerCaps: readonly TravelerConstraintProfile[];
   /** Destination-local date the pool is being built for; drives the opening-hours status shown. */
   selectedDate: string;
+  /** Evaluated against each snapshot's expiry so the pool never advertises stale hours as current.
+   * Injected rather than read from the clock, keeping this module pure and testable. */
+  now?: Date;
 };
 
 /**
@@ -214,8 +219,11 @@ export function buildChoicePool(input: BuildPoolInput): PoolCandidate[] {
     const category = categorizePoi(row.tags);
     const servesFood = isFoodVenue(row.tags);
     // Live provider hours are preferred over the stored snapshot when both exist; the snapshot is
-    // what the catalog is permitted to retain, the live result is fresher.
-    const hours = match?.providerHours ?? row.providerHours;
+    // what the catalog is permitted to retain, the live result is fresher. An expired snapshot is
+    // dropped entirely rather than shown as current -- the card then reads "Hours unverified",
+    // matching exactly what the server-side placement check will decide.
+    const storedHours = isSnapshotUsable(row.providerHoursExpiresAt, input.now ?? new Date()) ? row.providerHours : null;
+    const hours = match?.providerHours ?? storedHours;
     const businessStatus = match?.businessStatus ?? row.businessStatus;
     candidates.push({
       key: row.id,

@@ -150,10 +150,12 @@ export function useDragCommit(tripId: string, initialRevision = 1) {
   /** Schedules a pool POI onto the selected day. Unlike the edit paths there is no optimistic row
    * to mutate -- the item does not exist yet -- so this refetches on success instead. */
   const commitSchedule = useCallback(
-    async (poiId: string, localDate: string, startTime: string, durationMinutes: number, itemType: string) => {
+    async (poiId: string, localDate: string, startTime: string, durationMinutes: number) => {
       try {
+        // No itemType is sent: the server derives the canonical category from the catalog row, so a
+        // client cannot mislabel a food venue to dodge the dietary gate.
         const result = await requestJson<EditResult>(`/api/trips/${encodeURIComponent(tripId)}/itinerary/schedule`, {
-          poiId, expectedRevision: revisionRef.current, localDate, startTime, durationMinutes, itemType,
+          poiId, expectedRevision: revisionRef.current, localDate, startTime, durationMinutes,
         });
         setRevision(result.revision);
         setItems((existing) => [...existing, result.item]);

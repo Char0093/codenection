@@ -9,7 +9,7 @@ import { PoiDetailSheet } from "@/features/timeline/poi-detail-sheet";
 import { useDragCommit, type DragItem } from "@/features/timeline/use-drag-commit";
 import { useResizeCommit } from "@/features/timeline/use-resize-commit";
 import { MINUTES_PER_DAY, minutesToPixels, minutesToTime } from "@/features/timeline/calendar-geometry";
-import { itemTypeForCategory, type PoolCandidate } from "@/lib/poi/choice-pool";
+import type { PoolCandidate } from "@/lib/poi/choice-pool";
 import { evaluateDrop } from "@/lib/poi/opening-hours";
 
 const PX_PER_MINUTE = 1.2;
@@ -145,8 +145,7 @@ export function TimelinePane({ tripId, startDate, endDate, revision }: {
       return;
     }
     const result = await commitSchedule(
-      candidate.poiId, selectedDate, minutesToTime(startMinute),
-      candidate.defaultDurationMinutes, itemTypeForCategory(candidate.category),
+      candidate.poiId, selectedDate, minutesToTime(startMinute), candidate.defaultDurationMinutes,
     );
     if (!result.ok) setNotice(result.reason);
     else setNotice(feasibility.warning ?? null);

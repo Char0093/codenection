@@ -30,11 +30,51 @@ const rowSchema = z.object({
   business_status: z.enum(["operational", "closed_temporarily", "closed_permanently"]).nullable(),
   provider_hours: providerHoursSchema,
   provider_hours_fetched_at: z.string().nullable(),
+  provider_hours_expires_at: z.string().nullable(),
 });
 
 const POOL_COLUMNS = "id,name,latitude,longitude,tags,cost_tier,halal_status,allergen_risk,allergen_data_unknown,"
   + "dress_code,short_description,official_url,source_url,source_note,verified_at,provider_place_id,"
-  + "business_status,provider_hours,provider_hours_fetched_at";
+  + "business_status,provider_hours,provider_hours_fetched_at,provider_hours_expires_at";
+
+function mapRow(value: z.infer<typeof rowSchema>): CuratedPoiRow {
+  return {
+    id: value.id,
+    name: value.name,
+    latitude: value.latitude ?? 0,
+    longitude: value.longitude ?? 0,
+    tags: value.tags,
+    costTier: value.cost_tier,
+    halalStatus: value.halal_status,
+    allergenRisk: value.allergen_risk,
+    allergenDataUnknown: value.allergen_data_unknown,
+    dressCode: value.dress_code,
+    shortDescription: value.short_description,
+    officialUrl: value.official_url,
+    sourceUrl: value.source_url,
+    sourceNote: value.source_note,
+    verifiedAt: value.verified_at,
+    providerPlaceId: value.provider_place_id,
+    businessStatus: value.business_status,
+    providerHours: (value.provider_hours ?? null) as ProviderOpeningHours | null,
+    providerHoursFetchedAt: value.provider_hours_fetched_at,
+    providerHoursExpiresAt: value.provider_hours_expires_at,
+  };
+}
+
+/** One catalog row plus the region it belongs to, for server-side placement checks. */
+export async function getPoiForScheduling(
+  client: SupabaseClient, poiId: string,
+): Promise<{ poi: CuratedPoiRow; region: string } | null> {
+  const { data, error } = await client
+    .from("poi_catalog").select(POOL_COLUMNS + ",region")
+    .eq("id", poiId).maybeSingle();
+  if (error) databaseError(error);
+  if (!data) return null;
+  const parsed = rowSchema.extend({ region: z.string() }).safeParse(data);
+  if (!parsed.success) return null;
+  return { poi: mapRow(parsed.data), region: parsed.data.region };
+}
 
 /**
  * Curated candidates for one reference-corridor region. Rows without coordinates are skipped rather
@@ -50,27 +90,7 @@ export async function listCuratedPoisForRegion(client: SupabaseClient, region: s
     if (!parsed.success) continue;
     const value = parsed.data;
     if (value.latitude === null || value.longitude === null) continue;
-    rows.push({
-      id: value.id,
-      name: value.name,
-      latitude: value.latitude,
-      longitude: value.longitude,
-      tags: value.tags,
-      costTier: value.cost_tier,
-      halalStatus: value.halal_status,
-      allergenRisk: value.allergen_risk,
-      allergenDataUnknown: value.allergen_data_unknown,
-      dressCode: value.dress_code,
-      shortDescription: value.short_description,
-      officialUrl: value.official_url,
-      sourceUrl: value.source_url,
-      sourceNote: value.source_note,
-      verifiedAt: value.verified_at,
-      providerPlaceId: value.provider_place_id,
-      businessStatus: value.business_status,
-      providerHours: (value.provider_hours ?? null) as ProviderOpeningHours | null,
-      providerHoursFetchedAt: value.provider_hours_fetched_at,
-    });
+    rows.push(mapRow(value));
   }
   return rows;
 }

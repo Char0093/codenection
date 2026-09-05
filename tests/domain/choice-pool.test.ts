@@ -26,7 +26,8 @@ function curated(overrides: Partial<CuratedPoiRow> = {}): CuratedPoiRow {
     shortDescription: "Peranakan restaurant inside a Bandar Hilir hotel.",
     officialUrl: "https://example.invalid/seri-nyonya",
     sourceUrl: "https://example.invalid/source", sourceNote: "Reviewed", verifiedAt: "2026-09-05",
-    providerPlaceId: null, businessStatus: null, providerHours: null, providerHoursFetchedAt: null,
+    providerPlaceId: null, businessStatus: null, providerHours: null,
+    providerHoursFetchedAt: null, providerHoursExpiresAt: null,
     ...overrides,
   };
 }
@@ -182,6 +183,30 @@ describe("buildChoicePool", () => {
     });
     expect(pool[0].category).toBe("heritage");
     expect(pool[0].eligibility.result).toBe("pass");
+  });
+
+  it("uses a stored hours snapshot that is still inside its permitted window", () => {
+    const pool = buildChoicePool({
+      curated: [curated({
+        providerHours: { periods: [{ open: { day: 4, hour: 9, minute: 0 }, close: { day: 4, hour: 17, minute: 0 } }] },
+        providerHoursExpiresAt: "2026-10-02T00:00:00Z",
+      })],
+      confirmedConstraints: [], travelerCaps: [], selectedDate: SELECTED_DATE,
+      now: new Date("2026-10-01T00:00:00Z"),
+    });
+    expect(pool[0].openingStatus).toMatchObject({ kind: "open" });
+  });
+
+  it("treats an expired snapshot as unknown instead of advertising stale hours as current", () => {
+    const pool = buildChoicePool({
+      curated: [curated({
+        providerHours: { periods: [{ open: { day: 4, hour: 9, minute: 0 }, close: { day: 4, hour: 17, minute: 0 } }] },
+        providerHoursExpiresAt: "2026-09-30T00:00:00Z",
+      })],
+      confirmedConstraints: [], travelerCaps: [], selectedDate: SELECTED_DATE,
+      now: new Date("2026-10-01T00:00:00Z"),
+    });
+    expect(pool[0].openingStatus).toEqual({ kind: "unknown" });
   });
 
   it("warns rather than fails for a verified-halal venue with a modest dress code", () => {

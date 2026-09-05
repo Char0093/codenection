@@ -209,7 +209,7 @@ describe("scheduling from the pool", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Add to day" }));
     await waitFor(() => expect(writes.some((write) => write.url.includes("/itinerary/schedule"))).toBe(true));
     expect(writes.at(-1)!.body).toMatchObject({
-      poiId, localDate: "2026-10-01", startTime: "09:00", durationMinutes: 90, itemType: "culture",
+      poiId, localDate: "2026-10-01", startTime: "09:00", durationMinutes: 90,
     });
   });
 

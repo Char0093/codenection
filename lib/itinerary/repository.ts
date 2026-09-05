@@ -76,6 +76,34 @@ export async function listActiveItineraryItems(client: SupabaseClient, tripId: s
   return (data ?? []).map(mapRow);
 }
 
+/** What a move/resize needs before it can be revalidated: which catalog place the block came from
+ * (null for a Gemini block, which has no POI data to check) and its current duration, since a pure
+ * move carries no duration of its own. */
+export async function getScheduledItemContext(
+  client: SupabaseClient, tripId: string, itemId: string,
+): Promise<{ poiId: string | null; durationMinutes: number } | null> {
+  const { data, error } = await client
+    .from("itinerary_items")
+    .select("poi_id,local_start_time,local_end_time,itinerary_days!inner(trip_id)")
+    .eq("id", itemId).eq("itinerary_days.trip_id", tripId).maybeSingle();
+  if (error) databaseError(error);
+  if (!data) return null;
+  const parsed = z.object({
+    poi_id: z.string().uuid().nullable(),
+    local_start_time: z.string(),
+    local_end_time: z.string(),
+  }).safeParse(data);
+  if (!parsed.success) return null;
+  const minutes = (time: string) => {
+    const [hour, minute] = time.slice(0, 5).split(":").map(Number);
+    return hour * 60 + minute;
+  };
+  return {
+    poiId: parsed.data.poi_id,
+    durationMinutes: Math.max(0, minutes(parsed.data.local_end_time) - minutes(parsed.data.local_start_time)),
+  };
+}
+
 async function currentRevision(client: SupabaseClient, tripId: string): Promise<number> {
   const { data: trip, error } = await client.from("trips").select("revision").eq("id", tripId).single();
   if (error) databaseError(error);

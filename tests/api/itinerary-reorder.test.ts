@@ -4,11 +4,15 @@ import { AppError } from "@/lib/http/errors";
 const mocks = vi.hoisted(() => ({
   reorderItineraryItem: vi.fn(), unlockItineraryItem: vi.fn(),
   schedulePoiItem: vi.fn(), unschedulePoiItem: vi.fn(),
+  getScheduledItemContext: vi.fn(), assertPlacementAllowed: vi.fn(),
 }));
 vi.mock("@/lib/itinerary/repository", () => ({
   reorderItineraryItem: mocks.reorderItineraryItem, unlockItineraryItem: mocks.unlockItineraryItem,
   schedulePoiItem: mocks.schedulePoiItem, unschedulePoiItem: mocks.unschedulePoiItem,
+  getScheduledItemContext: mocks.getScheduledItemContext,
 }));
+vi.mock("@/lib/poi/schedule-validation", () => ({ assertPlacementAllowed: mocks.assertPlacementAllowed }));
+vi.mock("@/lib/repositories/server", () => ({ tripRepository: async () => ({}) }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({}) }));
 vi.mock("@/lib/supabase/auth", () => ({ verifiedUser: vi.fn().mockResolvedValue({ id: "user-1" }) }));
 
@@ -28,7 +32,11 @@ function request(url: string, body: unknown) {
   });
 }
 
-beforeEach(() => vi.resetAllMocks());
+beforeEach(() => {
+  vi.resetAllMocks();
+  mocks.getScheduledItemContext.mockResolvedValue({ poiId: null, durationMinutes: 60 });
+  mocks.assertPlacementAllowed.mockResolvedValue({ itemType: "culture" });
+});
 
 describe("itinerary reorder route", () => {
   it("moves an item without a duration", async () => {
@@ -55,6 +63,27 @@ describe("itinerary reorder route", () => {
     const response = await reorder(request("itinerary/reorder", { itemId, expectedRevision: 1, newDate: "2026-10-01", newStartTime: "13:00" }), context);
     expect(response.status).toBe(422);
     expect((await response.json()).error).toBe("Fixed reservations must be unlocked before they can be moved or resized");
+  });
+
+  it("revalidates a pool-scheduled block against opening hours before moving it", async () => {
+    mocks.getScheduledItemContext.mockResolvedValue({ poiId: "32345678-1234-4123-8123-123456789012", durationMinutes: 90 });
+    mocks.assertPlacementAllowed.mockRejectedValue(new AppError(422, "The visit does not fit inside the opening hours.", "VALIDATION_FAILED"));
+    const response = await reorder(request("itinerary/reorder", { itemId, expectedRevision: 1, newDate: "2026-10-01", newStartTime: "23:00" }), context);
+    expect(response.status).toBe(422);
+    expect(mocks.reorderItineraryItem).not.toHaveBeenCalled();
+  });
+
+  it("passes a pure move's existing duration into the revalidation", async () => {
+    mocks.getScheduledItemContext.mockResolvedValue({ poiId: "32345678-1234-4123-8123-123456789012", durationMinutes: 45 });
+    mocks.reorderItineraryItem.mockResolvedValue(item);
+    await reorder(request("itinerary/reorder", { itemId, expectedRevision: 1, newDate: "2026-10-01", newStartTime: "13:00" }), context);
+    expect(mocks.assertPlacementAllowed).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.objectContaining({ durationMinutes: 45 }));
+  });
+
+  it("does not run POI revalidation for a Gemini block, which has no catalog row", async () => {
+    mocks.reorderItineraryItem.mockResolvedValue(item);
+    await reorder(request("itinerary/reorder", { itemId, expectedRevision: 1, newDate: "2026-10-01", newStartTime: "13:00" }), context);
+    expect(mocks.assertPlacementAllowed).not.toHaveBeenCalled();
   });
 
   it("blocks cross-origin writes", async () => {
@@ -85,7 +114,7 @@ describe("itinerary unlock route", () => {
 
 describe("itinerary schedule route", () => {
   const poiId = "32345678-1234-4123-8123-123456789012";
-  const body = { poiId, expectedRevision: 1, localDate: "2026-10-01", startTime: "09:00", durationMinutes: 90, itemType: "culture" };
+  const body = { poiId, expectedRevision: 1, localDate: "2026-10-01", startTime: "09:00", durationMinutes: 90 };
 
   it("schedules a pool place and returns 201", async () => {
     mocks.schedulePoiItem.mockResolvedValue(item);
@@ -97,7 +126,6 @@ describe("itinerary schedule route", () => {
   it.each([
     ["a duration under the domain minimum", { ...body, durationMinutes: 10 }],
     ["a duration over the domain maximum", { ...body, durationMinutes: 600 }],
-    ["a pool category the itinerary does not model", { ...body, itemType: "heritage" }],
     ["a malformed time", { ...body, startTime: "9am" }],
   ])("rejects %s before touching the repository", async (_label, invalid) => {
     const response = await schedule(request("itinerary/schedule", invalid), context);

@@ -44,6 +44,13 @@ function weekMinute(point: ProviderTimePoint): number {
   return point.day * MINUTES_PER_DAY + point.hour * 60 + point.minute;
 }
 
+/** "09:30" or "09:30:00" -> 570. Server-side twin of the timeline's own conversion, kept here so
+ * route handlers never have to import a client feature module. */
+export function timeStringToMinutes(time: string): number {
+  const [hour, minute] = time.slice(0, 5).split(":").map(Number);
+  return hour * 60 + minute;
+}
+
 /** Day of week for a plain YYYY-MM-DD wall-clock date. Parsed as UTC so the machine's own timezone
  * cannot shift the destination-local date, matching how trip dates are handled elsewhere. */
 export function weekdayForDate(isoDate: string): number {

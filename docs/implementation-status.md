@@ -359,12 +359,15 @@ Missing or unresolved:
   documented as owner/planner-only, which may reject ordinary members.
 - Hosted prompt-injection and cross-trip isolation validation.
 
-### Task 3.4 — Calendar timeline editing, persistence, and synchronization: Delivered locally, hosted verification pending
+### Task 3.4 — Calendar timeline editing, persistence, and synchronization: Delivered and hosted-verified
 
 **Day-builder redesign implemented 2026-09-05** against the updated plan (single selected day, POI
-choice pool, opening-hours-aware drops). Requires migration `202609050012_poi_choice_metadata.sql`
-and a re-run of `npm run seed:kl-reference`, neither of which is applied to the hosted project yet,
-so this half is local-only so far:
+choice pool, opening-hours-aware drops). Migrations `202609050011` and `202609050012` are applied to
+the hosted project, the 24-POI seed has been re-run with coordinates and owned descriptions, and the
+round trip was verified live on 2026-09-06: scheduling a pool place returned 201 and rendered at the
+right time with its unverified-hours warning, returning it to the pool returned 200 and left the
+catalog row intact, and `Jonker Street` — which displays under Heritage — still failed the halal gate
+on its food content, confirming eligibility keys on food-serving rather than display category:
 
 - **Single-day editor.** `date-selector.tsx` is a roving-tabindex tablist (arrow keys, Home/End)
   above the timeline; only the selected destination-local day is rendered, and each day's scroll
@@ -400,6 +403,15 @@ so this half is local-only so far:
   provider hours snapshot; `itinerary_items` gains `poi_id`; `schedule_poi_item` and
   `unschedule_itinerary_item` apply the same validation set as a drag. All 24 seed POIs now carry an
   owned one-line description written from their already-cited sources.
+- **Server-side placement enforcement** (`lib/poi/schedule-validation.ts`, 10 tests): the pool UI
+  refusing to drag a failed candidate is a usability affordance, not a control, so the schedule and
+  reorder routes independently re-check that the place belongs to the trip's own destination, that
+  it clears the hard-constraint gate, and that the visit fits inside the venue's opening hours. The
+  itinerary category is derived server-side from the catalog row rather than accepted from the
+  request, so a client cannot relabel a food venue to dodge the dietary checks, and an expired hours
+  snapshot is treated as absent in both the pool and the validator rather than reused as evidence.
+  It lives in the route rather than plpgsql on purpose: Section VII's gate stays one deterministic
+  TypeScript function instead of gaining a second, drifting SQL copy.
 - **Two real access-control findings, fixed:** the pre-existing read policies only ever exposed
   items belonging to an accepted Gemini proposal, so a pool-scheduled item would have been written
   and then been invisible -- new narrow security-definer policies admit exactly that case. And
@@ -458,10 +470,6 @@ so this half is local-only so far:
   correctly; dragging a card by pointer to a new time persisted (200, confirmed by the card moving
   and staying at its new position after reload).
 
-The binding plan was subsequently refined from simultaneous multi-day columns to a single selected
-day with a date switcher and categorized POI pool. The delivered calendar engine remains reusable,
-but the new interaction model below is not implemented and Task 3.4 is therefore no longer complete.
-
 Documented scope limits, not silently under-built:
 
 - **No live Google Places adapter exists.** `lib/providers/types.ts` still only declares a
@@ -480,26 +488,19 @@ Documented scope limits, not silently under-built:
   a move to another date goes through the pool. The keyboard arrow-key day change was removed with
   it, since Return to pool → date strip → Add to day is a complete keyboard-reachable replacement.
 
-- **Single-day selection is not implemented.** The current UI renders multiple day columns side by
-  side and supports direct cross-day dragging. It needs a top date strip, one rendered day at a time,
-  and preservation of each day's edits/scroll state when switching.
-- **The categorized POI choice pool is not implemented.** Missing: canonical Food/Nature/Shopping/
-  Heritage/Culture/Entertainment/Local-Wildcard mapping, search, desktop side panel/mobile drawer,
-  described POI cards, detail sheet, trust/safety badges, pool-to-timeline scheduling,
-  timeline-to-pool unscheduling, and duplicate-visit confirmation.
-- **POI detail fields/provider presentation are incomplete.** `poi_catalog` has no owned
-  `short_description`, `official_url`, or provider Place ID yet, and the UI has no compact versus
-  full-description contract or provider attribution boundary.
-- **Opening-hours acquisition is not implemented.** There is no Google Places
-  `businessStatus`/`regularOpeningHours`/`currentOpeningHours` fetch, destination-local interval
-  normalizer, refresh policy, valid-drop highlighting, closed-period rejection, or persistent
-  unknown-hours warning.
-- **Revalidation against opening hours, transit feasibility, Task 1.7 daily bounds, pace, budget,
-  and rendezvous deadlines is not implemented.** None of these have a data source yet (no
-  opening-hours field, no Task 1.7 day-window table, no rendezvous/split-session concept exists in
-  Phase 4). Only date/overlap/midnight/revision/duration-domain/lock are enforced today, matching
-  what real data supports; adding the others now would mean inventing checks against numbers that
-  don't exist.
+- **Opening-hours *acquisition* is not implemented, only interpretation.** There is no Google Places
+  `businessStatus`/`regularOpeningHours`/`currentOpeningHours` fetch or refresh policy. The
+  destination-local interval normalizer, valid-drop highlighting, closed-period rejection and
+  persistent unknown-hours warning all exist and are tested; they simply operate on a stored
+  snapshot, and no snapshot is populated for any seeded POI today, so every card currently reads
+  "Hours unverified".
+- **Revalidation against transit feasibility, Task 1.7 daily bounds, pace, budget,
+  and rendezvous deadlines is not implemented.** None of these have a data source yet (no Task 1.7
+  day-window table, no routing matrix, no rendezvous/split-session concept until Phase 4). What *is*
+  enforced server-side on every schedule, move and resize: trip date range, overlap, midnight,
+  revision, duration domain, fixed-commitment lock, the POI's destination/region, the Phase 1
+  hard-constraint gate, and opening-hours fit — see `lib/poi/schedule-validation.ts`. Adding the
+  others now would mean inventing checks against numbers that don't exist.
 - **Remote edits still refetch rather than animate into place**, and multiplayer presence cursors
   during a drag do not exist (folds into Task 3.2, not touched here).
 - **"AI-suggested" is not a distinct card visual state.** Active/pending/conflicted/locked are;

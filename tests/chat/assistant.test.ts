@@ -1,12 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
 import { askAssistant } from "@/lib/chat/assistant";
 import { GeminiPlanningError } from "@/lib/gemini/errors";
+import type { GeminiClient } from "@/lib/gemini/client";
+
+type GenerateRequest = Parameters<GeminiClient["generateContent"]>[0];
 
 const trip = { destinationName: "Melaka", startDate: "2026-12-12", endDate: "2026-12-12", budgetTier: "standard" as const, pace: "balanced" as const };
 
 function fakeClient(text: string | undefined, options: { throwStatus?: number } = {}) {
   return {
-    generateContent: vi.fn(async () => {
+    // Declaring the request parameter gives the mock a real call signature, so assertions on
+    // `mock.calls[0][0]` type-check instead of indexing an inferred empty tuple.
+    generateContent: vi.fn(async (_request: GenerateRequest) => {
       if (options.throwStatus) {
         const error = new Error("boom") as Error & { status: number };
         error.status = options.throwStatus;

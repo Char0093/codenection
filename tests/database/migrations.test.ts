@@ -766,7 +766,7 @@ describe("chat-driven assistant proposals", () => {
   it("lets any member -- not just owner or planner -- create a pending suggestion and posts it to chat", async () => {
     await actor(member);
     const memberMemberId = await memberIdFor(member);
-    const created = (await db.query(
+    const created = (await db.query<{ id: string; status: string; proposal_type: string }>(
       "select * from public.save_chat_proposal($1,$2,$3::jsonb,$4,$5)",
       [trip, memberMemberId, JSON.stringify(proposalPayload), "assistant-test", "Here is a revised plan."],
     )).rows[0];
@@ -782,7 +782,7 @@ describe("chat-driven assistant proposals", () => {
   it("still only lets the trip owner accept it, identical to a button-generated proposal", async () => {
     await actor(member);
     const memberMemberId = await memberIdFor(member);
-    const created = (await db.query(
+    const created = (await db.query<{ id: string }>(
       "select * from public.save_chat_proposal($1,$2,$3::jsonb,$4,$5)",
       [trip, memberMemberId, JSON.stringify(proposalPayload), "assistant-test", "Suggestion"],
     )).rows[0];
@@ -791,7 +791,7 @@ describe("chat-driven assistant proposals", () => {
       .rejects.toThrow(/Only the trip owner/);
 
     await actor(owner);
-    const decided = (await db.query("select * from public.decide_trip_proposal($1,$2,'accept')", [trip, created.id])).rows[0];
+    const decided = (await db.query<{ status: string }>("select * from public.decide_trip_proposal($1,$2,'accept')", [trip, created.id])).rows[0];
     expect(decided.status).toBe("accepted");
   });
 
@@ -863,7 +863,7 @@ describe("reorder_itinerary_item", () => {
     const items = await seedActiveTrip();
     const revision = await currentRevision();
     await actor(member);
-    const moved = (await db.query(
+    const moved = (await db.query<{ local_start_time: string }>(
       "select * from public.reorder_itinerary_item($1,$2,$3,$4,$5)",
       [trip, items[0].id, revision, "2026-10-01", "13:00"],
     )).rows[0];
@@ -875,7 +875,7 @@ describe("reorder_itinerary_item", () => {
     const items = await seedActiveTrip();
     const revision = await currentRevision();
     await actor(owner);
-    const moved = (await db.query(
+    const moved = (await db.query<{ day_date: Date }>(
       "select i.*, d.day_date from public.reorder_itinerary_item($1,$2,$3,$4,$5) i " +
       "join itinerary_days d on d.id = i.itinerary_day_id",
       [trip, items[0].id, revision, "2026-10-02", "14:00"],
@@ -928,7 +928,7 @@ describe("reorder_itinerary_item", () => {
     const items = await seedActiveTrip();
     const revision = await currentRevision();
     await actor(member);
-    const resized = (await db.query(
+    const resized = (await db.query<{ local_start_time: string; local_end_time: string }>(
       "select * from public.reorder_itinerary_item($1,$2,$3,$4,$5,$6)",
       [trip, items[0].id, revision, "2026-10-01", "09:00", 90],
     )).rows[0];
@@ -1101,10 +1101,10 @@ describe("fixed_commitment lock and unlock_itinerary_item", () => {
   it("unlocks a locked item, after which it can be moved", async () => {
     const items = await seedLockedTrip();
     let revision = await currentRevision();
-    const unlocked = (await db.query("select * from public.unlock_itinerary_item($1,$2,$3)", [trip, items[0].id, revision])).rows[0];
+    const unlocked = (await db.query<{ fixed_commitment: boolean }>("select * from public.unlock_itinerary_item($1,$2,$3)", [trip, items[0].id, revision])).rows[0];
     expect(unlocked.fixed_commitment).toBe(false);
     revision = await currentRevision();
-    const moved = (await db.query("select * from public.reorder_itinerary_item($1,$2,$3,$4,$5)", [trip, items[0].id, revision, "2026-10-01", "13:00"])).rows[0];
+    const moved = (await db.query<{ local_start_time: string }>("select * from public.reorder_itinerary_item($1,$2,$3,$4,$5)", [trip, items[0].id, revision, "2026-10-01", "13:00"])).rows[0];
     expect(moved.local_start_time).toBe("13:00:00");
   });
 
