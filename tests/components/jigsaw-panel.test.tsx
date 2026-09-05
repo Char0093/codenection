@@ -39,8 +39,8 @@ describe("JigsawPanel", () => {
     );
 
     const jonker = screen.getByRole("button", { name: /Jonker Street, 10:00 for 90 minutes/ });
-    // Width is proportional to duration: 90 minutes at scale 2.
-    expect(jonker).toHaveStyle({ width: "180px" });
+    // Height is proportional to duration on the vertical timeline: 90 minutes at scale 2.
+    expect(jonker).toHaveStyle({ height: "180px" });
   });
 
   it("locks rigid anchors so they cannot be dragged", () => {

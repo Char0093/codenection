@@ -1,6 +1,6 @@
 "use client";
 
-import { Lock, Scissors, TriangleAlert } from "lucide-react";
+import { Bus, GripVertical, Landmark, Lock, Scissors, ShoppingBag, Trees, TriangleAlert, UtensilsCrossed } from "lucide-react";
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   SLOT_MINUTES,
@@ -24,11 +24,19 @@ export type JigsawPanelProps = {
   /** Visible timeline range in minutes from local midnight. */
   dayStartMinute?: number;
   dayEndMinute?: number;
-  /** Pixels per minute. Drives block width, so a longer stay is a wider capsule. */
+  /** Pixels per minute. Drives block height, so a longer stay is a taller card. */
   scale?: number;
   onChange?: (blocks: TimelineBlock[]) => void;
   onResolve?: (option: TrilemmaOption) => void;
 };
+
+const CATEGORY_ICON = {
+  culture: Landmark,
+  food: UtensilsCrossed,
+  nature: Trees,
+  shopping: ShoppingBag,
+  transit: Bus,
+} as const;
 
 function formatMinute(minute: number): string {
   const hour = Math.floor(minute / 60) % 24;
@@ -47,7 +55,7 @@ export function JigsawPanel({
 }: JigsawPanelProps) {
   const [draft, setDraft] = useState<readonly TimelineBlock[]>(blocks);
   const [dragId, setDragId] = useState<string | null>(null);
-  const dragState = useRef<{ pointerId: number; originX: number; originStart: number } | null>(null);
+  const dragState = useRef<{ pointerId: number; originY: number; originStart: number } | null>(null);
 
   const memberIds = useMemo(() => members.map((member) => member.id), [members]);
   const placed = useMemo(() => draft.filter((entry) => entry.startMinute !== null), [draft]);
@@ -78,14 +86,14 @@ export function JigsawPanel({
   const handlePointerDown = (block: TimelineBlock) => (event: React.PointerEvent<HTMLButtonElement>) => {
     if (isRigidAnchor(block) || block.startMinute === null) return;
     event.currentTarget.setPointerCapture(event.pointerId);
-    dragState.current = { pointerId: event.pointerId, originX: event.clientX, originStart: block.startMinute };
+    dragState.current = { pointerId: event.pointerId, originY: event.clientY, originStart: block.startMinute };
     setDragId(block.id);
   };
 
   const handlePointerMove = (block: TimelineBlock) => (event: React.PointerEvent<HTMLButtonElement>) => {
     const state = dragState.current;
     if (!state || state.pointerId !== event.pointerId || dragId !== block.id) return;
-    const deltaMinutes = (event.clientX - state.originX) / scale;
+    const deltaMinutes = (event.clientY - state.originY) / scale;
     moveBlock(block.id, snapToGrid(state.originStart + deltaMinutes));
   };
 
@@ -96,14 +104,15 @@ export function JigsawPanel({
     }
   };
 
-  // Keyboard drag: the timeline must be usable without a pointer.
+  // Keyboard drag: the timeline must be usable without a pointer. Up/Down match the vertical
+  // layout; Left/Right are kept working too since "earlier/later" reads fine either way.
   const handleKeyDown = (block: TimelineBlock) => (event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (block.startMinute === null || isRigidAnchor(block)) return;
     const step = event.shiftKey ? SLOT_MINUTES * 2 : SLOT_MINUTES;
-    if (event.key === "ArrowLeft") {
+    if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
       event.preventDefault();
       moveBlock(block.id, block.startMinute - step);
-    } else if (event.key === "ArrowRight") {
+    } else if (event.key === "ArrowRight" || event.key === "ArrowDown") {
       event.preventDefault();
       moveBlock(block.id, block.startMinute + step);
     }
@@ -134,52 +143,69 @@ export function JigsawPanel({
       ) : null}
 
       <div className="jigsaw-scroll">
-        <div className="jigsaw-ruler" style={{ width: span * scale }}>
-          {ticks.map((minute) => (
-            <span key={minute} className="jigsaw-tick" style={{ left: (minute - dayStartMinute) * scale }}>
-              {formatMinute(minute)}
-            </span>
-          ))}
-        </div>
+        <div className="jigsaw-body" style={{ height: span * scale }}>
+          <div className="jigsaw-ruler-v">
+            {ticks.map((minute) => (
+              <span key={minute} className="jigsaw-tick-v" style={{ top: (minute - dayStartMinute) * scale }}>
+                {formatMinute(minute)}
+              </span>
+            ))}
+          </div>
 
-        <div className="jigsaw-track" style={{ width: span * scale }} data-testid="jigsaw-track">
-          {placed.map((block) => {
-            const texture = blockTexture(block, memberIds);
-            const anchored = isRigidAnchor(block);
-            const start = block.startMinute as number;
-            return (
-              <button
-                key={block.id}
-                type="button"
-                className="jigsaw-block"
-                data-texture={texture}
-                data-anchored={anchored ? "true" : undefined}
-                data-conflict={conflictIds.has(block.id) ? "true" : undefined}
-                data-dragging={dragId === block.id ? "true" : undefined}
-                style={{ left: (start - dayStartMinute) * scale, width: block.durationMinutes * scale }}
-                aria-label={
-                  block.title +
-                  ", " +
-                  formatMinute(start) +
-                  " for " +
-                  block.durationMinutes +
-                  " minutes" +
-                  (anchored ? ", locked anchor" : "")
-                }
-                aria-describedby={conflictIds.has(block.id) ? "jigsaw-conflict-hint" : undefined}
-                disabled={anchored}
-                onPointerDown={handlePointerDown(block)}
-                onPointerMove={handlePointerMove(block)}
-                onPointerUp={handlePointerUp}
-                onPointerCancel={handlePointerUp}
-                onKeyDown={handleKeyDown(block)}
-              >
-                {anchored ? <Lock size={12} aria-hidden /> : null}
-                <span className="jigsaw-block-title">{block.title}</span>
-                <span className="jigsaw-block-time">{formatMinute(start)}</span>
-              </button>
-            );
-          })}
+          <div
+            className="jigsaw-track-v"
+            data-testid="jigsaw-track"
+            style={{
+              backgroundImage: "linear-gradient(to bottom, var(--line), var(--line) 1px, transparent 1px, transparent 100%)",
+              backgroundSize: "100% " + 60 * scale + "px",
+            }}
+          >
+            {placed.map((block) => {
+              const texture = blockTexture(block, memberIds);
+              const anchored = isRigidAnchor(block);
+              const start = block.startMinute as number;
+              const Icon = CATEGORY_ICON[block.category];
+              return (
+                <button
+                  key={block.id}
+                  type="button"
+                  className="jigsaw-block-v"
+                  data-texture={texture}
+                  data-anchored={anchored ? "true" : undefined}
+                  data-conflict={conflictIds.has(block.id) ? "true" : undefined}
+                  data-dragging={dragId === block.id ? "true" : undefined}
+                  style={{ top: (start - dayStartMinute) * scale, height: block.durationMinutes * scale }}
+                  aria-label={
+                    block.title +
+                    ", " +
+                    formatMinute(start) +
+                    " for " +
+                    block.durationMinutes +
+                    " minutes" +
+                    (anchored ? ", locked anchor" : "")
+                  }
+                  aria-describedby={conflictIds.has(block.id) ? "jigsaw-conflict-hint" : undefined}
+                  disabled={anchored}
+                  onPointerDown={handlePointerDown(block)}
+                  onPointerMove={handlePointerMove(block)}
+                  onPointerUp={handlePointerUp}
+                  onPointerCancel={handlePointerUp}
+                  onKeyDown={handleKeyDown(block)}
+                >
+                  <span className="jigsaw-block-handle">
+                    {anchored ? <Lock size={13} aria-hidden /> : <GripVertical size={14} aria-hidden />}
+                  </span>
+                  <span className="jigsaw-cat-icon">
+                    <Icon size={13} aria-hidden />
+                  </span>
+                  <span className="jigsaw-block-text">
+                    <span className="jigsaw-block-title">{block.title}</span>
+                    <span className="jigsaw-block-time">{formatMinute(start)} &middot; {block.durationMinutes} min</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
