@@ -215,7 +215,7 @@ Recommendation engines frequently fall into the **algorithmic echo chamber**: if
 │   Collaborative workspace  (Next.js route, React 19)                   │
 │   - Top 60%: Google 3D/vector map, tilted camera, split/merge routes    │
 │   - Bottom 40%: realtime chatroom, AI assistant, action sheet           │
-│   - Pre-trip mode: full-screen timeline jigsaw (drag bargaining)        │
+│   - Pre-trip: categorized POI pool + one-day 24h timeline builder       │
 └───────────────────────────────────┬────────────────────────────────────┘
                                     │ HTTPS + Supabase Realtime (WSS)
                                     ▼
@@ -342,7 +342,7 @@ New tables extend the existing `trips` / `trip_members` / itinerary schema. All 
 - `trip_interest_signals` — derived discovery tags from chat, pasted text, voice, or public-link captions: `trip_id`, nullable `trip_member_id`, typed `tag`, `source`, `confidence`, `scope` (`moment` | `day` | `trip`), `source_message_id` when applicable, `expires_at`, and dismissal metadata. Store the derived tag and a short user-visible source label, not copied raw third-party content. Members can inspect and dismiss their own inferred signals; RLS prevents cross-trip access.
 - `trip_constraints` — hard constraints as typed rows: `kind` (`dietary` | `religious_access` | `mobility`), `flag` (enum), `severity` (`severe` | `standard`), `source` (`chat` | `voice` | `social` | `manual`), `confirmed_by`, `confirmed_at`. Nothing is enforced until `confirmed_at` is set.
 - `trip_day_windows` — one row per participating member and trip-local date: `trip_member_id`, `local_date`, `available_from time`, `preferred_start time`, `finish_by time`, `timezone text`, and `revision`, unique on `(trip_member_id, local_date)`. `available_from` / `finish_by` are hard scheduling bounds; `preferred_start` is a visible soft preference. Defaults are explicit and editable before generation, never inferred silently from pace or browser timezone.
-- `poi_catalog` — cached POIs: `geog geography(Point,4326)` (PostGIS), `cost_tier`, `tags text[]`, `halal_status` (`verified` | `claimed` | `unknown` | `no`), `allergen_risk text[]`, `indoor bool`, `dress_code` enum, `tourist_density` enum, `height_m numeric` (nullable), `landmark_class` (`prominent_structure` | `global_storefront` | `architectural_typology` | null) for deterministic landmark grounding (Task 6.1).
+- `poi_catalog` — WanderSync-owned curated POIs: `geog geography(Point,4326)` (PostGIS), nullable `provider_place_id`, independently written `short_description`, `official_url`, `cost_tier`, `tags text[]`, `halal_status` (`verified` | `claimed` | `unknown` | `no`), `allergen_risk text[]`, `indoor bool`, `dress_code` enum, `tourist_density` enum, `height_m numeric` (nullable), `landmark_class` (`prominent_structure` | `global_storefront` | `architectural_typology` | null) for deterministic landmark grounding (Task 6.1). Provider descriptions and hours remain provider content and are not copied into these owned fields.
 - `itinerary_dag` — nodes (activities, transits) + edges with time windows; `locked bool` for visited or fixed-reservation nodes; supports partial re-optimization.
 - `subgroups`, `subgroup_members`, `split_sessions` — branch assignments, rendezvous point (`geog`), convergence time.
 - `mobility_options` — computed Fastest / Budget / Scenic legs with cost, duration, and `weather_sensitive bool`.
@@ -635,8 +635,10 @@ the realtime, authorization, and confirmation primitives established here are re
 
 The workspace lives at `/trips/[tripId]/workspace` as a dual-layer contextual surface: the **top
 60%** is the Google 3D/vector spatial map, the **bottom 40%** is the realtime chatroom and action sheet.
-Pre-trip mode replaces the whole surface with the full-screen **timeline jigsaw**, because drag
-bargaining needs the horizontal room. See `docs/features/collaborative-workspace.md`.
+Pre-trip mode replaces the whole surface with the full-screen **day builder**: a categorized POI
+choice pool beside one selected date's 24-hour timeline. Only one date is rendered at a time; a
+date strip switches days without discarding edits. The pool is a desktop side panel and collapses
+to a bottom drawer on narrow screens. See `docs/features/collaborative-workspace.md`.
 
 ### Task 3.0: Level 0 bargaining engine and jigsaw panel — DELIVERED
 
@@ -713,15 +715,40 @@ bargaining needs the horizontal room. See `docs/features/collaborative-workspace
 
 ### Task 3.4: Calendar timeline editing, persistence, and synchronization
 
-**Files:** create `features/timeline/` (`timeline-pane.tsx`, `day-column.tsx`, `activity-card.tsx`,
-`travel-block.tsx`, `use-drag-commit.ts`, `use-resize-commit.ts`),
+**Files:** create `features/timeline/` (`timeline-pane.tsx`, `date-selector.tsx`, `day-column.tsx`,
+`activity-card.tsx`, `travel-block.tsx`, `poi-choice-pool.tsx`, `poi-choice-card.tsx`,
+`poi-detail-sheet.tsx`, `use-drag-commit.ts`, `use-resize-commit.ts`), `lib/poi/choice-pool.ts`,
+`lib/poi/opening-hours.ts`, `supabase/migrations/2026090X0008_poi_choice_metadata.sql`,
+`app/api/trips/[tripId]/poi-choices/route.ts`,
 `app/api/trips/[tripId]/itinerary/reorder/route.ts`,
 `tests/components/timeline/*.test.tsx`, `tests/api/itinerary-reorder.test.ts`.
 
-- [ ] Extend the delivered `JigsawPanel` to a Google Calendar-style vertical day/week editor. Each
-      day spans 00:00-24:00; inactive overnight hours are collapsed by default but remain reachable.
-      Blocks are positioned by local start time and their height is proportional to duration.
-- [ ] Drag a whole block to change its start time or move it across days. Pointer-accessible top and
+- [ ] Extend the delivered `JigsawPanel` to a Google Calendar-style vertical **single-day** editor.
+      The selected day spans destination-local 00:00-24:00; inactive overnight hours are collapsed
+      by default but remain reachable. A keyboard-accessible date strip above the timeline switches
+      the selected date, preserves scroll/edit state per day, and never renders all trip days at
+      once. Blocks are positioned by local start time and height is proportional to duration.
+- [ ] Add a choice pool beside the timeline on desktop and as a bottom drawer on narrow screens.
+      Categorize candidates through a deterministic canonical mapping (`food`, `nature`, `shopping`,
+      `heritage`, `culture`, `entertainment`, `local_wildcard`) over owned/provider tags; support
+      category tabs and search without asking Gemini to classify during rendering.
+- [ ] `choice-pool.ts` merges curated `poi_catalog` rows with transient Google Places results,
+      resolves/deduplicates by provider Place ID and conservative name/location matching, and keeps
+      provenance/trust explicit. The Phase 1 gate decides eligibility before drag; `fail` candidates
+      are not draggable and are hidden by default behind an **Unavailable** explanation. Task 5.1
+      later ranks the same typed pool rather than creating a second candidate model.
+- [ ] Each pool card shows name, thumbnail when permitted, an independently owned or correctly
+      attributed provider description, estimated visit duration, cost tier, travel-time estimate,
+      opening status, safety badges, trust level (`curated` | `provider` | `unverified`), and **View
+      details**. The detail sheet shows the full description, sources, official/Google Maps links,
+      verification date, hours, and warnings. Never present Google Places data as WanderSync-owned.
+- [ ] Drag a pool card onto a valid time to schedule it; dragging an ordinary scheduled block back
+      to the pool unschedules the itinerary item but never deletes the POI. Prevent accidental
+      duplicate scheduling unless the user explicitly confirms a repeat visit. Highlight feasible
+      drop ranges and disable infeasible ranges before drop when the necessary data is known.
+- [ ] Drag a scheduled block to change its start time within the selected day. Moving to another day
+      is done by switching the date and then placing it from the pool, rather than displaying several
+      day columns simultaneously. Pointer-accessible top and
       bottom resize handles change visit duration in 15-minute increments (the existing 30-minute
       bargaining grid remains delivered behavior, but persistence accepts the existing 15-480
       minute domain contract). Provide equivalent keyboard move/resize controls and announce the
@@ -733,6 +760,15 @@ bargaining needs the horizontal room. See `docs/features/collaborative-workspace
       edit is revalidated** against opening hours, transit feasibility, Task 1.7 daily bounds,
       overlap/midnight rules, pace, budget, the Phase 1 constraint gate, reservations, and
       rendezvous deadlines. A refusal rolls the block back and shows the reason on that block.
+- [ ] Resolve `provider_place_id` and request Google Places `businessStatus`,
+      `regularOpeningHours`, and, when the visit is within the provider's supported near-term range,
+      `currentOpeningHours`. Normalize split/overnight periods into destination-local intervals.
+      Refresh on generation, detail opening, schedule edit, and shortly before the visit; treat
+      regular hours for distant dates as provisional. Follow provider caching/attribution rules.
+- [ ] Permanently/temporarily closed POIs and blocks that cannot fit wholly inside an open interval
+      are not valid drops. When hours are absent, do not pretend the venue is open: allow an
+      authorized explicit placement only with an **Hours unverified — confirm before visiting**
+      warning that remains on the block and proposal review.
 - [ ] Fixed reservations and consensus anchors are locked by default. Changing one requires an
       explicit unlock/confirmation; resizing an ordinary visit must never silently move a locked
       block. Any proposed downstream auto-shift is previewed as a diff before confirmation.
@@ -742,10 +778,13 @@ bargaining needs the horizontal room. See `docs/features/collaborative-workspace
 - [ ] Remote reorders from other members animate into place over the same `trip:{tripId}` channel,
       with multiplayer presence cursors so asynchronous negotiation is visible. Target: all
       members see a resolved conflict within 500 ms.
-- [ ] Tests: full 24-hour access with overnight collapse, height proportional to duration,
-      same-day/cross-day move, pointer and keyboard resize, 15-minute snapping, travel blocks,
-      rejected edit rollback, locked-anchor protection, opening-hours/transit/day-window failure,
-      stale-revision refusal, overlap/midnight refusal, and two-member concurrent edits.
+- [ ] Tests: one selected date only, keyboard date switching with per-day state preservation,
+      desktop pool/mobile drawer, category mapping/search, compact description plus full detail sheet,
+      pool-to-timeline and timeline-to-pool drag, duplicate prevention, full 24-hour access with
+      overnight collapse, height proportional to duration, pointer/keyboard move and resize,
+      15-minute snapping, travel blocks, split/overnight/special/unknown opening hours, rejected edit
+      rollback, locked-anchor protection, transit/day-window failure, stale-revision refusal,
+      overlap/midnight refusal, attribution, and two-member concurrent edits.
 
 ### Task 3.5: Workspace shell & confirmation primitive
 
@@ -773,9 +812,10 @@ bargaining needs the horizontal room. See `docs/features/collaborative-workspace
 
 **Phase 3 exit criteria:** two signed-in members of the same trip see each other's messages and
 presence live; the assistant answers an `@ai` question and posts a proposal card that only an
-authorized member can accept; moving or resizing an activity on the 24-hour calendar persists for
-both members, keeps travel time visible, and is refused with a visible reason when it breaks a
-schedule or constraint rule; tapping a chat POI card flies the
+authorized member can accept; selecting a date shows only that day's 24-hour calendar and a
+categorized POI pool; dragging a described POI into a valid slot, moving it, or resizing it persists
+for both members, keeps travel time visible, and is refused with a visible reason when it breaks
+opening hours, schedule, or constraint rules; tapping a chat POI card flies the
 map to it while the map ignores gestures whenever the chat sheet is expanded past 40%; simulated
 airplane mode still renders the last-synced itinerary and emergency contacts.
 

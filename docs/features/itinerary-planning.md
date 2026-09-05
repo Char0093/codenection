@@ -16,6 +16,13 @@ The itinerary planner creates viable day plans using deterministic scoring and h
 - Surface conflicts instead of silently producing unsafe plans.
 - Allow users to regenerate or manually move and resize itinerary items on a 24-hour Calendar-style
   timeline; represent required travel as separate blocks rather than hidden padding.
+- Show one selected date at a time, switched from a date strip above the timeline. Do not display all
+  trip days simultaneously.
+- Provide a searchable POI choice pool categorized as Food, Nature, Shopping, Heritage, Culture,
+  Entertainment, and Local/Wildcard. Users drag described POI cards into valid timeline slots or
+  return scheduled blocks to the pool without deleting the underlying POI.
+- Keep timeline descriptions to one line and provide full POI descriptions, sources, links, hours,
+  safety evidence, and trust status in a details sheet.
 - Keep post-onboarding preferences editable. Soft changes affect future suggestions immediately but
   never rewrite the active itinerary. A user may request a current-itinerary review, which produces
   a validated pending diff requiring confirmation.

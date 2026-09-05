@@ -24,6 +24,12 @@ UI, route handlers, and domain modules must not call third-party APIs directly. 
   separate server-only key through typed provider adapters.
 - Keep WanderSync-owned `poi_catalog` safety data separate from provider content. Google Places is
   not evidence of halal or allergen safety and is not copied wholesale into the permanent catalog.
+- The POI choice pool may display attributed live Places fields, but owned `short_description` and
+  safety evidence must come from independently reviewable sources. Persist the provider Place ID as
+  the resolver key; do not relabel provider descriptions as WanderSync content.
+- For scheduling, request `businessStatus`, `regularOpeningHours`, and near-term
+  `currentOpeningHours`, normalize them in destination-local time, and retain only a permitted,
+  timestamped provider snapshot. Unknown hours are a warning, never evidence that a POI is open.
 - Attach provider, retrieval time, expiry, and attribution metadata to provider-derived results;
   enforce the current Google caching and display terms.
 - `ComputeRouteMatrix` supplies travel costs to the Python optimizer. The optimizer remains the
