@@ -124,6 +124,21 @@ coordination; a **private** answer (the social-role step, by default) is visible
 arbiter logic server-side, never returned to another member's client -- the same social-face
 protection Task 1.5's blind-preference ballot already gives budget answers.
 
+Survey completion never freezes a member's profile. An always-available **My Travel Preferences**
+screen lets the member revisit individual answers without repeating the whole wizard. Stable soft
+preferences replace the previous value and affect future ranking/generation immediately; they do
+not rewrite the active itinerary. Editing a safety-critical constraint enters the same explicit
+confirmation path as its initial creation, and removing or reducing a confirmed severe constraint
+records the actor and supersedes the old row rather than erasing its audit trail. After any edit
+that could materially affect the current plan, the UI offers **Apply to future suggestions** or
+**Review current itinerary**. Review re-runs deterministic validation and produces a visible
+pending diff through the standard confirmation primitive; it never silently activates changes.
+Newly stricter safety requirements immediately mark affected active items as requiring review even
+though the itinerary itself remains unchanged. Public coordination may state that requirements
+changed, but never reveal fields marked private (such as private budget or social role) or medical
+detail beyond the confirmed typed constraint flags required for group safety. A member's separate
+privacy/deletion request still hard-deletes their profile and constraint data under Section IX.
+
 | Step | UI | Feeds | Mechanism |
 | --- | --- | --- | --- |
 | 1. Travel vibe | Single-select image cards: heritage, food, nature, urban. | Module 5 exploration engine | Seeds the stable baseline of `interest_vector`; chat-derived discovery signals may temporarily reweight it. |
@@ -326,6 +341,7 @@ New tables extend the existing `trips` / `trip_members` / itinerary schema. All 
 - `traveler_profiles` — per member: `interest_vector vector(64)` (the explicit survey baseline), `budget_daily_cap numeric`, `budget_total_cap numeric`, `pace`, `mobility_threshold_m int`, `serendipity_epsilon numeric` (0.0-0.3, Task 1.6's surprise dial), `social_role` enum (Task 1.6; private -- never returned in a cross-member API response). Chat inference never overwrites these fields. **No free-text medical data.**
 - `trip_interest_signals` — derived discovery tags from chat, pasted text, voice, or public-link captions: `trip_id`, nullable `trip_member_id`, typed `tag`, `source`, `confidence`, `scope` (`moment` | `day` | `trip`), `source_message_id` when applicable, `expires_at`, and dismissal metadata. Store the derived tag and a short user-visible source label, not copied raw third-party content. Members can inspect and dismiss their own inferred signals; RLS prevents cross-trip access.
 - `trip_constraints` — hard constraints as typed rows: `kind` (`dietary` | `religious_access` | `mobility`), `flag` (enum), `severity` (`severe` | `standard`), `source` (`chat` | `voice` | `social` | `manual`), `confirmed_by`, `confirmed_at`. Nothing is enforced until `confirmed_at` is set.
+- `trip_day_windows` — one row per participating member and trip-local date: `trip_member_id`, `local_date`, `available_from time`, `preferred_start time`, `finish_by time`, `timezone text`, and `revision`, unique on `(trip_member_id, local_date)`. `available_from` / `finish_by` are hard scheduling bounds; `preferred_start` is a visible soft preference. Defaults are explicit and editable before generation, never inferred silently from pace or browser timezone.
 - `poi_catalog` — cached POIs: `geog geography(Point,4326)` (PostGIS), `cost_tier`, `tags text[]`, `halal_status` (`verified` | `claimed` | `unknown` | `no`), `allergen_risk text[]`, `indoor bool`, `dress_code` enum, `tourist_density` enum, `height_m numeric` (nullable), `landmark_class` (`prominent_structure` | `global_storefront` | `architectural_typology` | null) for deterministic landmark grounding (Task 6.1).
 - `itinerary_dag` — nodes (activities, transits) + edges with time windows; `locked bool` for visited or fixed-reservation nodes; supports partial re-optimization.
 - `subgroups`, `subgroup_members`, `split_sessions` — branch assignments, rendezvous point (`geog`), convergence time.
@@ -349,7 +365,7 @@ A single deterministic function every candidate item — from Gemini, from a sol
 | **Religious access / dress code** | A POI with a `dress_code` requirement generates a mandatory packing item and a pre-visit reminder. It is never silently scheduled. |
 | **Budget** | The selected set's cost must not exceed total / daily / per-meal caps for **any** affected traveler, including per-branch caps after a split. Cost tiers are estimates; the gate uses the conservative upper bound of the tier. |
 | **Mobility** | Legs exceeding a member's `mobility_threshold_m` are rejected or flagged by severity. |
-| **Time** | No overlap, no midnight crossing, and arrival at the consensus anchor no later than the convergence time. |
+| **Time** | Every activity and transit block stays inside that date's `available_from` / `finish_by` window; no overlap, no midnight crossing, and arrival at the consensus anchor no later than the convergence time. A soft `preferred_start` may move only with a visible explanation. |
 
 Gate output is `pass` | `warn` (needs explicit human confirmation) | `fail` (never shown as approved). Every `warn` and `fail` is logged with a machine-readable reason for audit.
 
@@ -487,7 +503,7 @@ Public confirmation (Task 1.3) works for facts a member is willing to say out lo
 
 ### Task 1.6: Onboarding questionnaire (Travel DNA)
 
-**Files:** create `supabase/migrations/2026090X0006_onboarding_profile.sql`, `components/onboarding-wizard.tsx`, `app/actions/onboarding.ts`, `app/trips/[tripId]/onboarding/page.tsx`, `app/api/trips/[tripId]/onboarding/summary/route.ts`, `tests/components/onboarding-wizard.test.tsx`, `tests/database/onboarding-rls.test.ts`.
+**Files:** create `supabase/migrations/2026090X0006_onboarding_profile.sql`, `components/onboarding-wizard.tsx`, `components/travel-preferences-editor.tsx`, `app/actions/onboarding.ts`, `app/trips/[tripId]/onboarding/page.tsx`, `app/trips/[tripId]/preferences/page.tsx`, `app/api/trips/[tripId]/onboarding/summary/route.ts`, `app/api/trips/[tripId]/preferences/route.ts`, `tests/components/onboarding-wizard.test.tsx`, `tests/components/travel-preferences-editor.test.tsx`, `tests/database/onboarding-rls.test.ts`.
 
 See [Section II-a](#ii-a-hybrid-preference-model-compact-survey-and-contextual-chat-learning) for the compact five-screen design and its
 mapping onto the modules above.
@@ -505,15 +521,62 @@ mapping onto the modules above.
       owner; only server-side jigsaw evaluation logic (Task 3.0's regret-weight addendum) reads it.
 - [ ] Redoing the questionnaire overwrites the previous answer per field; it never accumulates
       history. Chat-derived discovery signals never write to or overwrite questionnaire fields.
+- [ ] Provide an always-available **My Travel Preferences** editor after onboarding. A member can
+      change one field without repeating the wizard; soft preference writes are revision-checked,
+      idempotent upserts and affect only subsequent ranking/generation by default.
+- [ ] Safety-critical additions, edits, removals, or severity reductions use Task 1.3's explicit
+      confirmation flow. A severe change requires the affected member, or an owner acting on their
+      behalf with the actor recorded. Supersede the previous confirmed row instead of deleting its
+      audit history during an ordinary edit; a Section IX privacy/deletion request still removes the
+      member's data. No chat inference may perform either operation.
+- [ ] After a material edit, offer **Apply to future suggestions** and **Review current itinerary**.
+      The first leaves the active itinerary byte-for-byte unchanged. The second re-runs the gate and
+      schedule checks and creates a pending minimal-diff proposal using Task 3.5's confirmation
+      primitive. A stricter safety edit immediately flags affected active cards as requiring review,
+      but never silently removes, replaces, or activates an item.
+- [ ] Realtime announces a generic requirements/preferences change to the group without exposing
+      private budget caps, `social_role`, or medical detail beyond confirmed typed flags. Only the
+      owning member sees their complete fields marked private.
 - [ ] "Group Conductor" summary endpoint: vibe overlap, a pace-mismatch flag (both an
       `active`/`intense` and a `relaxed` pace present among confirmed members), and a consensus
       percentage, computed read-only from already-confirmed rows.
 - [ ] Tests: quick mode skips steps 3-5 with sane defaults, each step's answer lands in the field
       the Section II-a table specifies, `social_role` never appears in a cross-member response,
       redoing the questionnaire replaces rather than duplicates rows, the pace-mismatch flag fires
-      only when both extremes are present among confirmed members.
+      only when both extremes are present among confirmed members; editing one soft preference
+      changes future ranking without mutating the active itinerary; a safety edit requires
+      confirmation and preserves its audit trail; concurrent stale edits fail; itinerary review
+      creates a pending diff; and group events contain no private value.
 
-**Phase 1 exit criteria:** the compact survey establishes an explicit baseline; ingested chat, voice, and social input produce expiring discovery signals and candidate constraints; a chat message about live jazz changes attraction ranking without changing the stored survey vector; a day-scoped indoor request expires after that day; dismissed inferred interests do not reappear from the same source; only human-confirmed constraints are enforced; the gate rejects a peanut-risk food POI and an unverified-halal POI in an automated test; a blind ballot set with one `BUDGET` vote locks the group ceiling to `BUDGET` without exposing who voted it; a completed onboarding questionnaire seeds `interest_vector`, `pace`, `serendipity_epsilon`, and a private `social_role` without leaking the latter to other members; the reference-corridor seed data loads cleanly; the open baseline items above are closed.
+**Phase 1 exit criteria:** the compact survey establishes an explicit, later-editable baseline; ingested chat, voice, and social input produce expiring discovery signals and candidate constraints; a chat message about live jazz changes attraction ranking without changing the stored survey vector; a day-scoped indoor request expires after that day; dismissed inferred interests do not reappear from the same source; only human-confirmed constraints are enforced; the gate rejects a peanut-risk food POI and an unverified-halal POI in an automated test; a blind ballot set with one `BUDGET` vote locks the group ceiling to `BUDGET` without exposing who voted it; a completed onboarding questionnaire seeds `interest_vector`, `pace`, `serendipity_epsilon`, and a private `social_role` without leaking the latter to other members; editing a soft preference changes future suggestions without silently changing the active itinerary, while reviewing that itinerary creates only a confirmable pending diff; the reference-corridor seed data loads cleanly; the open baseline items above are closed.
+
+### Task 1.7: Daily planning windows before generation
+
+**Files:** create `supabase/migrations/2026090X0007_trip_day_windows.sql`, `components/trip-day-windows.tsx`, `app/api/trips/[tripId]/day-windows/route.ts`, `lib/domain/day-window.ts`, `tests/components/trip-day-windows.test.tsx`, `tests/api/day-windows.test.ts`, `tests/database/day-windows-rls.test.ts`.
+
+- [ ] Before **Generate plan**, show one row per destination-local date with preset start choices
+      (07:00, 08:00, 09:00, 10:00), a custom-time option, and an optional **Finish by** value.
+      Copying one day's values to all days is a convenience, not an irreversible bulk edit.
+- [ ] Store each participating member's `available_from` as a hard lower bound,
+      `preferred_start` as a soft preference, and `finish_by` as a hard upper bound in
+      `trip_day_windows`; validate `available_from <=
+      preferred_start < finish_by` and use the destination IANA timezone, never the browser's
+      timezone. Surface any default before generation and keep every value editable afterward.
+- [ ] For groups, do not average away availability. The shared solver window begins at the latest
+      hard `available_from` among participating members. A differing soft preference may shift with
+      an explanation; an optional early-bird branch may start earlier and rejoin at a feasible
+      anchor, but it is never created or activated without confirmation.
+- [ ] Pass every date's bounds and preference into Tasks 2.3 and 4.2. Reject generation when a hard
+      window is empty or cannot contain required reservations; otherwise return a pending proposal
+      and explain material movement away from `preferred_start`.
+- [ ] Tests: preset and custom time, copy-to-all, destination-timezone behavior across DST,
+      invalid/empty window, latest hard group availability, soft-preference explanation, and an
+      early-bird suggestion that leaves the active itinerary unchanged until confirmed.
+
+**Updated Phase 1 exit criterion:** generation has an explicit destination-local planning window
+for every trip day; the reference proposal starts no earlier than its hard bound, materially moving
+away from the preferred start produces an explanation, and an infeasible window blocks generation
+with a useful message.
 
 ---
 
@@ -545,6 +608,9 @@ mapping onto the modules above.
 **Files:** create `services/optimizer/app/solvers/schedule.py`, `services/optimizer/tests/test_schedule.py`, `app/api/trips/[tripId]/schedule/route.ts`, `tests/api/schedule.test.ts`.
 
 - [ ] OR-Tools model maximizing aggregated interest-match utility subject to total, daily, and per-meal cost caps, with a paid/free balance term so free local gems are not crowded out.
+- [ ] Pack activities and required transit inside each Task 1.7 hard daily window; treat
+      `preferred_start` as a penalized soft deviation rather than a hard equality, and report the
+      deviation when the selected schedule starts materially earlier or later.
 - [ ] Return the selected activity set plus remaining slack per cap; deterministic under a supplied seed.
 - [ ] Python tests: caps respected, infeasible when caps are too tight, free-gem substitution when a paid option is dropped, stable output under a fixed seed.
 - [ ] Next.js route: authorized actor → build payload → solve → run every returned item through the [gate](#vii-hard-constraint-gate) → persist as a **pending** proposal. Never auto-activate.
@@ -645,25 +711,41 @@ bargaining needs the horizontal room. See `docs/features/collaborative-workspace
 - [ ] Tests: responds only when addressed, proposal card round-trip, accept requires authorization,
       provider failure leaves the active itinerary unchanged.
 
-### Task 3.4: Persist and synchronise jigsaw drags
+### Task 3.4: Calendar timeline editing, persistence, and synchronization
 
 **Files:** create `features/timeline/` (`timeline-pane.tsx`, `day-column.tsx`, `activity-card.tsx`,
-`use-drag-commit.ts`), `app/api/trips/[tripId]/itinerary/reorder/route.ts`,
+`travel-block.tsx`, `use-drag-commit.ts`, `use-resize-commit.ts`),
+`app/api/trips/[tripId]/itinerary/reorder/route.ts`,
 `tests/components/timeline/*.test.tsx`, `tests/api/itinerary-reorder.test.ts`.
 
-- [ ] Extend the delivered `JigsawPanel` to multi-day: flashcards grouped by day, dragging across
-      days as well as within one.
-- [ ] Drop applies an optimistic local update, then a server-validated write. **Every reorder is
-      revalidated** by the existing deterministic schedule rules and the Phase 1 constraint gate
-      before persistence; a refusal rolls the card back and shows the reason on the card.
+- [ ] Extend the delivered `JigsawPanel` to a Google Calendar-style vertical day/week editor. Each
+      day spans 00:00-24:00; inactive overnight hours are collapsed by default but remain reachable.
+      Blocks are positioned by local start time and their height is proportional to duration.
+- [ ] Drag a whole block to change its start time or move it across days. Pointer-accessible top and
+      bottom resize handles change visit duration in 15-minute increments (the existing 30-minute
+      bargaining grid remains delivered behavior, but persistence accepts the existing 15-480
+      minute domain contract). Provide equivalent keyboard move/resize controls and announce the
+      resulting start, end, and duration.
+- [ ] Render required travel as separate, visually subordinate timeline blocks between POIs rather
+      than hiding it inside attraction duration. A card shows its start, end, duration, lock state,
+      and concise safety/opening-hours warning state.
+- [ ] A move or resize applies an optimistic local update, then a server-validated write. **Every
+      edit is revalidated** against opening hours, transit feasibility, Task 1.7 daily bounds,
+      overlap/midnight rules, pace, budget, the Phase 1 constraint gate, reservations, and
+      rendezvous deadlines. A refusal rolls the block back and shows the reason on that block.
+- [ ] Fixed reservations and consensus anchors are locked by default. Changing one requires an
+      explicit unlock/confirmation; resizing an ordinary visit must never silently move a locked
+      block. Any proposed downstream auto-shift is previewed as a diff before confirmation.
 - [ ] Card states are visually distinct: active, pending proposal, AI-suggested, conflicted.
 - [ ] Writes carry the trip revision. A stale revision loses and the client refetches, so two members
       dragging at once cannot silently clobber each other.
 - [ ] Remote reorders from other members animate into place over the same `trip:{tripId}` channel,
       with multiplayer presence cursors so asynchronous negotiation is visible. Target: all
       members see a resolved conflict within 500 ms.
-- [ ] Tests: reorder within a day, move across days, rejected drop rolls back with a reason,
-      stale-revision write is refused, overlap and midnight-crossing refused, keyboard drag works.
+- [ ] Tests: full 24-hour access with overnight collapse, height proportional to duration,
+      same-day/cross-day move, pointer and keyboard resize, 15-minute snapping, travel blocks,
+      rejected edit rollback, locked-anchor protection, opening-hours/transit/day-window failure,
+      stale-revision refusal, overlap/midnight refusal, and two-member concurrent edits.
 
 ### Task 3.5: Workspace shell & confirmation primitive
 
@@ -691,8 +773,9 @@ bargaining needs the horizontal room. See `docs/features/collaborative-workspace
 
 **Phase 3 exit criteria:** two signed-in members of the same trip see each other's messages and
 presence live; the assistant answers an `@ai` question and posts a proposal card that only an
-authorized member can accept; dragging a card between days persists for both members and is refused
-with a visible reason when it breaks a schedule or constraint rule; tapping a chat POI card flies the
+authorized member can accept; moving or resizing an activity on the 24-hour calendar persists for
+both members, keeps travel time visible, and is refused with a visible reason when it breaks a
+schedule or constraint rule; tapping a chat POI card flies the
 map to it while the map ignores gestures whenever the chat sheet is expanded past 40%; simulated
 airplane mode still renders the last-synced itinerary and emergency contacts.
 

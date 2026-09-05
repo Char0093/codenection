@@ -38,10 +38,18 @@ Below the tablet breakpoint the panes become tabs; the timeline is the default t
 
 ## Pane 2: Interactive flashcard timeline
 
-- Each itinerary activity is a draggable flashcard grouped under its day.
-- Drag to reorder within a day or move an activity to another day. Drop commits an optimistic local
-  update, then a server-validated write; a rejected write rolls the card back with the reason.
-- Every reorder is revalidated by the deterministic schedule rules and the hard-constraint gate
+- Use a Google Calendar-style vertical day/week view covering the full destination-local
+  00:00-24:00 day. Overnight hours may be collapsed initially but remain accessible.
+- Each activity is a draggable block positioned by start time, with height proportional to its
+  duration. Drag the block to change time/day; resize it from either edge in 15-minute increments.
+  Pointer and keyboard users receive equivalent controls and start/end/duration announcements.
+- Required travel appears as its own subordinate block between attractions, so a visually open gap
+  never hides necessary transit time.
+- A move or resize commits an optimistic local update, then a server-validated write; a rejected
+  write rolls the block back with the reason. Fixed reservations and consensus anchors are locked
+  unless an authorized user explicitly unlocks and confirms the change.
+- Every edit is revalidated by opening hours, transit feasibility, the trip day's hard planning
+  window, deterministic schedule rules, rendezvous deadlines, and the hard-constraint gate
   before it is persisted. A drag can be refused (overlap, midnight crossing, budget or dietary
   violation, anchor arrival missed) and the refusal reason is shown on the card.
 - Card states are visually distinct: active, pending proposal, AI-suggested, and conflicted.
