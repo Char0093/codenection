@@ -1,14 +1,17 @@
 "use client";
 
 import React, { useEffect, useRef, useState, type FormEvent } from "react";
-import { AlertCircle, Compass, FileText, LoaderCircle, LogOut, MapPin, Plus, RotateCcw, Save, Settings2, Sparkles } from "lucide-react";
+import Link from "next/link";
+import { AlertCircle, Compass, FileText, LoaderCircle, LogOut, MapPin, Plus, RotateCcw, Save, Settings2, Sparkles, Users } from "lucide-react";
 import { budgetTiers, paceLevels, validateTripDates, type TripInput } from "@/lib/domain/trip";
 import type { ProposalRecord, TripRecord } from "@/lib/repositories/planning-repository";
 import { GeminiProposalReview } from "@/components/gemini-proposal-review";
+import { DietaryConstraintPicker } from "@/components/dietary-constraint-picker";
+import type { DietaryFlag } from "@/lib/domain/constraints";
 
 type View = "setup" | "plan";
 type Operation = "loading" | "saving" | "generating" | "deciding" | null;
-type TripDetail = { trip: TripRecord; proposals: ProposalRecord[] };
+type TripDetail = { trip: TripRecord; proposals: ProposalRecord[]; dietaryFlags: DietaryFlag[] };
 const emptyInput: TripInput = { destinationName: "", startDate: "", endDate: "", budgetTier: "standard", pace: "balanced", notes: "" };
 
 class HttpError extends Error {
@@ -46,6 +49,7 @@ export function TripSetupDashboard({ email }: { email: string }) {
   const [trip, setTrip] = useState<TripRecord | null>(null);
   const [input, setInput] = useState<TripInput>(emptyInput);
   const [proposals, setProposals] = useState<ProposalRecord[]>([]);
+  const [dietaryFlags, setDietaryFlags] = useState<DietaryFlag[]>([]);
   const [operation, setOperation] = useState<Operation>("loading");
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,6 +80,7 @@ export function TripSetupDashboard({ email }: { email: string }) {
         setTrip(detail?.trip ?? null);
         setInput(detail ? inputFromTrip(detail.trip) : { ...emptyInput });
         setProposals(detail?.proposals ?? []);
+        setDietaryFlags(detail?.dietaryFlags ?? []);
         setFailedTripId(null);
         setReconcileTripId(null);
         setTripUrl(detail?.trip.id ?? null);
@@ -125,6 +130,7 @@ export function TripSetupDashboard({ email }: { email: string }) {
     if (current.signal.aborted) return;
     updateSavedTrip(detail.trip);
     setProposals(detail.proposals);
+    setDietaryFlags(detail.dietaryFlags);
     setReconcileTripId(null);
   }
 
@@ -148,7 +154,7 @@ export function TripSetupDashboard({ email }: { email: string }) {
 
   function newTrip() {
     if (locked.current || !ready) return;
-    setTrip(null); setInput({ ...emptyInput }); setProposals([]); setTripUrl(null);
+    setTrip(null); setInput({ ...emptyInput }); setProposals([]); setDietaryFlags([]); setTripUrl(null);
     setView("setup"); setError(null); setNotice(null); setFailedTripId(null);
     setReconcileTripId(null);
   }
@@ -241,6 +247,7 @@ export function TripSetupDashboard({ email }: { email: string }) {
         {trips.map((item) => <option key={item.id} value={item.id}>{item.destinationName} / {item.startDate}</option>)}
       </select></label>
       <button className="secondary-button" type="button" disabled={busy || !ready} onClick={newTrip}><Plus aria-hidden="true" />New trip</button>
+      {trip && <Link className="secondary-button" href={`/trips/${trip.id}/workspace`}><Users aria-hidden="true" />Open workspace</Link>}
     </div>
     <div className="view-tabs" role="tablist" aria-label="Trip workspace">
       {(["setup", "plan"] as const).map((item) => <button key={item} id={`${item}-tab`} type="button" role="tab"
@@ -283,6 +290,7 @@ export function TripSetupDashboard({ email }: { email: string }) {
                 <button className="primary-button" type="submit" value="generate"><Sparkles aria-hidden="true" />Generate plan</button></div>
             </fieldset>
           </form>
+          {trip && <DietaryConstraintPicker tripId={trip.id} flags={dietaryFlags} disabled={busy} />}
         </section>
         <section id="plan-panel" role="tabpanel" aria-labelledby="plan-tab" hidden={view !== "plan"}>
           <div className="section-heading"><h1>Plan</h1></div>

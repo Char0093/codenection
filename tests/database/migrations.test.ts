@@ -645,3 +645,267 @@ describe("shared generation reservations", () => {
     expect(exposed).toEqual([]);
   });
 });
+
+describe("trip chat", () => {
+  async function memberIdFor(user: string, target = trip) {
+    return (await db.query<{ id: string }>(
+      "select id from trip_members where trip_id=$1 and user_id=$2", [target, user],
+    )).rows[0].id;
+  }
+
+  it("lets any trip member read messages, and denies a stranger entirely", async () => {
+    await actor(owner);
+    const ownerMemberId = await memberIdFor(owner);
+    await db.query(
+      "insert into chat_messages(trip_id,author_member_id,author_kind,body) values ($1,$2,'member','Hello group')",
+      [trip, ownerMemberId],
+    );
+    for (const user of [owner, planner, member, viewer]) {
+      await actor(user);
+      const rows = (await db.query("select body from chat_messages where trip_id=$1", [trip])).rows;
+      expect(rows).toEqual([{ body: "Hello group" }]);
+    }
+    await actor(stranger);
+    expect((await db.query("select body from chat_messages where trip_id=$1", [trip])).rows).toEqual([]);
+  });
+
+  it("never leaks another trip's chat by subscribing to its channel name alone", async () => {
+    await actor(stranger);
+    const strangerMemberId = await memberIdFor(stranger, otherTrip);
+    await db.query(
+      "insert into chat_messages(trip_id,author_member_id,author_kind,body) values ($1,$2,'member','Private to Osaka')",
+      [otherTrip, strangerMemberId],
+    );
+    // A member of `trip` querying by `otherTrip`'s id -- the RLS check, not the channel name, must deny this.
+    await actor(owner);
+    expect((await db.query("select body from chat_messages where trip_id=$1", [otherTrip])).rows).toEqual([]);
+  });
+
+  it("lets a member post only as themselves, never as another member or as the assistant", async () => {
+    await actor(member);
+    const ownMemberId = await memberIdFor(member);
+    const ownerMemberId = await memberIdFor(owner);
+    await db.query(
+      "insert into chat_messages(trip_id,author_member_id,author_kind,body) values ($1,$2,'member','My own words')",
+      [trip, ownMemberId],
+    );
+    await expect(db.query(
+      "insert into chat_messages(trip_id,author_member_id,author_kind,body) values ($1,$2,'member','Forged')",
+      [trip, ownerMemberId],
+    )).rejects.toThrow();
+    await expect(db.query(
+      "insert into chat_messages(trip_id,author_member_id,author_kind,body) values ($1,$2,'assistant','Pretending to be the assistant')",
+      [trip, ownMemberId],
+    )).rejects.toThrow();
+  });
+
+  it("rejects a stranger's write and an empty body", async () => {
+    await actor(stranger);
+    const strangerMemberId = await memberIdFor(stranger, otherTrip);
+    await expect(db.query(
+      "insert into chat_messages(trip_id,author_member_id,author_kind,body) values ($1,$2,'member','Uninvited')",
+      [trip, strangerMemberId],
+    )).rejects.toThrow();
+    await actor(owner);
+    const ownerMemberId = await memberIdFor(owner);
+    await expect(db.query(
+      "insert into chat_messages(trip_id,author_member_id,author_kind,body) values ($1,$2,'member','   ')",
+      [trip, ownerMemberId],
+    )).rejects.toThrow();
+  });
+
+  it("is append-only: no update or delete privilege exists even for the author", async () => {
+    await actor(owner);
+    const ownerMemberId = await memberIdFor(owner);
+    const id = (await db.query<{ id: string }>(
+      "insert into chat_messages(trip_id,author_member_id,author_kind,body) values ($1,$2,'member','Immutable') returning id",
+      [trip, ownerMemberId],
+    )).rows[0].id;
+    await expect(db.query("update chat_messages set body='edited' where id=$1", [id])).rejects.toThrow(/permission denied/);
+    await expect(db.query("delete from chat_messages where id=$1", [id])).rejects.toThrow(/permission denied/);
+  });
+
+  it("orders messages stably by time with id as a tiebreak for same-instant inserts", async () => {
+    await actor(null, "postgres");
+    const ownerMemberId = await memberIdFor(owner);
+    await db.query(`insert into chat_messages(id,trip_id,author_member_id,author_kind,body,created_at) values
+      ('00000000-0000-4000-8000-0000000000a2',$1,$2,'member','second',$3),
+      ('00000000-0000-4000-8000-0000000000a1',$1,$2,'member','first',$3)`,
+      [trip, ownerMemberId, "2026-10-01T00:00:00.000Z"]);
+    await actor(owner);
+    const ordered = (await db.query<{ body: string }>(
+      "select body from chat_messages where trip_id=$1 order by created_at, id", [trip],
+    )).rows;
+    expect(ordered.map((row) => row.body)).toEqual(["first", "second"]);
+  });
+});
+
+describe("chat-driven assistant proposals", () => {
+  async function memberIdFor(user: string, target = trip) {
+    return (await db.query<{ id: string }>(
+      "select id from trip_members where trip_id=$1 and user_id=$2", [target, user],
+    )).rows[0].id;
+  }
+  const proposalPayload = payload([activity(), activity({ date: "2026-10-02" })]);
+
+  it("lets any member -- not just owner or planner -- create a pending suggestion and posts it to chat", async () => {
+    await actor(member);
+    const memberMemberId = await memberIdFor(member);
+    const created = (await db.query(
+      "select * from public.save_chat_proposal($1,$2,$3::jsonb,$4,$5)",
+      [trip, memberMemberId, JSON.stringify(proposalPayload), "assistant-test", "Here is a revised plan."],
+    )).rows[0];
+    expect(created.status).toBe("pending");
+    expect(created.proposal_type).toBe("gemini_itinerary");
+
+    const posted = (await db.query<{ author_kind: string; proposal_id: string; body: string }>(
+      "select author_kind,proposal_id,body from chat_messages where trip_id=$1 order by created_at desc limit 1", [trip],
+    )).rows[0];
+    expect(posted).toEqual({ author_kind: "assistant", proposal_id: created.id, body: "Here is a revised plan." });
+  });
+
+  it("still only lets the trip owner accept it, identical to a button-generated proposal", async () => {
+    await actor(member);
+    const memberMemberId = await memberIdFor(member);
+    const created = (await db.query(
+      "select * from public.save_chat_proposal($1,$2,$3::jsonb,$4,$5)",
+      [trip, memberMemberId, JSON.stringify(proposalPayload), "assistant-test", "Suggestion"],
+    )).rows[0];
+
+    await expect(db.query("select * from public.decide_trip_proposal($1,$2,'accept')", [trip, created.id]))
+      .rejects.toThrow(/Only the trip owner/);
+
+    await actor(owner);
+    const decided = (await db.query("select * from public.decide_trip_proposal($1,$2,'accept')", [trip, created.id])).rows[0];
+    expect(decided.status).toBe("accepted");
+  });
+
+  it("rejects an invalid proposal through the same validator a button-generated one uses", async () => {
+    await actor(owner);
+    const ownerMemberId = await memberIdFor(owner);
+    await expect(db.query(
+      "select * from public.save_chat_proposal($1,$2,$3::jsonb,$4,$5)",
+      [trip, ownerMemberId, JSON.stringify({ summary: "x", activities: [], assumptions: [] }), "assistant-test", "Broken"],
+    )).rejects.toThrow();
+  });
+
+  it("refuses to let a member author a proposal under someone else's membership id", async () => {
+    await actor(member);
+    const ownerMemberId = await memberIdFor(owner);
+    await expect(db.query(
+      "select * from public.save_chat_proposal($1,$2,$3::jsonb,$4,$5)",
+      [trip, ownerMemberId, JSON.stringify(proposalPayload), "assistant-test", "Forged"],
+    )).rejects.toThrow();
+  });
+
+  it("denies a stranger entirely", async () => {
+    await actor(stranger);
+    const strangerMemberId = await memberIdFor(stranger, otherTrip);
+    await expect(db.query(
+      "select * from public.save_chat_proposal($1,$2,$3::jsonb,$4,$5)",
+      [trip, strangerMemberId, JSON.stringify(proposalPayload), "assistant-test", "Uninvited"],
+    )).rejects.toThrow();
+  });
+
+  it("posts a plain assistant reply for any member, with no proposal attached", async () => {
+    await actor(viewer);
+    const posted = (await db.query<{ author_kind: string; proposal_id: string | null; body: string }>(
+      "select author_kind,proposal_id,body from public.post_assistant_message($1,$2)",
+      [trip, "Jonker Street opens around 6pm."],
+    )).rows[0];
+    expect(posted).toEqual({ author_kind: "assistant", proposal_id: null, body: "Jonker Street opens around 6pm." });
+  });
+
+  it("refuses a plain assistant reply from a non-member", async () => {
+    await actor(stranger);
+    await expect(db.query("select * from public.post_assistant_message($1,$2)", [trip, "Hello"])).rejects.toThrow();
+  });
+});
+
+describe("reorder_itinerary_item", () => {
+  async function activeItems() {
+    return (await db.query<{ id: string; local_date: string; local_start_time: string; local_end_time: string }>(
+      "select i.id,i.local_date,i.local_start_time,i.local_end_time from itinerary_items i " +
+      "join itinerary_days d on d.id=i.itinerary_day_id where d.trip_id=$1 order by i.local_date,i.local_start_time", [trip],
+    )).rows;
+  }
+  async function currentRevision() {
+    return (await db.query<{ revision: number }>("select revision from trips where id=$1", [trip])).rows[0].revision;
+  }
+  async function seedActiveTrip() {
+    const twoOnDayOne = payload([
+      activity({ date: "2026-10-01", startTime: "09:00", durationMinutes: 60 }),
+      activity({ date: "2026-10-01", startTime: "11:00", durationMinutes: 60 }),
+      activity({ date: "2026-10-02", startTime: "09:00", durationMinutes: 60 }),
+    ]);
+    await actor(owner);
+    const proposal = await save(twoOnDayOne);
+    await decide(proposal.id);
+    return activeItems();
+  }
+
+  it("reorders an activity within the same day", async () => {
+    const items = await seedActiveTrip();
+    const revision = await currentRevision();
+    await actor(member);
+    const moved = (await db.query(
+      "select * from public.reorder_itinerary_item($1,$2,$3,$4,$5)",
+      [trip, items[0].id, revision, "2026-10-01", "13:00"],
+    )).rows[0];
+    expect(moved.local_start_time).toBe("13:00:00");
+    expect(await currentRevision()).toBe(revision + 1);
+  });
+
+  it("moves an activity across days", async () => {
+    const items = await seedActiveTrip();
+    const revision = await currentRevision();
+    await actor(owner);
+    const moved = (await db.query(
+      "select i.*, d.day_date from public.reorder_itinerary_item($1,$2,$3,$4,$5) i " +
+      "join itinerary_days d on d.id = i.itinerary_day_id",
+      [trip, items[0].id, revision, "2026-10-02", "14:00"],
+    )).rows[0];
+    expect(moved.day_date.toISOString().slice(0, 10)).toBe("2026-10-02");
+  });
+
+  it("refuses a stale revision so a client must refetch rather than clobber a concurrent drag", async () => {
+    const items = await seedActiveTrip();
+    const revision = await currentRevision();
+    await actor(owner);
+    await db.query("select * from public.reorder_itinerary_item($1,$2,$3,$4,$5)", [trip, items[0].id, revision, "2026-10-01", "13:00"]);
+    await expect(db.query("select * from public.reorder_itinerary_item($1,$2,$3,$4,$5)", [trip, items[1].id, revision, "2026-10-01", "15:00"]))
+      .rejects.toThrow();
+  });
+
+  it("refuses a drop that would overlap another activity that day", async () => {
+    const items = await seedActiveTrip();
+    const revision = await currentRevision();
+    await actor(owner);
+    await expect(db.query("select * from public.reorder_itinerary_item($1,$2,$3,$4,$5)", [trip, items[1].id, revision, "2026-10-01", "09:30"]))
+      .rejects.toThrow();
+  });
+
+  it("refuses a drop that would cross midnight", async () => {
+    const items = await seedActiveTrip();
+    const revision = await currentRevision();
+    await actor(owner);
+    await expect(db.query("select * from public.reorder_itinerary_item($1,$2,$3,$4,$5)", [trip, items[0].id, revision, "2026-10-01", "23:30"]))
+      .rejects.toThrow();
+  });
+
+  it("refuses a date outside the trip's own range", async () => {
+    const items = await seedActiveTrip();
+    const revision = await currentRevision();
+    await actor(owner);
+    await expect(db.query("select * from public.reorder_itinerary_item($1,$2,$3,$4,$5)", [trip, items[0].id, revision, "2026-11-01", "09:00"]))
+      .rejects.toThrow(/outside the trip range/);
+  });
+
+  it("denies a non-member entirely", async () => {
+    const items = await seedActiveTrip();
+    const revision = await currentRevision();
+    await actor(stranger);
+    await expect(db.query("select * from public.reorder_itinerary_item($1,$2,$3,$4,$5)", [trip, items[0].id, revision, "2026-10-01", "13:00"]))
+      .rejects.toThrow();
+  });
+});
