@@ -10,9 +10,24 @@ UI, route handlers, and domain modules must not call third-party APIs directly. 
 
 ## Real MVP Adapters
 
-- Maps and geocoding.
+- Google Maps JavaScript API for the web map.
+- Google Places API (New) for transient place discovery/details.
+- Google Routes API for route legs and travel-time matrices.
 - Weather.
 - Currency exchange rates.
+
+## Mapping Provider Boundary
+
+- Use Google Maps Platform end to end wherever Google map content is displayed. Do not combine
+  Google Routes or Places content with Mapbox, OpenStreetMap, or another non-Google map.
+- Browser map rendering uses a referrer-restricted public key. Places and Routes calls use a
+  separate server-only key through typed provider adapters.
+- Keep WanderSync-owned `poi_catalog` safety data separate from provider content. Google Places is
+  not evidence of halal or allergen safety and is not copied wholesale into the permanent catalog.
+- Attach provider, retrieval time, expiry, and attribution metadata to provider-derived results;
+  enforce the current Google caching and display terms.
+- `ComputeRouteMatrix` supplies travel costs to the Python optimizer. The optimizer remains the
+  source of itinerary/subgroup decisions; Google supplies transport-network facts, not group policy.
 
 ## Mock MVP Adapters
 
@@ -45,5 +60,7 @@ Every provider call should emit a `provider_events` row for observability.
 ## Non-Goals
 
 - Provider-specific logic in React components.
-- Hard dependency on a single maps, weather, or currency vendor.
+- Calling Google Routes or Places without the corresponding Google display/content boundary. A
+  future provider replacement must replace the complete mapping-content family or pass a legal
+  compatibility review; adapter abstraction does not make cross-provider display permissible.
 - Real booking or payment execution in MVP.

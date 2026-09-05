@@ -24,6 +24,7 @@ The MVP must deliver:
 
 ## Required Docs
 
+- `implementation-status.md`: point-in-time delivery status, remaining acceptance work, and the recommended next execution order for development agents.
 - `framework.md`: stack, architecture, coding boundaries, Supabase usage, testing expectations.
 - `database-structure.md`: Supabase/Postgres schema, table boundaries, indexes, and RLS model.
 - `agentic-architecture.md`: bounded agent roles, proposal workflow, human confirmation rules, and eval requirements.
@@ -38,7 +39,8 @@ The MVP must deliver:
 
 ## Drift Rules
 
-- Do not add native mobile apps in the MVP.
+- Do not add native mobile apps during web Phases 0–9. The conditional post-web Android companion
+  is specified in `Implementation_Plan.md` Phase 10 and has explicit start gates.
 - Do not implement autonomous emergency dispatch.
 - Do not implement full booking/rebooking automation in the MVP.
 - Trip chat is persisted under RLS and deleted with the trip. Send the assistant only the current trip's context and a bounded recent-message window.

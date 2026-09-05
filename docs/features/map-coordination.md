@@ -6,10 +6,13 @@ The map view grounds the trip in real places, routes, rendezvous anchors, and sp
 
 ## MVP Behavior
 
-- Display itinerary items on a map with day filters.
+- Display itinerary items on a Google Maps JavaScript API vector/3D map with day filters and an
+  accessible 2D fallback when WebGL/3D is unavailable.
 - Show meeting points, subgroup routes, fallback basecamp, and semantic rendezvous anchors.
 - Show walking/transit duration estimates when provider data is available.
 - Degrade to saved coordinates and text instructions if route data is unavailable.
+- Use Google Routes `ComputeRouteMatrix` for solver travel costs and `ComputeRoutes` for displayed
+  walking, driving, cycling, and transit legs. Preserve Google attribution and required route warnings.
 
 ## Split Flow
 

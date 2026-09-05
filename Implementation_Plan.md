@@ -2,17 +2,21 @@
 
 > **For agentic workers:** Use `superpowers:subagent-driven-development` or `superpowers:executing-plans` task by task. Keep TDD, review gates, and verification evidence with every task. This document is the binding specification and **replaces the earlier narrowed "travel planner MVP" plan**. Where `docs/` files conflict with this plan, this plan wins; the retired scope-lock and the profile/allergen/weather non-goals in older docs are superseded by [Section IX](#ix-data-privacy--safety-appendix).
 
+For the current delivered/partial/not-started inventory and recommended next task order, read
+[`docs/implementation-status.md`](docs/implementation-status.md) before selecting work. The status
+file is a point-in-time handoff; this document remains authoritative for requirements.
+
 ## What this does
 
 WanderSync is an **end-to-end adaptive collaborative travel system** for group trips. It turns scattered group intent (chat, voice notes, social links) into a validated, budget-bounded, safety-checked itinerary, then keeps that itinerary alive during the trip: it re-optimizes around weather, budget drift, and impromptu detours, coordinates group split-and-merge with real routing math, and gives human-scale on-site help for navigation, photography, and dietary safety.
 
-**Goal:** Deliver a system where an LLM proposes and enriches, deterministic optimization decides what is feasible, and the group explicitly confirms what becomes real — coordinated in a native, multi-user collaborative workspace in the browser.
+**Goal:** Deliver a system where an LLM proposes and enriches, deterministic optimization decides what is feasible, and the group explicitly confirms what becomes real — coordinated first in a native, multi-user collaborative workspace in the browser, with a mobile-ready service boundary for a later Android companion.
 
 **Core value:** It systematically resolves the failure modes of existing travel tools — rigid schedules, group compromise fatigue, navigation disorientation, budget drift, and algorithmic echo chambers that over-filter discovery.
 
-**Architecture (hybrid):** A **Next.js / TypeScript** application owns the entire user-facing experience — the collaborative workspace, Supabase auth and data access, Realtime fan-out, LLM/VQA calls, and orchestration. There is no third-party chat platform, bot, or webview in the product. A separate stateless **Python / FastAPI optimization service** owns the operations-research compute: m-VRPTW routing, multi-objective Knapsack scheduling, traveler clustering, astronomical (SunCalc) computation, and DAG itinerary retopology. The Python service holds no credentials beyond a shared secret, never writes the database, and never calls external providers — it receives an anonymized problem payload and returns a solution.
+**Architecture (hybrid, web-first):** During Phases 0–9, a **Next.js / TypeScript** application owns the complete web experience — the collaborative workspace, Supabase auth and data access, Realtime fan-out, LLM/VQA calls, and orchestration. There is no third-party chat platform, bot, or webview in the product. User-facing operations that a future client needs must also have versioned HTTPS/JSON contracts; do not make a Next.js server action the only way to perform a domain operation. A separate stateless **Python / FastAPI optimization service** owns the operations-research compute: m-VRPTW routing, multi-objective Knapsack scheduling, traveler clustering, astronomical (SunCalc) computation, and DAG itinerary retopology. The Python service holds no credentials beyond a shared secret, never writes the database, and never calls external providers — it receives an anonymized problem payload and returns a solution. After the web lifecycle is validated, Phase 10 may add a native **Kotlin / Jetpack Compose Android companion** against the same server-authoritative contracts.
 
-**Tech stack:** Next.js 15 App Router, React 19, TypeScript, Mapbox GL JS (3D extrusion), `lucide-react` icons, pointer-event drag (no drag library: the 30-minute grid and magnetic snapping are custom), and the existing hand-written CSS design tokens in `app/globals.css` (this project does **not** use Tailwind); Supabase Auth / Postgres / PostGIS / pgvector / RLS / **Realtime**; `@google/genai` (Gemini) for intent extraction, VQA, and narration; Zod; Vitest + Playwright. Python 3.12, FastAPI, Google OR-Tools, NumPy / scikit-learn (K-Means, GMM), SunCalc, pytest + ruff + mypy. Redis for ephemeral group location, session state, locks, and a job queue. GitHub Actions CI.
+**Tech stack:** Next.js 15 App Router, React 19, TypeScript, Google Maps JavaScript API with a vector map / 3D Maps (`Map3DElement`), Google Places API (New), Google Routes API (`ComputeRoutes`, `ComputeRouteMatrix`), `lucide-react` icons, pointer-event drag (no drag library: the 30-minute grid and magnetic snapping are custom), and the existing hand-written CSS design tokens in `app/globals.css` (this project does **not** use Tailwind); Supabase Auth / Postgres / PostGIS / pgvector / RLS / **Realtime**; `@google/genai` (Gemini) for intent extraction, VQA, and narration; Zod; Vitest + Playwright. Python 3.12, FastAPI, Google OR-Tools, NumPy / scikit-learn (K-Means, GMM), SunCalc, pytest + ruff + mypy. Redis for ephemeral group location, session state, locks, and a job queue. GitHub Actions CI. Phase 10 default: Kotlin, Jetpack Compose, Google Maps SDK for Android, coroutines/Flow, Room for offline data, Hilt for dependency injection, and Android platform APIs for camera, notifications, and explicitly scoped split-session location.
 
 **Control contract (the moat):** Gemini produces candidates, explanations, and alternatives. It cannot activate a plan, spend money, assign people to subgroups, bypass RLS, or mutate state. The Python service can compute an optimal assignment or route but cannot persist or activate it. Every candidate item passes a deterministic hard-constraint gate ([Section VII](#vii-hard-constraint-gate)) before it is stored or shown as approved, and every state change is confirmed by an authorized human.
 
@@ -21,7 +25,7 @@ WanderSync is an **end-to-end adaptive collaborative travel system** for group t
 - [What this does](#what-this-does)
 - [I. Target users](#i-target-users)
 - [II. The eleven core modules](#ii-the-eleven-core-modules)
-- [II-a. Onboarding: the Travel DNA questionnaire](#ii-a-onboarding-the-travel-dna-questionnaire)
+- [II-a. Hybrid preference model: compact survey and contextual chat learning](#ii-a-hybrid-preference-model-compact-survey-and-contextual-chat-learning)
 - [II-b. Conflict resolution framework](#ii-b-progressive-conflict-resolution-framework)
 - [III. Deep-dive: Module 5 — serendipity & dynamic exploration engine](#iii-deep-dive-module-5--serendipity--dynamic-exploration-engine)
 - [IV. End-to-end system architecture](#iv-end-to-end-system-architecture)
@@ -40,6 +44,7 @@ WanderSync is an **end-to-end adaptive collaborative travel system** for group t
 - [Phase 7 — Environmental self-healing](#phase-7--environmental-self-healing-module-9)
 - [Phase 8 — Multimodal on-site VQA](#phase-8--multimodal-on-site-vqa-module-10)
 - [Phase 9 — End-to-end, deployment, demo](#phase-9--end-to-end-deployment-demo)
+- [Phase 10 — Post-web Android companion](#phase-10--post-web-android-companion)
 - [IX. Data privacy & safety appendix](#ix-data-privacy--safety-appendix)
 - [Explicit non-goals](#explicit-non-goals)
 - [Verification standard](#verification-standard)
@@ -88,14 +93,31 @@ The reference scenario is a four-person friend group on a 3-day city trip in Mal
 | | **10. Environmental self-healing** | Triggers sub-second DAG retopology when precipitation exceeds 70%, budgets run over, or ad-hoc detours occur — swapping outdoor routes for indoor equivalents and rebalancing financial headroom. | Keeps itineraries resilient against weather disruption and sudden change. |
 | | **11. Multimodal on-site VQA** | Ingests snapshots of local food to screen for allergen cross-contamination and detail culinary origins; analyzes heritage architecture to identify styles and historical context. | Protects dietary safety on the spot while delivering rich cultural storytelling. |
 
-## II-a. Onboarding: the Travel DNA questionnaire
+## II-a. Hybrid preference model: compact survey and contextual chat learning
 
-A first-launch, five-step questionnaire, under 90 seconds, completed once per member before group
-bargaining starts. Its purpose is narrow: give the modules above real signal from the first minute
-instead of inferring everything from chat text. A "Quick mode" (dealbreakers and budget only, the
-rest defaulted) sits alongside the full flow for members happy to trust the defaults. When a group
-leader invites members, each invite carries the same prompt, so onboarding scales with the group
-rather than being a solo setup step.
+A first-launch survey provides a small, reliable baseline; it is not a personality test and does
+not try to predict the whole trip. The full flow is five one-question screens, targeted at under 60
+seconds per member. A "Quick mode" captures dealbreakers and budget only, then applies visible,
+editable defaults. When a group leader invites members, each invite carries the same prompt, so
+onboarding scales with the group rather than being a solo setup step.
+
+Chat then supplies the changing part of preference discovery. Messages, pasted chat, voice
+transcripts, and shared public-link captions may produce **expiring discovery signals** such as
+`live_jazz`, `indoor_today`, `street_food`, or `quiet_evening`. These signals help find new
+attractions, choose Safe / Local / Wildcard variants, suggest spontaneous detours, choose a
+weather fallback, and detect when a micro-split may suit the group. They never silently overwrite
+survey answers and never become hard constraints without confirmation.
+
+| Signal class | Examples | Authority and lifetime |
+| --- | --- | --- |
+| Confirmed facts / hard constraints | Peanut allergy, halal requirement, mobility threshold | Explicit survey/manual confirmation is authoritative. Chat may only create a review candidate. Persists until the member edits or deletes it. |
+| Stable soft preferences | Budget lean, pace, broad travel vibe, surprise tolerance | Explicit survey answer is the baseline. Chat can temporarily reweight recommendations but cannot overwrite it. |
+| Contextual discovery signals | "Somewhere indoors this afternoon", "I'd love live jazz", a shared heritage-market link | Derived from trip-scoped content, visible and removable by the member. Scoped to a moment, day, or trip and expires automatically. |
+
+When signals disagree, safety is resolved first by the hard-constraint gate, explicit recent user
+requests outrank older inferred interests, and the survey remains the fallback after contextual
+signals expire. The UI must explain material recommendations with both the signal and its source,
+for example: "Suggested because the group recently mentioned architecture and cafes."
 
 Two visibility tiers apply throughout: a **public** answer is visible to the rest of the group for
 coordination; a **private** answer (the social-role step, by default) is visible only to the
@@ -104,7 +126,7 @@ protection Task 1.5's blind-preference ballot already gives budget answers.
 
 | Step | UI | Feeds | Mechanism |
 | --- | --- | --- | --- |
-| 1. Travel vibe | Single-select image cards: heritage, food, nature, urban. | Module 5 exploration engine | Seeds the exploitation-set weighting of `interest_vector` before any chat text exists. |
+| 1. Travel vibe | Single-select image cards: heritage, food, nature, urban. | Module 5 exploration engine | Seeds the stable baseline of `interest_vector`; chat-derived discovery signals may temporarily reweight it. |
 | 2. Dealbreaker vault | Multi-select toggle chips: halal, vegetarian/vegan, named allergens, mobility access, a walking-distance cap. | Task 1.1 `trip_constraints` | Each chip is a direct, self-confirmed write to the existing typed dietary/mobility enum -- the same self-confirmation model the dietary picker already uses, not a second constraint system. |
 | 3. Energy & wallet | Two sliders: budget lean, pace. | Module 2 Knapsack; the existing `pace_level` enum | Pace reuses the trip's existing relaxed/balanced/active/intense scale and `paceDailyDurationCaps` rather than inventing a second one; budget seeds the member's personal cost-tier lean inside the group's shared Knapsack objective. |
 | 4. Social role | Single-select carousel (Navigator, Chronicler, Gourmand, Go-with-the-flow, Negotiator); private by default. | Level 0 jigsaw minimax regret | A per-member regret-weight multiplier on `evaluateTeam`'s scoring -- see the Task 3.0 addendum below. |
@@ -120,7 +142,8 @@ write path and no new trust boundary.
 vault writes the exact typed-enum rows the hard-constraint gate already enforces, not a second,
 competing constraint system. The vibe check and surprise dial only ever bias which gate-`pass`
 candidates get suggested first -- a `fail` from Section VII is terminal regardless of onboarding
-answers.
+answers or chat-derived signals. If chat appears to disclose a hard constraint, the system shows
+the affected member a Confirm / Edit / Reject card; until confirmation, the candidate is inert.
 
 ## II-b. Progressive conflict resolution framework
 
@@ -173,9 +196,9 @@ Recommendation engines frequently fall into the **algorithmic echo chamber**: if
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────┐
-│                      Client interaction layer                          │
+│                    Web client interaction layer                        │
 │   Collaborative workspace  (Next.js route, React 19)                   │
-│   - Top 60%: Mapbox 3D spatial map, 60 deg tilt, split/merge routes     │
+│   - Top 60%: Google 3D/vector map, tilted camera, split/merge routes    │
 │   - Bottom 40%: realtime chatroom, AI assistant, action sheet           │
 │   - Pre-trip mode: full-screen timeline jigsaw (drag bargaining)        │
 └───────────────────────────────────┬────────────────────────────────────┘
@@ -203,25 +226,78 @@ Recommendation engines frequently fall into the **algorithmic echo chamber**: if
 
 ┌────────────────────────────────────────────────────────────────────────┐
 │  External providers, called ONLY by Next.js:                           │
-│  Mapbox · Google Routes & Transit · OpenWeatherMap · social fetchers    │
+│  Google Maps / Places / Routes · OpenWeatherMap · social fetchers       │
 └────────────────────────────────────────────────────────────────────────┘
 
 Control boundary:
 Gemini drafts and enriches. The Python service computes feasibility and optima.
 Next.js validation + Supabase policies decide what is saved, shown, and active.
 Humans confirm every state change.
+
+Future Phase 10 boundary:
+Android (Kotlin / Compose) → versioned HTTPS contracts + Supabase Auth/Realtime.
+It does not call the private optimizer or Gemini directly and does not embed the web application.
 ```
+
+### Web-first, mobile-ready client contract
+
+- Phases 0–9 ship and validate the responsive web/PWA experience first. Android work does not
+  delay the hard-constraint gate, optimizer, or web acceptance path.
+- Keep authorization, revision checks, idempotency, confirmation, and the hard-constraint gate
+  server-authoritative. A mobile client is never trusted to reproduce these rules correctly.
+- Every operation needed by both web and mobile has a versioned HTTPS/JSON endpoint with stable
+  machine-readable errors. Next.js server actions may wrap these endpoints for web ergonomics but
+  must not become an exclusive transport.
+- Publish schemas from one contract source and verify the same fixtures with Zod, Pydantic, and
+  Kotlin serialization. Do not manually maintain three subtly different payload definitions.
+- Share contracts and behavior, not UI code. React components, CSS, browser storage, and Next.js
+  server actions are not imported, embedded, or mechanically translated into Android.
+- Design mutations for retries: idempotency key, expected revision, authorized actor, and explicit
+  confirmation token where applicable. Offline clients queue intentions, not already-approved state.
+- Android receives no Gemini, optimizer, database-service, or unrestricted provider secret. It
+  uses the authenticated public client boundary and narrowly restricted platform tokens only when
+  a native SDK truly requires one.
+
+### Mapping-provider decision and content boundary
+
+- Use one Google Maps Platform family for map display and Google-sourced map content: Maps
+  JavaScript API on web, Places API (New) for transient discovery/details, Routes API for walking,
+  driving, cycling, and public transit, and Maps SDK for Android if Phase 10 map features proceed.
+- Do not render Google Routes, Places, Directions, Distance Matrix, or Route Optimization content
+  on a Mapbox, OpenStreetMap, or other non-Google map. Current Google service-specific terms
+  prohibit that combination. Re-check the current terms before each provider launch.
+- `ComputeRouteMatrix` supplies travel times/distances to WanderSync's own OR-Tools model;
+  `ComputeRoutes` supplies the final user-visible route legs. Google does not decide subgroup
+  membership, itinerary utility, hard constraints, or confirmation.
+- Transit routes have different capabilities from road routes, including restrictions on
+  intermediate waypoints. Build each transit leg between solver-selected stops and validate the
+  final connection/arrival time rather than assuming a multi-waypoint transit request.
+- `poi_catalog` is WanderSync-owned reference data collected from independently reviewable sources.
+  Google Places can discover candidates and refresh permitted display details, but must never be
+  copied wholesale into the permanent catalog or treated as evidence of halal/allergen safety.
+- Store Google place IDs only where permitted and enforce the provider's current caching limits for
+  coordinates and other content. Keep provider-derived fields separate from owned safety metadata,
+  with provider name, retrieval time, and expiry.
+- Use separate restricted keys: a referrer-restricted public browser key for Maps JavaScript, a
+  server-only key restricted to Places/Routes from the backend, and later a package/signing-
+  certificate-restricted Android key. Billing budgets, quotas, and alerts are required before launch.
 
 ## V. Service boundary (Next.js ↔ Python optimization service)
 
 **Next.js owns**
 
-- All authentication, session handling, and RLS-scoped reads/writes. Supabase credentials live only here.
-- The collaborative workspace: realtime chat, presence, the embedded assistant, and the flashcard timeline, all served as Next.js routes.
+- Server-side authentication verification, web session handling, and all privileged/RLS-scoped
+  orchestration. Private credentials live only here. A Phase 10 Android client may contain only the
+  public Supabase project configuration and its current user's securely stored session token.
+- The web collaborative workspace: realtime chat, presence, the embedded assistant, and the
+  flashcard timeline, all served as Next.js routes. Android later implements native screens against
+  the shared contracts; it does not reuse or embed these React routes.
 - All Gemini calls: intent extraction, "Switch It Up" narration, orientation cues, VQA, detour copy.
 - The **hard-constraint gate**: no itinerary item is persisted or shown as approved until it passes.
 - Orchestration: builds solve payloads, enqueues jobs, applies solutions, pushes confirmations.
-- All external-provider calls (Mapbox, Google Routes/Transit, OpenWeatherMap, social fetchers).
+- All server-side external-provider calls (Google Places/Routes, OpenWeatherMap, social fetchers).
+  The browser loads Google Maps only with its referrer-restricted public key; it never receives the
+  server Places/Routes key.
 
 **Python optimization service owns**
 
@@ -247,7 +323,8 @@ Humans confirm every state change.
 
 New tables extend the existing `trips` / `trip_members` / itinerary schema. All are trip-scoped with RLS mirroring the current policies (`can_view_trip`, `can_manage_trip`, owner-only activation). Requires the `postgis` and `vector` extensions.
 
-- `traveler_profiles` — per member: `interest_vector vector(64)` (pgvector), `budget_daily_cap numeric`, `budget_total_cap numeric`, `pace`, `mobility_threshold_m int`, `serendipity_epsilon numeric` (0.0-0.3, Task 1.6's surprise dial), `social_role` enum (Task 1.6; private -- never returned in a cross-member API response). **No free-text medical data.**
+- `traveler_profiles` — per member: `interest_vector vector(64)` (the explicit survey baseline), `budget_daily_cap numeric`, `budget_total_cap numeric`, `pace`, `mobility_threshold_m int`, `serendipity_epsilon numeric` (0.0-0.3, Task 1.6's surprise dial), `social_role` enum (Task 1.6; private -- never returned in a cross-member API response). Chat inference never overwrites these fields. **No free-text medical data.**
+- `trip_interest_signals` — derived discovery tags from chat, pasted text, voice, or public-link captions: `trip_id`, nullable `trip_member_id`, typed `tag`, `source`, `confidence`, `scope` (`moment` | `day` | `trip`), `source_message_id` when applicable, `expires_at`, and dismissal metadata. Store the derived tag and a short user-visible source label, not copied raw third-party content. Members can inspect and dismiss their own inferred signals; RLS prevents cross-trip access.
 - `trip_constraints` — hard constraints as typed rows: `kind` (`dietary` | `religious_access` | `mobility`), `flag` (enum), `severity` (`severe` | `standard`), `source` (`chat` | `voice` | `social` | `manual`), `confirmed_by`, `confirmed_at`. Nothing is enforced until `confirmed_at` is set.
 - `poi_catalog` — cached POIs: `geog geography(Point,4326)` (PostGIS), `cost_tier`, `tags text[]`, `halal_status` (`verified` | `claimed` | `unknown` | `no`), `allergen_risk text[]`, `indoor bool`, `dress_code` enum, `tourist_density` enum, `height_m numeric` (nullable), `landmark_class` (`prominent_structure` | `global_storefront` | `architectural_typology` | null) for deterministic landmark grounding (Task 6.1).
 - `itinerary_dag` — nodes (activities, transits) + edges with time windows; `locked bool` for visited or fixed-reservation nodes; supports partial re-optimization.
@@ -362,15 +439,18 @@ Phase 0/1 of the earlier plan is implemented on `main` and is the baseline Wande
 - [ ] Bootstrap seed harness: a deterministic script (`scripts/seed_kl_reference.ts`, invoked via `supabase/seed.sql` for local resets) pre-populates 40–50 hand-verified `poi_catalog` rows for the reference corridor (KLCC, Bukit Bintang, Old Town/Melaka), with real `halal_status`, `allergen_risk`, `indoor`, `dress_code`, and (Task 6.1) `landmark_class` values — commercial map APIs do not carry these fields, so every downstream feature needs this ground truth rather than synthetic mocks. Idempotent: re-running does not duplicate rows.
 - [ ] Run lint, test, build.
 
-### Task 1.2: Multi-source context ingestion
+### Task 1.2: Contextual discovery and candidate-constraint extraction
 
-**Files:** create `lib/ingestion/{chat,voice,social}.ts`, `lib/ingestion/extract.ts`, `app/api/trips/[tripId]/ingest/route.ts`, `tests/ingestion/*.test.ts`.
+**Files:** create `supabase/migrations/2026090X0002_interest_signals.sql`, `lib/ingestion/{chat,voice,social}.ts`, `lib/ingestion/extract.ts`, `lib/domain/interest-signals.ts`, `app/api/trips/[tripId]/ingest/route.ts`, `app/api/trips/[tripId]/interest-signals/route.ts`, `tests/ingestion/*.test.ts`, `tests/domain/interest-signals.test.ts`, `tests/database/interest-signals-rls.test.ts`.
 
-- [ ] Chat: read the trip's own `chat_messages` history, and accept pasted text from an outside group chat.
+- [ ] Chat: incrementally read the trip's own new `chat_messages`, and accept explicitly pasted text from an outside group chat. Do not repeatedly reprocess the full history.
 - [ ] Voice: accept audio, transcribe via Gemini, feed the text to the extractor.
 - [ ] Social: fetch Instagram / TikTok / Xiaohongshu URLs through a pluggable fetcher interface with per-host adapters. **Caption and oEmbed text only**; respect robots and rate limits; no login-walled scraping. Store only derived interest tags, never raw third-party content.
-- [ ] `extract.ts`: one Gemini call → structured JSON (`interestTags[]`, `candidateConstraints[]` with `kind` / `flag` / `severity` / `evidence`) → Zod. A deterministic post-filter maps evidence phrases to enum flags; anything unmapped becomes a manual review item and is never auto-enforced.
-- [ ] Fake-client tests: valid extraction, malformed JSON, ambiguous evidence, and prompt injection inside ingested text (must not create a constraint or exfiltrate trip data).
+- [ ] `extract.ts`: one Gemini call → structured JSON with `discoverySignals[]` (`tag`, `confidence`, `scope`, `sourceLabel`) and `candidateConstraints[]` (`kind`, `flag`, `severity`, `evidence`) → Zod. A deterministic post-filter allowlists signal tags, clamps `scope` to an expiry, and maps constraint evidence to typed enum flags. Anything unmapped becomes a manual review item and is never auto-enforced.
+- [ ] Persist discovery signals separately from `traveler_profiles`: `moment` expires after the relevant itinerary window, `day` at the end of the destination-local day, and `trip` at trip end. Repeated equivalent signals refresh one row rather than accumulating duplicates.
+- [ ] Provide a "Why am I seeing this?" source label and an inferred-interest control where a member can dismiss their own signal. Dismissal immediately removes it from future ranking and prevents the same source message from recreating it.
+- [ ] Feed active discovery signals into attraction search, Safe / Local / Wildcard ranking, spontaneous detours, weather alternatives, and split-suggestion detection. They are ranking inputs only; every surfaced candidate still passes the hard-constraint gate.
+- [ ] Fake-client tests: valid attraction-interest extraction, contextual `indoor_today` expiry, deduplication, dismissal, malformed JSON, ambiguous evidence, and prompt injection inside ingested text (must not create a constraint, overwrite a survey answer, or exfiltrate trip data).
 - [ ] Rate-limit ingestion per user and per trip.
 
 ### Task 1.3: Confirmation & interest-vector build
@@ -379,8 +459,9 @@ Phase 0/1 of the earlier plan is implemented on `main` and is the baseline Wande
 
 - [ ] UI lists each candidate constraint with its evidence and a one-tap Confirm / Edit / Reject. Nothing is enforced until an authorized member confirms.
 - [ ] `severe` flags require confirmation from the affected member, or from the owner acting on their behalf with the actor logged.
-- [ ] Deterministic embedding of confirmed interest tags into `interest_vector` via a fixed tag→dimension map. No LLM in the write path.
-- [ ] Tests: confirm enforces, reject discards, edit re-maps, unauthorized actor denied, severe flag cannot be confirmed by an unrelated member.
+- [ ] Deterministic embedding of explicit survey tags into the baseline `interest_vector` via a fixed tag→dimension map. Build a separate, ephemeral contextual vector from active `trip_interest_signals`; combine the two only at read/ranking time. No LLM in either vector write path.
+- [ ] Weighting rule: an explicit current-turn request outranks older contextual signals; active contextual signals may reweight but not erase the survey baseline; expired or dismissed signals contribute zero. The calculation is deterministic under a supplied clock.
+- [ ] Tests: confirm enforces, reject discards, edit re-maps, unauthorized actor denied, severe flag cannot be confirmed by an unrelated member, contextual signals change attraction ranking without modifying the stored baseline, and expiry restores baseline ranking.
 
 ### Task 1.4: Hard-constraint gate
 
@@ -408,11 +489,12 @@ Public confirmation (Task 1.3) works for facts a member is willing to say out lo
 
 **Files:** create `supabase/migrations/2026090X0006_onboarding_profile.sql`, `components/onboarding-wizard.tsx`, `app/actions/onboarding.ts`, `app/trips/[tripId]/onboarding/page.tsx`, `app/api/trips/[tripId]/onboarding/summary/route.ts`, `tests/components/onboarding-wizard.test.tsx`, `tests/database/onboarding-rls.test.ts`.
 
-See [Section II-a](#ii-a-onboarding-the-travel-dna-questionnaire) for the five-step design and its
+See [Section II-a](#ii-a-hybrid-preference-model-compact-survey-and-contextual-chat-learning) for the compact five-screen design and its
 mapping onto the modules above.
 
 - [ ] Five-step wizard plus a "Quick mode" toggle on step one (dealbreakers and budget only, the
-      rest defaulted); no free-text fields, under 90 seconds to complete.
+      rest defaulted); one primary interaction per screen, no free-text fields, under 60 seconds
+      to complete, and every default remains visible and editable later.
 - [ ] Steps 1, 3, and 5 write `traveler_profiles` (`interest_vector` seed, `pace`,
       `serendipity_epsilon`); step 2 writes `trip_constraints` rows through the existing
       self-confirmed path from Task 1.1, not a second constraint system; step 4 writes
@@ -422,7 +504,7 @@ mapping onto the modules above.
 - [ ] `social_role` is never included in any API response readable by a member other than its
       owner; only server-side jigsaw evaluation logic (Task 3.0's regret-weight addendum) reads it.
 - [ ] Redoing the questionnaire overwrites the previous answer per field; it never accumulates
-      history.
+      history. Chat-derived discovery signals never write to or overwrite questionnaire fields.
 - [ ] "Group Conductor" summary endpoint: vibe overlap, a pace-mismatch flag (both an
       `active`/`intense` and a `relaxed` pace present among confirmed members), and a consensus
       percentage, computed read-only from already-confirmed rows.
@@ -431,7 +513,7 @@ mapping onto the modules above.
       redoing the questionnaire replaces rather than duplicates rows, the pace-mismatch flag fires
       only when both extremes are present among confirmed members.
 
-**Phase 1 exit criteria:** ingested chat, voice, and social input produce candidate constraints; only human-confirmed constraints are enforced; the gate rejects a peanut-risk food POI and an unverified-halal POI in an automated test; a blind ballot set with one `BUDGET` vote locks the group ceiling to `BUDGET` without exposing who voted it; a completed onboarding questionnaire seeds `interest_vector`, `pace`, `serendipity_epsilon`, and a private `social_role` without leaking the latter to other members; the reference-corridor seed data loads cleanly; the open baseline items above are closed.
+**Phase 1 exit criteria:** the compact survey establishes an explicit baseline; ingested chat, voice, and social input produce expiring discovery signals and candidate constraints; a chat message about live jazz changes attraction ranking without changing the stored survey vector; a day-scoped indoor request expires after that day; dismissed inferred interests do not reappear from the same source; only human-confirmed constraints are enforced; the gate rejects a peanut-risk food POI and an unverified-halal POI in an automated test; a blind ballot set with one `BUDGET` vote locks the group ceiling to `BUDGET` without exposing who voted it; a completed onboarding questionnaire seeds `interest_vector`, `pace`, `serendipity_epsilon`, and a private `social_role` without leaking the latter to other members; the reference-corridor seed data loads cleanly; the open baseline items above are closed.
 
 ---
 
@@ -486,7 +568,7 @@ mapping onto the modules above.
 the realtime, authorization, and confirmation primitives established here are reused everywhere.
 
 The workspace lives at `/trips/[tripId]/workspace` as a dual-layer contextual surface: the **top
-60%** is the Mapbox 3D spatial map, the **bottom 40%** is the realtime chatroom and action sheet.
+60%** is the Google 3D/vector spatial map, the **bottom 40%** is the realtime chatroom and action sheet.
 Pre-trip mode replaces the whole surface with the full-screen **timeline jigsaw**, because drag
 bargaining needs the horizontal room. See `docs/features/collaborative-workspace.md`.
 
@@ -630,7 +712,7 @@ airplane mode still renders the last-synced itinerary and emergency contacts.
 
 **Files:** create `services/optimizer/app/solvers/route.py`, `services/optimizer/tests/test_route.py`, `app/api/trips/[tripId]/route-plan/route.ts`, `tests/api/route-plan.test.ts`.
 
-- [ ] OR-Tools routing: per-branch ordered waypoints, time windows, a travel-time matrix supplied by Next.js from Mapbox/Google Routes, and a shared rendezvous node every branch must reach by the convergence time.
+- [ ] OR-Tools routing: per-branch ordered waypoints, time windows, a travel-time matrix supplied by Next.js through Google Routes `ComputeRouteMatrix`, and a shared rendezvous node every branch must reach by the convergence time.
 - [ ] Return arrival times and slack; report infeasible if a branch cannot make the anchor.
 - [ ] Tests: two branches converge on time, a tightened window becomes infeasible rather than silently late, an added stop reflows downstream arrivals.
 
@@ -658,7 +740,7 @@ airplane mode still renders the last-synced itinerary and emergency contacts.
 **Files:** create `lib/mobility/breakeven.ts`, `lib/mobility/options.ts`, `app/api/trips/[tripId]/legs/[legId]/mobility/route.ts`, `tests/mobility/*.test.ts`.
 
 - [ ] Rideshare break-even: compare a 3–4-passenger ride-hail fare estimate against summed transit fares for the branch size. Deterministic given quoted prices.
-- [ ] Emit Fastest / Budget / Scenic-Walk options with cost and duration from Google Routes & Transit.
+- [ ] Emit Fastest / Budget / Scenic-Walk options with cost and duration from Google Routes. Build public-transit legs with `travelMode = TRANSIT`, respecting the transit endpoint's waypoint limitations and preserving required Google attribution/warnings.
 - [ ] A rain trigger (from the Phase 7 monitor or a manual flag) marks weather-sensitive legs and prefers covered or indoor connections.
 - [ ] Keep routes text- and map-based; no live vehicle tracking.
 - [ ] Tests: break-even flips at the expected party size, the scenic option only appears when it fits the time budget, the rain pivot changes the recommendation.
@@ -673,7 +755,7 @@ airplane mode still renders the last-synced itinerary and emergency contacts.
 
 **Files:** create `lib/serendipity/recommender.ts`, `lib/serendipity/diversity.ts`, `tests/serendipity/*.test.ts`.
 
-- [ ] Exploitation set: rank POIs by interest-vector similarity and constraint fit. Exploration set: sample high-variance POIs (low similarity, distinct tags, still gate-`pass`) with probability ε, default 0.2 and configurable per trip.
+- [ ] Exploitation set: rank POIs against the explicit survey baseline plus active, non-dismissed contextual discovery signals from Task 1.2. A current-turn request receives the highest soft-preference weight; expired signals contribute zero. Exploration set: sample high-variance POIs (low baseline similarity, distinct tags, still gate-`pass`) with probability ε, default 0.2 and configurable per trip.
 - [ ] Every exploration candidate runs through the [gate](#vii-hard-constraint-gate); a `fail` is dropped and resampled, never surfaced with a warning.
 - [ ] Diversity metric plus dedupe against `serendipity_log` history so the same surprise is not re-shown.
 - [ ] Deterministic under a seed. Tests cover ε=0 (pure exploitation), ε=1 (all exploration, still constraint-safe), dedupe, and an allergen-risk POI being filtered out of the exploration pool.
@@ -693,7 +775,8 @@ airplane mode still renders the last-synced itinerary and emergency contacts.
 - [ ] Detect buffer windows on the active DAG: a gap at or above a configurable threshold before the next fixed commitment.
 - [ ] Proximity scan of `poi_catalog` (PostGIS radius) for gate-`pass` POIs matching the group vector; rank by interest × proximity × rarity.
 - [ ] Offer as an assistant proposal card in chat via the Task 3.5 confirmation primitive, showing the buffer math. Accept calls the Phase 4 solver to reflow remaining waypoints; dismiss logs the outcome and suppresses the POI for the day.
-- [ ] Tests: no offer when the buffer is too small, the offer respects the dinner reservation, accepting keeps the anchor arrival feasible.
+- [ ] Prefer detours matching active `moment` or `day` discovery signals (for example, a recent request for live music or somewhere indoors), and explain which recent signal influenced the suggestion. A contextual match changes ranking only; it cannot bypass feasibility, dedupe, or the hard-constraint gate.
+- [ ] Tests: no offer when the buffer is too small, the offer respects the dinner reservation, accepting keeps the anchor arrival feasible, a recent contextual signal changes the top eligible attraction, and an expired or dismissed signal does not.
 
 **Phase 5 exit criteria:** the reference trip's 20% blend yields at least one gate-clean out-of-profile POI; Safe, Local, and Wildcard variants all satisfy Ben's allergy flag and Amira's Halal constraint; a simulated 30-minute buffer produces a detour offer that still makes the 18:00 anchor.
 
@@ -703,14 +786,16 @@ airplane mode still renders the last-synced itinerary and emergency contacts.
 
 ### Task 6.1: 3D landmark navigation
 
-**Files:** create `features/workspace/nav-3d.tsx`, `lib/nav/landmarks.ts`, `lib/nav/orientation-cues.ts`, `tests/nav/*.test.ts`.
+**Files:** create `features/workspace/google-map-3d.tsx`, `lib/providers/google-maps.ts`, `lib/providers/google-places.ts`, `lib/providers/google-routes.ts`, `lib/nav/landmarks.ts`, `lib/nav/orientation-cues.ts`, `tests/nav/*.test.ts`, `tests/providers/google-maps-contract.test.ts`.
 
-- [ ] Mapbox GL 3D building extrusion at a 60° pitch, camera following the active leg, with the next turn landmark highlighted from `poi_catalog` and Mapbox POI data.
+- [ ] Google Maps JavaScript API vector/3D view with a tilted camera following the active leg, subgroup polylines, rendezvous markers, and the next eligible landmark highlighted. Prefer `Map3DElement` where supported and provide an accessible 2D vector-map fallback when 3D/WebGL is unavailable.
 - [ ] **Deterministic landmark pre-filtering (`lib/nav/landmarks.ts`), before any Gemini call:** run a
-      spatial query against `poi_catalog` / Mapbox POI layers within `r <= 50m` of the upcoming
+      spatial query against the WanderSync-owned `poi_catalog` within `r <= 50m` of the upcoming
       turn/intersection coordinate, filtered to `landmark_class` in (`prominent_structure` with
       `height_m > 30`, `global_storefront`, `architectural_typology`). This candidate list, not the raw
-      map tile, is what reaches the LLM — an empty result means no landmark candidate at all.
+      Google map/Places response, is what reaches the LLM — an empty result means no landmark
+      candidate at all. A transient Google Places result is display-only until independently
+      reviewed into owned catalog data.
 - [ ] Conversational cue generation (Gemini) is **strictly grounded**: the prompt supplies only the
       pre-filtered candidate list, and the response is Zod-validated against a schema that permits
       referencing only entities from that list. "Walk toward the clock tower, turn right at the
@@ -718,7 +803,9 @@ airplane mode still renders the last-synced itinerary and emergency contacts.
       an empty candidate list yields plain distance/direction phrasing with no invented landmark name.
 - [ ] Tests: a cue references only a real feature present in the passed context, no cue is invented
       when the deterministic pre-filter returns nothing, a candidate outside the 50 m radius or below
-      the height threshold is never offered to the LLM, pitch and marker state render correctly.
+      the height threshold is never offered to the LLM, camera and marker state render correctly,
+      the 2D fallback works without WebGL, provider attribution is visible, and no Google Places or
+      Routes content is rendered on a non-Google map.
 
 ### Task 6.2: Photo spot & lighting engine
 
@@ -820,7 +907,7 @@ airplane mode still renders the last-synced itinerary and emergency contacts.
 
 **Files:** create `Dockerfile` (Next.js), `docker-compose.prod.yml`, `.github/workflows/{ci,deploy}.yml`, `docs/deployment.md`. The optimizer `Dockerfile` comes from Task 2.1.
 
-- [ ] Document only server-side secrets: Supabase URL and anon key, `GEMINI_API_KEY`, `GEMINI_MODEL`, `OPT_SERVICE_TOKEN`, `MAPBOX_TOKEN`, `GOOGLE_ROUTES_KEY`, `OPENWEATHER_KEY`, `REDIS_URL`. No secret ever gets a `NEXT_PUBLIC_` prefix.
+- [ ] Document configuration by exposure class: public `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and referrer-restricted `NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY`; server-only `GEMINI_API_KEY`, `GEMINI_MODEL`, `OPT_SERVICE_TOKEN`, `GOOGLE_MAPS_SERVER_KEY`, `OPENWEATHER_KEY`, and `REDIS_URL`. No server secret gets a `NEXT_PUBLIC_` prefix. Configure API allowlists, referrer/IP restrictions, billing budgets, quota caps, and alerts.
 - [ ] The optimizer service is network-isolated and reachable only from the Next.js service.
 - [ ] Health endpoints for both services; structured logs with no prompt payloads, no secrets, and no raw personal data.
 - [ ] Configure the Supabase Realtime quotas and allowed origins; run a production smoke test with non-sensitive demo data and two concurrent sessions.
@@ -833,6 +920,94 @@ airplane mode still renders the last-synced itinerary and emergency contacts.
 - [ ] A scripted sub-three-minute run of the reference trip that hits constraint safety, split/merge math, self-healing, and on-site VQA.
 
 **Phase 9 exit criteria:** the team can demonstrate the ingest → optimize → split → heal → merge → VQA → ledger path end to end in under three minutes, with both services deployed and CI green.
+
+---
+
+## Phase 10 — Post-web Android companion
+
+**Start condition:** Phase 9 is green in production-like web testing, API contracts have remained
+stable for one release cycle, and user research shows meaningful demand for on-trip native
+capabilities. This phase is a follow-on product decision, not part of the web MVP critical path.
+Native Kotlin with Jetpack Compose is the default because offline state, camera capture,
+notifications, and controlled location sharing are central to the companion. Record an ADR before
+starting if evidence favors Flutter, React Native, or Kotlin Multiplatform instead.
+
+### Task 10.1: Mobile API contract hardening
+
+**Files:** create `contracts/openapi.yaml`, `contracts/fixtures/`, `docs/mobile-api.md`; modify shared
+web route tests and CI contract checks.
+
+- [ ] Inventory every companion operation: sign-in/session refresh, active itinerary snapshot,
+      chat history/send, proposal decision, constraint read, split/merge status, allergy-card
+      download, receipt upload, and food-VQA upload.
+- [ ] Expose each operation through versioned HTTPS/JSON; remove any dependency on calling a
+      Next.js server action from outside the web client.
+- [ ] Require idempotency keys on retryable mutations and expected revisions on itinerary or trip
+      state changes. Preserve the existing server-side authorization and confirmation rules.
+- [ ] Generate or validate TypeScript and Kotlin models from the same contract source. Cross-client
+      fixture tests must agree on nullable fields, enums, timestamps, bigint revisions, and stable
+      error codes.
+- [ ] Document Supabase Auth token exchange/refresh, Realtime topics, reconnect/backfill behavior,
+      pagination, upload limits, and API version support policy.
+
+### Task 10.2: Android foundation and offline architecture
+
+**Files:** create `android/` with Gradle convention plugins and modules `app`, `core`, `domain`,
+`data`, `presentation`, `design-system`, and feature modules for `auth`, `itinerary`, and `chat`.
+
+- [ ] Native Kotlin/Jetpack Compose app with unidirectional state flow, coroutines/Flow, Hilt, and
+      repository interfaces defined in the pure Kotlin `domain` layer.
+- [ ] Enforce dependency direction: presentation → domain; data → domain; domain has no Android,
+      network, database, or UI dependency. DTOs and Room entities never leak into Compose screens.
+- [ ] Supabase-compatible authentication with secure token storage and logout cleanup. Never store
+      service-role, Gemini, optimizer, or unrestricted provider credentials in the application.
+- [ ] Room-backed active-trip snapshot with remote/local data sources and an explicit stale/offline
+      UI state. Repository synchronization must preserve the last trusted server revision.
+- [ ] CI runs Android lint, unit tests, contract-fixture tests, and a minimal Compose UI smoke test.
+
+### Task 10.3: Android companion MVP
+
+**Files:** create Android feature modules/screens for active trip, itinerary, chat, split status, and
+offline safety card.
+
+- [ ] Sign in, select the active trip, view the current itinerary, and receive Realtime updates with
+      reconnect/backfill behavior equivalent to web.
+- [ ] Read and send trip chat messages, address the assistant, and render pending proposal cards.
+      All state-changing decisions still use server-issued confirmation and authorization.
+- [ ] Show current split/merge branch, rendezvous anchor, checkpoint time, mission metadata, and
+      deterministic ETA guidance. Do not activate or reassign a member silently.
+- [ ] Pre-cache the active itinerary and bilingual emergency allergy card for airplane-mode access.
+      Offline content clearly displays its last-synced time and never claims a queued change is active.
+- [ ] Accessibility, process-death restoration, rotation, offline/reconnect, and expired-session tests.
+
+### Task 10.4: Native on-trip capabilities
+
+**Files:** add Android feature modules for capture, notifications, and split-session location.
+
+- [ ] Camera capture for receipt OCR and food VQA uploads, including client-side EXIF removal,
+      compression limits, preview, explicit upload confirmation, and safe failure posture.
+- [ ] Push notifications for confirmed itinerary changes, imminent rendezvous, and required user
+      action. Notifications contain no sensitive constraint or medical detail on the lock screen.
+- [ ] Location sharing is opt-in and active only during a split session, with visible foreground
+      state, least-precise sufficient location, short server TTL, and immediate stop on opt-out,
+      merge completion, logout, or trip end.
+- [ ] Battery, permission denial, revoked permission, background restriction, duplicate upload,
+      notification-deep-link, and location-expiry tests.
+
+### Task 10.5: Android planning parity decision
+
+**Files:** create `docs/adr/android-planning-parity.md` after companion telemetry and interviews.
+
+- [ ] Decide from evidence whether Android needs full trip creation, questionnaire editing, jigsaw
+      planning, and native Google Maps SDK 3D/map parity. These are not assumed requirements of the companion MVP.
+- [ ] If approved, plan them as separately scoped work using the existing versioned contracts and
+      server-authoritative rules; do not duplicate optimizer, LLM, or safety logic on-device.
+
+**Phase 10 exit criteria:** an authenticated Android user can open a previously created trip, read
+the active itinerary and allergy card offline, reconnect without losing chat, view split/merge
+status, and submit confirmed camera uploads. Contract fixtures match the web client, no restricted
+secret is packaged, queued offline actions are never shown as active before server acknowledgement,
+and location data expires when the split session ends.
 
 ---
 
@@ -849,7 +1024,8 @@ This system deliberately handles data the earlier plan avoided: dietary, religio
 **Consent and control**
 
 - A constraint is inert until an authorized member confirms it (Task 1.3). `severe` flags require the affected member's confirmation, or the owner acting on their behalf with the actor recorded.
-- Each member can view and delete their own `traveler_profile`, constraints, and interest vector. Deletion removes them from future optimization; `heal_events` and `serendipity_log` retain only anonymized references.
+- Chat inference may create an expiring discovery signal or a constraint-review candidate, but it may never overwrite an explicit survey answer, promote a candidate to a hard constraint, or infer a medical diagnosis.
+- Each member can view and delete their own `traveler_profile`, constraints, interest vector, and inferred discovery signals. Deletion or dismissal removes them from future optimization; `heal_events` and `serendipity_log` retain only anonymized references.
 - Live location (`trip:{id}:loc:*`) is Redis-only with a short TTL, never persisted to Postgres, and cleared on trip end or member opt-out. Location is shared only during an active split window.
 
 **Safety posture**
@@ -871,6 +1047,9 @@ This system deliberately handles data the earlier plan avoided: dietary, religio
 - Autonomous booking, rebooking, payments, or ticketing. The system plans and coordinates; humans transact.
 - Real-time emergency dispatch or medical advice. Allergy handling is preventative and informational, not clinical.
 - Continuous background location tracking, or location sharing outside an active split window.
+- Native mobile delivery during Phases 0–9. Phase 10 is a conditional post-web companion and must
+  not delay completion of the web lifecycle. Full Android planning/map parity requires Task 10.5's
+  evidence-based decision.
 - MBTI or personality quizzes, and provider-health/status dashboards. These are retired directions; do not revive them.
 - Telegram bots, Telegram Mini Apps, bot webhooks, chat-platform link tokens, or any other third-party chat client. The collaborative workspace is the only interface; this direction is retired and must not be revived.
 - Flight status, hotel availability, crowd feeds, or price-drop monitoring.
