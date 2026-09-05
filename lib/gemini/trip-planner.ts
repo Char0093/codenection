@@ -3,6 +3,7 @@ import { z } from "zod";
 import { paceDailyDurationCaps } from "@/lib/domain/itinerary";
 import { createGeminiClient, type GeminiClient } from "./client";
 import { GeminiPlanningError } from "./errors";
+import { toGeminiResponseSchema } from "./json-schema";
 import { geminiTripProposalSchema, geminiTripRequestSchema } from "./schemas";
 import type { GeminiTripProposal, GeminiTripRequest } from "./types";
 
@@ -20,7 +21,7 @@ export type GeminiPlanningResult = { proposal: GeminiTripProposal; model: string
 const DEFAULT_MODEL = "gemini-3.7-flash";
 const DEFAULT_TIMEOUT_MS = 30_000;
 const MAX_RESPONSE_CHARACTERS = 512 * 1024;
-const responseJsonSchema = z.toJSONSchema(geminiTripProposalSchema, { target: "draft-07" });
+const responseJsonSchema = toGeminiResponseSchema(geminiTripProposalSchema);
 
 function isRateLimited(error: unknown): boolean {
   return typeof error === "object" && error !== null && "status" in error && error.status === 429;
