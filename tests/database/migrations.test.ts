@@ -923,4 +923,197 @@ describe("reorder_itinerary_item", () => {
     await expect(db.query("select * from public.reorder_itinerary_item($1,$2,$3,$4,$5)", [trip, items[0].id, revision, "2026-10-01", "13:00"]))
       .rejects.toThrow();
   });
+
+  it("resizes an activity's duration via the optional 6th parameter, keeping the same start", async () => {
+    const items = await seedActiveTrip();
+    const revision = await currentRevision();
+    await actor(member);
+    const resized = (await db.query(
+      "select * from public.reorder_itinerary_item($1,$2,$3,$4,$5,$6)",
+      [trip, items[0].id, revision, "2026-10-01", "09:00", 90],
+    )).rows[0];
+    expect(resized.local_start_time).toBe("09:00:00");
+    expect(resized.local_end_time).toBe("10:30:00");
+  });
+
+  it("refuses a resize duration outside the 15-480 minute domain contract", async () => {
+    const items = await seedActiveTrip();
+    const revision = await currentRevision();
+    await actor(owner);
+    await expect(db.query("select * from public.reorder_itinerary_item($1,$2,$3,$4,$5,$6)", [trip, items[0].id, revision, "2026-10-01", "09:00", 10]))
+      .rejects.toThrow(/between 15 and 480/);
+    await expect(db.query("select * from public.reorder_itinerary_item($1,$2,$3,$4,$5,$6)", [trip, items[0].id, revision, "2026-10-01", "09:00", 500]))
+      .rejects.toThrow(/between 15 and 480/);
+  });
+
+  it("still refuses an overlap when the resize is what causes it", async () => {
+    const items = await seedActiveTrip();
+    const revision = await currentRevision();
+    await actor(owner);
+    // items[0] is 09:00-10:00, items[1] is 11:00-12:00 -- growing item 0 to 135 minutes (ending
+    // 11:15) overlaps it; 120 minutes would only touch its boundary, not overlap it.
+    await expect(db.query("select * from public.reorder_itinerary_item($1,$2,$3,$4,$5,$6)", [trip, items[0].id, revision, "2026-10-01", "09:00", 135]))
+      .rejects.toThrow();
+  });
+});
+
+describe("schedule_poi_item / unschedule_itinerary_item", () => {
+  async function seedTripAndPoi() {
+    await actor(owner);
+    const proposal = await save(payload([
+      activity({ date: "2026-10-01", startTime: "09:00", durationMinutes: 60 }),
+      activity({ date: "2026-10-02", startTime: "09:00", durationMinutes: 60 }),
+    ]));
+    await decide(proposal.id);
+    await actor(null, "postgres");
+    const poi = (await db.query<{ id: string }>(
+      // poi_catalog is shared reference data, not trip-scoped, so beforeEach's truncate does not
+      // clear it. Upsert (and reset business_status) so each test starts from the same row.
+      `insert into poi_catalog(name, region, geog, latitude, longitude, indoor)
+       values ('Stadthuys', 'Old Town/Melaka', 'SRID=4326;POINT(102.249154 2.194059)'::geography, 2.194059, 102.249154, true)
+       on conflict (name, region) do update set business_status = null, latitude = excluded.latitude
+       returning id`,
+    )).rows[0];
+    await actor(owner);
+    return poi.id;
+  }
+  async function currentRevision() {
+    return (await db.query<{ revision: number }>("select revision from trips where id=$1", [trip])).rows[0].revision;
+  }
+
+  it("schedules a pool place onto a trip day and links it to the catalog row", async () => {
+    const poiId = await seedTripAndPoi();
+    const revision = await currentRevision();
+    await actor(member);
+    const scheduled = (await db.query<{ poi_id: string; local_start_time: string; local_end_time: string; title: string }>(
+      "select * from public.schedule_poi_item($1,$2,$3,$4,$5,$6,$7)",
+      [trip, poiId, revision, "2026-10-01", "13:00", 90, "culture"],
+    )).rows[0];
+    expect(scheduled.poi_id).toBe(poiId);
+    expect(scheduled.title).toBe("Stadthuys");
+    expect(scheduled.local_end_time).toBe("14:30:00");
+    expect(await currentRevision()).toBe(revision + 1);
+  });
+
+  it("is readable afterwards -- the pool-scheduled item is not hidden by the Gemini-provenance policy", async () => {
+    const poiId = await seedTripAndPoi();
+    await db.query("select * from public.schedule_poi_item($1,$2,$3,$4,$5,$6,$7)", [trip, poiId, await currentRevision(), "2026-10-01", "13:00", 90, "culture"]);
+    await actor(member);
+    const visible = (await db.query<{ id: string }>(
+      "select i.id from itinerary_items i join itinerary_days d on d.id=i.itinerary_day_id where i.poi_id=$1", [poiId],
+    )).rows;
+    expect(visible).toHaveLength(1);
+  });
+
+  it("applies the same validation set as a drag: duration domain, midnight, overlap, trip range", async () => {
+    const poiId = await seedTripAndPoi();
+    const revision = await currentRevision();
+    await expect(db.query("select public.schedule_poi_item($1,$2,$3,$4,$5,$6,$7)", [trip, poiId, revision, "2026-10-01", "13:00", 10, "culture"]))
+      .rejects.toThrow(/between 15 and 480/);
+    await expect(db.query("select public.schedule_poi_item($1,$2,$3,$4,$5,$6,$7)", [trip, poiId, revision, "2026-10-01", "23:30", 90, "culture"]))
+      .rejects.toThrow(/midnight/);
+    await expect(db.query("select public.schedule_poi_item($1,$2,$3,$4,$5,$6,$7)", [trip, poiId, revision, "2026-10-01", "09:30", 60, "culture"]))
+      .rejects.toThrow(/Overlaps/);
+    await expect(db.query("select public.schedule_poi_item($1,$2,$3,$4,$5,$6,$7)", [trip, poiId, revision, "2026-11-01", "09:00", 60, "culture"]))
+      .rejects.toThrow(/outside the trip range/);
+  });
+
+  it("rejects an unsupported category and a closed place", async () => {
+    const poiId = await seedTripAndPoi();
+    const revision = await currentRevision();
+    await expect(db.query("select public.schedule_poi_item($1,$2,$3,$4,$5,$6,$7)", [trip, poiId, revision, "2026-10-01", "13:00", 60, "heritage"]))
+      .rejects.toThrow(/Unsupported activity category/);
+    await actor(null, "postgres");
+    await db.query("update poi_catalog set business_status='closed_permanently' where id=$1", [poiId]);
+    await actor(owner);
+    await expect(db.query("select public.schedule_poi_item($1,$2,$3,$4,$5,$6,$7)", [trip, poiId, revision, "2026-10-01", "13:00", 60, "culture"]))
+      .rejects.toThrow(/reported closed/);
+  });
+
+  it("denies a non-member and a stale revision", async () => {
+    const poiId = await seedTripAndPoi();
+    const revision = await currentRevision();
+    await actor(stranger);
+    await expect(db.query("select public.schedule_poi_item($1,$2,$3,$4,$5,$6,$7)", [trip, poiId, revision, "2026-10-01", "13:00", 60, "culture"]))
+      .rejects.toThrow();
+    await actor(owner);
+    await expect(db.query("select public.schedule_poi_item($1,$2,$3,$4,$5,$6,$7)", [trip, poiId, revision + 99, "2026-10-01", "13:00", 60, "culture"]))
+      .rejects.toThrow(/revision/);
+  });
+
+  it("returns a scheduled place to the pool, deleting the block but never the catalog row", async () => {
+    const poiId = await seedTripAndPoi();
+    const scheduled = (await db.query<{ id: string }>(
+      "select * from public.schedule_poi_item($1,$2,$3,$4,$5,$6,$7)",
+      [trip, poiId, await currentRevision(), "2026-10-01", "13:00", 90, "culture"],
+    )).rows[0];
+
+    const freed = (await db.query<{ unschedule_itinerary_item: string }>(
+      "select public.unschedule_itinerary_item($1,$2,$3)", [trip, scheduled.id, await currentRevision()],
+    )).rows[0].unschedule_itinerary_item;
+    expect(freed).toBe(poiId);
+
+    await actor(null, "postgres");
+    expect((await db.query<{ count: number }>("select count(*)::int count from itinerary_items where id=$1", [scheduled.id])).rows[0].count).toBe(0);
+    expect((await db.query<{ count: number }>("select count(*)::int count from poi_catalog where id=$1", [poiId])).rows[0].count).toBe(1);
+  });
+
+  it("refuses to unschedule a Gemini block, which has no catalog row to return to", async () => {
+    await seedTripAndPoi();
+    const geminiItem = (await db.query<{ id: string }>(
+      "select i.id from itinerary_items i join itinerary_days d on d.id=i.itinerary_day_id where d.trip_id=$1 and i.poi_id is null limit 1", [trip],
+    )).rows[0];
+    await actor(owner);
+    await expect(db.query("select public.unschedule_itinerary_item($1,$2,$3)", [trip, geminiItem.id, await currentRevision()]))
+      .rejects.toThrow(/scheduled from the pool/);
+  });
+});
+
+describe("fixed_commitment lock and unlock_itinerary_item", () => {
+  async function seedLockedTrip() {
+    const twoOnDayOne = payload([
+      activity({ date: "2026-10-01", startTime: "09:00", durationMinutes: 60 }),
+      activity({ date: "2026-10-01", startTime: "11:00", durationMinutes: 60 }),
+      activity({ date: "2026-10-02", startTime: "09:00", durationMinutes: 60 }),
+    ]);
+    await actor(owner);
+    const proposal = await save(twoOnDayOne);
+    await decide(proposal.id);
+    const items = (await db.query<{ id: string }>(
+      "select i.id from itinerary_items i join itinerary_days d on d.id=i.itinerary_day_id where d.trip_id=$1 order by i.local_start_time", [trip],
+    )).rows;
+    await actor(null, "postgres");
+    await db.query("update itinerary_items set fixed_commitment = true where id = $1", [items[0].id]);
+    await actor(owner);
+    return items;
+  }
+  async function currentRevision() {
+    return (await db.query<{ revision: number }>("select revision from trips where id=$1", [trip])).rows[0].revision;
+  }
+
+  it("refuses to move or resize a locked item", async () => {
+    const items = await seedLockedTrip();
+    const revision = await currentRevision();
+    await expect(db.query("select * from public.reorder_itinerary_item($1,$2,$3,$4,$5)", [trip, items[0].id, revision, "2026-10-01", "13:00"]))
+      .rejects.toThrow(/unlocked/);
+  });
+
+  it("unlocks a locked item, after which it can be moved", async () => {
+    const items = await seedLockedTrip();
+    let revision = await currentRevision();
+    const unlocked = (await db.query("select * from public.unlock_itinerary_item($1,$2,$3)", [trip, items[0].id, revision])).rows[0];
+    expect(unlocked.fixed_commitment).toBe(false);
+    revision = await currentRevision();
+    const moved = (await db.query("select * from public.reorder_itinerary_item($1,$2,$3,$4,$5)", [trip, items[0].id, revision, "2026-10-01", "13:00"])).rows[0];
+    expect(moved.local_start_time).toBe("13:00:00");
+  });
+
+  it("unlock requires trip membership and a current revision", async () => {
+    const items = await seedLockedTrip();
+    const revision = await currentRevision();
+    await actor(stranger);
+    await expect(db.query("select * from public.unlock_itinerary_item($1,$2,$3)", [trip, items[0].id, revision])).rejects.toThrow();
+    await actor(owner);
+    await expect(db.query("select * from public.unlock_itinerary_item($1,$2,$3)", [trip, items[0].id, revision + 99])).rejects.toThrow();
+  });
 });

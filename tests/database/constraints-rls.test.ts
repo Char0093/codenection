@@ -218,7 +218,8 @@ describe("trip_member_budget_mobility_caps (Task 1.4 gate support)", () => {
 describe("poi_catalog RLS", () => {
   beforeEach(async () => {
     await actor(null, "postgres");
-    await db.exec(`truncate poi_catalog;
+    // cascade: itinerary_items.poi_id references this table since migration 202609050012.
+    await db.exec(`truncate poi_catalog cascade;
       insert into poi_catalog(name,region,geog,indoor)
       values ('Test Museum','Melaka', ST_GeogFromText('SRID=4326;POINT(102.2500 2.1900)'), true)`);
   });

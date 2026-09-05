@@ -229,24 +229,137 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
 .assistant-proposal-card { margin-top: 8px; padding: 12px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface); text-align: left; }
 .assistant-proposal-missing { margin: 8px 0 0; font-size: 12px; font-style: italic; color: var(--muted); }
 
-/* ---------- Active-itinerary timeline (Task 3.4) ---------- */
+/* ---------- Active-itinerary calendar timeline (Task 3.4) ---------- */
 
-.timeline-pane { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 6px; }
-.day-column { flex: none; width: 220px; display: flex; flex-direction: column; gap: 8px; }
-.day-column-heading { font-size: 13px; color: var(--muted); font-weight: 600; }
-.day-column-list { list-style: none; margin: 0; padding: 8px; min-height: 120px; display: flex; flex-direction: column; gap: 8px; border: 1px dashed var(--line-strong); border-radius: 10px; background: var(--canvas); }
-.day-column-list[data-drag-over="true"] { border-color: var(--blue); background: var(--teal-soft); }
-.day-column-empty { list-style: none; color: var(--muted); font-size: 12px; text-align: center; padding: 16px 4px; }
+.timeline-pane { display: flex; flex-direction: column; gap: 8px; }
+.cal-viewport { max-height: 620px; overflow: auto; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface); }
+.cal-body { position: relative; display: flex; min-width: max-content; }
 
-.activity-card { position: relative; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); cursor: grab; }
-.activity-card[data-pending="true"] { opacity: 0.7; cursor: wait; }
-.activity-card[data-conflicted="true"] { border-color: var(--error); }
-.activity-card-handle { color: var(--muted); flex: none; }
-.activity-card-time { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; flex: none; }
-.activity-card-title { font-size: 12.5px; font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.activity-card-status { flex: none; }
-.activity-card-warning { color: var(--error); }
-.activity-card-rejected { position: absolute; inset: 100% 0 auto 0; margin-top: 4px; padding: 4px 8px; border-radius: 6px; background: var(--error-soft); color: var(--error-dark); font-size: 11px; z-index: 1; }
+.cal-ruler { position: sticky; left: 0; z-index: 2; flex: none; width: 56px; background: var(--surface); border-right: 1px solid var(--line-strong); }
+.cal-tick { position: absolute; left: 0; right: 6px; text-align: right; transform: translateY(-50%); font-size: 11px; font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.cal-day {
+  /* One day is rendered at a time now, so the column fills the track instead of keeping the fixed
+     width it needed back when several days sat side by side. */
+  position: relative; flex: 1 1 auto; min-width: 220px; border-right: 1px solid var(--line);
+  background-repeat: repeat-y;
+  background-image: linear-gradient(to bottom, var(--line), var(--line) 1px, transparent 1px, transparent 100%);
+}
+
+.cal-block {
+  position: absolute; left: 4px; right: 4px; display: flex; align-items: flex-start; gap: 6px;
+  padding: 4px 8px; border-radius: 7px; border: 1px solid var(--line-strong); background: var(--surface);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06); cursor: grab; overflow: hidden; touch-action: none;
+}
+.cal-block:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.cal-block[data-pending="true"] { opacity: 0.7; cursor: wait; }
+.cal-block[data-conflicted="true"] { border-color: var(--error); box-shadow: 0 0 0 2px var(--error); }
+.cal-block[data-locked="true"] { cursor: default; background: var(--canvas); border-style: dashed; }
+.cal-block[data-dragging="true"] { opacity: 0.85; z-index: 1; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15); }
+.cal-block-handle { flex: none; color: var(--muted); cursor: grab; padding-top: 1px; }
+.cal-block-handle:active { cursor: grabbing; }
+.cal-block-text { min-width: 0; flex: 1; }
+.cal-block-title { display: block; font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-block-time { display: block; font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.cal-block-status { flex: none; }
+.cal-block-warning { color: var(--error); }
+.cal-block-rejected { position: absolute; inset: 100% 0 auto 0; margin-top: 4px; padding: 4px 8px; border-radius: 6px; background: var(--error-soft); color: var(--error-dark); font-size: 11px; z-index: 1; }
+
+.cal-resize-handle { position: absolute; left: 0; right: 0; height: 6px; cursor: ns-resize; touch-action: none; }
+.cal-resize-top { top: 0; }
+.cal-resize-bottom { bottom: 0; }
+
+.cal-unlock-button {
+  flex: none; display: flex; align-items: center; gap: 3px; padding: 2px 6px; font-size: 10.5px;
+  border: 1px solid var(--line-strong); border-radius: 5px; background: var(--surface); color: var(--ink);
+}
+
+/* ---- Date strip: only one trip day is ever rendered on the timeline ---- */
+.cal-date-strip { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
+.cal-date-tab {
+  flex: none; display: flex; flex-direction: column; gap: 1px; align-items: flex-start;
+  padding: 6px 10px; border: 1px solid var(--line-strong); border-radius: 8px;
+  background: var(--surface); color: var(--ink); text-align: left; min-width: 118px;
+}
+.cal-date-tab[data-selected="true"] { background: var(--canvas); border-color: var(--blue); }
+.cal-date-tab:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.cal-date-tab-day { font-size: 12px; font-weight: 600; }
+.cal-date-tab-date { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.cal-date-tab-count { font-size: 10.5px; color: var(--muted); }
+
+/* ---- Builder layout: pool beside the timeline, drawer underneath on narrow screens ---- */
+.cal-builder { display: grid; grid-template-columns: minmax(260px, 320px) 1fr; gap: 12px; align-items: start; }
+
+.cal-notice {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0;
+  padding: 8px 12px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--canvas); font-size: 12.5px;
+}
+.cal-notice button { padding: 3px 9px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--surface); font-size: 12px; }
+.cal-notice-dismiss { margin-left: auto; }
+
+/* ---- POI choice pool ---- */
+.poi-pool {
+  display: flex; flex-direction: column; gap: 8px; max-height: 620px; overflow-y: auto;
+  padding: 10px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface);
+}
+.poi-pool[data-drag-over="true"] { border-color: var(--blue); background: var(--canvas); }
+.poi-pool-controls { display: flex; flex-direction: column; gap: 6px; position: sticky; top: 0; background: var(--surface); z-index: 1; }
+.poi-pool-search { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid var(--line-strong); border-radius: 7px; color: var(--muted); }
+.poi-pool-search input { flex: 1; min-width: 0; border: 0; background: transparent; font-size: 12.5px; color: var(--ink); }
+.poi-pool-search input:focus { outline: none; }
+.poi-pool-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+.poi-pool-tabs button { padding: 3px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--muted); font-size: 11px; }
+.poi-pool-tabs button[data-selected="true"] { border-color: var(--blue); color: var(--ink); background: var(--canvas); }
+.poi-pool-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.poi-pool-empty { margin: 0; font-size: 12px; color: var(--muted); }
+.poi-pool-toggle { width: 100%; padding: 5px 8px; border: 1px dashed var(--line-strong); border-radius: 7px; background: transparent; color: var(--muted); font-size: 11.5px; }
+.poi-pool-unavailable { display: flex; flex-direction: column; gap: 8px; }
+
+.poi-card { display: flex; flex-direction: column; gap: 5px; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: 9px; background: var(--surface); cursor: grab; }
+.poi-card[data-blocked="true"] { cursor: not-allowed; opacity: 0.75; border-style: dashed; }
+.poi-card-head { display: flex; align-items: baseline; gap: 6px; justify-content: space-between; }
+.poi-card-name { font-size: 12.5px; font-weight: 600; }
+.poi-card-category { flex: none; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.poi-card-description { margin: 0; font-size: 11.5px; color: var(--ink); }
+.poi-card-muted { color: var(--muted); }
+.poi-card-facts { display: flex; flex-wrap: wrap; gap: 8px; font-size: 10.5px; color: var(--muted); }
+.poi-card-facts span { display: inline-flex; align-items: center; gap: 3px; }
+.poi-card-badges { display: flex; flex-wrap: wrap; gap: 4px; }
+.poi-badge { display: inline-flex; align-items: center; gap: 3px; padding: 1px 6px; border-radius: 999px; font-size: 10px; border: 1px solid var(--line-strong); color: var(--muted); }
+.poi-badge[data-tone="ok"] { border-color: var(--consensus); color: var(--consensus); }
+.poi-badge[data-tone="warn"] { border-color: var(--flexible); color: var(--flexible-dark); }
+.poi-badge[data-tone="bad"] { border-color: var(--error); color: var(--error-dark); }
+.poi-card-blocked { margin: 0; padding: 4px 7px; border-radius: 6px; background: var(--error-soft); color: var(--error-dark); font-size: 10.5px; }
+.poi-card-actions { display: flex; align-items: center; gap: 8px; }
+.poi-card-link { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: transparent; color: var(--blue); font-size: 11.5px; }
+.poi-card-add { margin-left: auto; padding: 3px 9px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--surface); font-size: 11.5px; }
+
+/* ---- Detail sheet ---- */
+.poi-detail { margin-top: 10px; padding: 12px 14px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface); display: flex; flex-direction: column; gap: 10px; }
+.poi-detail-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.poi-detail-head h3 { margin: 0; font-size: 15px; }
+.poi-detail h4 { margin: 0 0 3px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.poi-detail p, .poi-detail li { margin: 0; font-size: 12px; }
+.poi-detail-category { color: var(--muted); }
+.poi-detail-attribution { font-size: 10.5px; color: var(--muted); font-style: italic; }
+.poi-detail-hours, .poi-detail-sources, .poi-detail-warnings { margin: 0; padding-left: 16px; display: flex; flex-direction: column; gap: 2px; }
+.poi-detail-warning { color: var(--flexible-dark); }
+.poi-detail-note { font-size: 10.5px; color: var(--muted); }
+
+/* ---- Drop guides on the timeline ---- */
+.cal-open-band { position: absolute; left: 0; right: 0; background: var(--consensus-soft); pointer-events: none; }
+.cal-drop-preview { position: absolute; left: 4px; right: 4px; border-radius: 7px; border: 2px dashed var(--blue); pointer-events: none; }
+.cal-drop-preview[data-feasible="false"] { border-color: var(--error); background: var(--error-soft); }
+
+.cal-unschedule-button { flex: none; padding: 2px 6px; font-size: 10.5px; border: 1px solid var(--line-strong); border-radius: 5px; background: var(--surface); color: var(--muted); }
+.cal-block-hours-warning { position: absolute; inset: auto 4px 2px 4px; font-size: 9.5px; color: var(--flexible-dark); }
+
+.cal-travel-block {
+  position: absolute; left: 4px; right: 4px; display: flex; align-items: center; gap: 5px;
+  padding: 2px 6px; border-radius: 6px; background: var(--canvas); color: var(--muted); font-size: 10px;
+  border: 1px dashed var(--line-strong); pointer-events: none;
+}
+.cal-travel-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ---------- Timeline jigsaw: vertical day schedule ---------- */
 
@@ -303,4 +416,14 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
 @media (max-width: 720px) {
   .workspace-panes { grid-template-rows: 50fr 50fr; }
   .jigsaw-meter { grid-template-columns: 70px 1fr 40px; }
+}
+
+/* The day builder needs more room than the other panes: side by side, the pool and a 220px day
+   column crowd each other well before the tablet breakpoint. Below this width the pool becomes a
+   bottom drawer under the timeline, per Task 3.4. It stays a normal scrollable region, never a
+   focus trap. */
+@media (max-width: 1024px) {
+  .cal-builder { grid-template-columns: 1fr; }
+  .poi-pool { order: 2; max-height: 46vh; }
+  .cal-viewport { order: 1; max-height: 48vh; }
 }

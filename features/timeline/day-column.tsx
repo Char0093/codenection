@@ -1,56 +1,108 @@
+"use client";
+
 import React, { useState } from "react";
 import { ActivityCard } from "@/features/timeline/activity-card";
+import { TravelBlock } from "@/features/timeline/travel-block";
+import { POI_DRAG_MIME } from "@/features/timeline/poi-choice-card";
+import { MOVE_SNAP_MINUTES, clampStart, minutesToPixels, pixelsToMinutes, snapTo } from "@/features/timeline/calendar-geometry";
+import type { OpenInterval } from "@/lib/poi/opening-hours";
 import type { DragItem } from "@/features/timeline/use-drag-commit";
 
-const DEFAULT_DAY_START = "09:00";
-const BUFFER_MINUTES = 15;
-export const KEYBOARD_STEP_MINUTES = 30;
+/** Feasible ranges for the candidate currently being dragged from the pool, so infeasible time is
+ * visibly disabled *before* the drop rather than explained after it. */
+export type DropGuide = {
+  candidateKey: string;
+  durationMinutes: number;
+  /** Empty means "no hours data" -- the whole day stays droppable, with an unverified warning. */
+  openIntervals: readonly OpenInterval[];
+  hoursKnown: boolean;
+};
 
-export function addMinutes(time: string, minutes: number): string {
-  const [hour, minute] = time.slice(0, 5).split(":").map(Number);
-  const total = hour * 60 + minute + minutes;
-  const clamped = Math.max(0, Math.min(23 * 60 + 59, total));
-  return String(Math.floor(clamped / 60)).padStart(2, "0") + ":" + String(clamped % 60).padStart(2, "0");
-}
-
-export function DayColumn({ date, items, conflictedIds, onDrop }: {
+export function DayColumn({ date, items, conflictedIds, pxPerMinute, trackHeightPx, dropGuide, onMove, onResize, onUnlock, onUnschedule, onPoolDrop, announce }: {
   date: string;
   items: readonly DragItem[];
   conflictedIds: ReadonlySet<string>;
-  onDrop: (itemId: string, date: string, startTime: string) => void;
+  pxPerMinute: number;
+  trackHeightPx: number;
+  dropGuide: DropGuide | null;
+  onMove: (itemId: string, newDate: string, newStartTime: string) => void;
+  onResize: (itemId: string, newStartTime: string, durationMinutes: number) => void;
+  onUnlock: (itemId: string) => void;
+  onUnschedule: (itemId: string) => void;
+  onPoolDrop: (candidateKey: string, startMinute: number) => void;
+  announce: (message: string) => void;
 }) {
-  const [dragOver, setDragOver] = useState(false);
-  const sorted = items.slice().sort((left, right) => left.localStartTime.localeCompare(right.localStartTime));
+  const [hoverMinute, setHoverMinute] = useState<number | null>(null);
 
-  function handleDrop(event: React.DragEvent<HTMLUListElement>, beforeIndex: number) {
-    event.preventDefault();
-    setDragOver(false);
-    const itemId = event.dataTransfer.getData("text/plain");
-    if (!itemId) return;
-    const targetItems = sorted.filter((entry) => entry.id !== itemId);
-    const previous = targetItems[beforeIndex - 1];
-    const startTime = previous ? addMinutes(previous.localEndTime, BUFFER_MINUTES) : DEFAULT_DAY_START;
-    onDrop(itemId, date, startTime);
+  function minuteFromEvent(event: React.DragEvent<HTMLElement>): number {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const raw = pixelsToMinutes(event.clientY - rect.top, pxPerMinute);
+    const duration = dropGuide?.durationMinutes ?? 60;
+    return clampStart(snapTo(raw, MOVE_SNAP_MINUTES), duration);
   }
 
-  return <section className="day-column" aria-label={"Day " + date}>
-    <h3 className="day-column-heading">{date}</h3>
-    <ul
-      className="day-column-list"
-      data-drag-over={dragOver ? "true" : undefined}
+  function fits(startMinute: number): boolean {
+    if (!dropGuide) return false;
+    if (!dropGuide.hoursKnown) return true; // unknown hours warn, they do not block
+    const end = startMinute + dropGuide.durationMinutes;
+    return dropGuide.openIntervals.some((interval) => startMinute >= interval.startMinute && end <= interval.endMinute);
+  }
+
+  return (
+    <section
+      className="cal-day"
+      data-cal-date={date}
+      aria-label={"Day " + date}
+      style={{ height: trackHeightPx, backgroundSize: "100% " + 60 * pxPerMinute + "px" }}
       onDragOver={(event) => {
+        if (!dropGuide) return;
         event.preventDefault();
-        setDragOver(true);
+        event.dataTransfer.dropEffect = "copy";
+        setHoverMinute(minuteFromEvent(event));
       }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={(event) => handleDrop(event, sorted.length)}
+      onDragLeave={() => setHoverMinute(null)}
+      onDrop={(event) => {
+        const key = event.dataTransfer.getData(POI_DRAG_MIME);
+        setHoverMinute(null);
+        if (!key) return;
+        event.preventDefault();
+        onPoolDrop(key, minuteFromEvent(event));
+      }}
     >
-      {sorted.map((item) => (
-        <ActivityCard key={item.id} item={item} conflicted={conflictedIds.has(item.id)}
-          onDragStart={(event) => event.dataTransfer.setData("text/plain", item.id)}
-          onNudge={(minutes) => onDrop(item.id, date, addMinutes(item.localStartTime, minutes))} />
+      {/* Feasible-range shading only appears while a pool card is in flight. */}
+      {dropGuide?.hoursKnown && dropGuide.openIntervals.map((interval) => (
+        <div
+          key={"open-" + interval.startMinute}
+          className="cal-open-band"
+          aria-hidden
+          style={{ top: minutesToPixels(interval.startMinute, pxPerMinute), height: minutesToPixels(interval.endMinute - interval.startMinute, pxPerMinute) }}
+        />
       ))}
-      {sorted.length === 0 && <li className="day-column-empty">Drop an activity here</li>}
-    </ul>
-  </section>;
+      {dropGuide && hoverMinute !== null && (
+        <div
+          className="cal-drop-preview"
+          data-feasible={fits(hoverMinute) ? "true" : "false"}
+          aria-hidden
+          style={{ top: minutesToPixels(hoverMinute, pxPerMinute), height: minutesToPixels(dropGuide.durationMinutes, pxPerMinute) }}
+        />
+      )}
+
+      {items.map((item) => (
+        <TravelBlock key={item.id + "-travel"} item={item} pxPerMinute={pxPerMinute} />
+      ))}
+      {items.map((item) => (
+        <ActivityCard
+          key={item.id}
+          item={item}
+          conflicted={conflictedIds.has(item.id)}
+          pxPerMinute={pxPerMinute}
+          onMove={(newDate, newStartTime) => onMove(item.id, newDate, newStartTime)}
+          onResize={(newStartTime, durationMinutes) => onResize(item.id, newStartTime, durationMinutes)}
+          onUnlock={() => onUnlock(item.id)}
+          onUnschedule={() => onUnschedule(item.id)}
+          announce={announce}
+        />
+      ))}
+    </section>
+  );
 }

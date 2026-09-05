@@ -22,7 +22,7 @@
 | Delivered foundation | Delivered locally | Auth, trip CRUD, Gemini itinerary proposals, deterministic schedule validation, proposal confirmation, RLS, revisions, and rate reservations. |
 | Phase 1: preferences and safety | Partial | Full typed constraint schema, `traveler_profiles`/`poi_catalog` with RLS, 24 (of 40-50) researched-and-cited seed POIs, the deterministic hard-constraint gate (wired into Gemini proposal validation), and constraint-aware POI grounding (Task 1.1/5.x pulled forward) now exist -- live-verified both blocking (no verified venue) and succeeding (a verified venue exists). Context extraction, hybrid preference signals, the compact survey, and pre-generation daily planning windows do not yet exist. Gate `warn`s are computed but not yet surfaced in the UI; `claimed`-status venues cannot yet be safely suggested pending that UI. |
 | Phase 2: optimizer and ledger | Not started, except math helper | No Python service, optimizer client, Knapsack solver, Redis integration, or receipt ledger persistence. |
-| Phase 3: collaborative workspace | Partial, substantial | Jigsaw engine, chat, assistant proposals, responsive workspace, and persistent timeline drags exist. Presence, confirmation wiring, PWA behavior, and some synchronization details remain. |
+| Phase 3: collaborative workspace | Partial, substantial | Jigsaw engine, chat, assistant proposals, responsive workspace, and the full day builder exist: single-day timeline with a date switcher, categorized POI choice pool with descriptions/detail sheets, pool-to-timeline scheduling, and opening-hours-aware drop validation. Pending: applying migration `202609050012` and re-seeding on the hosted project, a live Google Places adapter (only the interface exists, so the pool is curated-only), travel-time estimates, presence, confirmation wiring, PWA behavior, and some synchronization details. |
 | Phases 4–9 | Not started | Routing, split/merge execution, serendipity, on-site tools, self-healing, VQA, deployment, and full demo path remain. |
 | Phase 10: Android companion | Conditional, not started | Post-web Kotlin/Compose companion. It starts only after Phase 9, one stable API release, and demonstrated user demand. |
 
@@ -85,7 +85,8 @@ Implemented 2026-09-05:
 
 Missing:
 
-- **Seed data is 22 of the target 40-50 rows** (6 KLCC, 5 Bukit Bintang, 11 Old Town/Melaka).
+- **Seed data is currently 24 of the target 40-50 rows** (6 KLCC, 5 Bukit Bintang,
+  13 Old Town/Melaka); older 22-row comments are stale.
   Each row is individually web-researched and cited (official venue sites, Wikipedia infobox
   coordinates, JAKIM's own Halal Hub statement for the one verified-halal food entry) rather than
   bulk-generated, per explicit instruction to prioritize accuracy over hitting the count. A second
@@ -358,24 +359,157 @@ Missing or unresolved:
   documented as owner/planner-only, which may reject ordinary members.
 - Hosted prompt-injection and cross-trip isolation validation.
 
-### Task 3.4 — Persist and synchronize jigsaw drags: Partial, near complete
+### Task 3.4 — Calendar timeline editing, persistence, and synchronization: Delivered locally, hosted verification pending
 
-Implemented:
+**Day-builder redesign implemented 2026-09-05** against the updated plan (single selected day, POI
+choice pool, opening-hours-aware drops). Requires migration `202609050012_poi_choice_metadata.sql`
+and a re-run of `npm run seed:kl-reference`, neither of which is applied to the hosted project yet,
+so this half is local-only so far:
 
-- Multi-day columns, same-day and cross-day dragging, optimistic state, server-side date/overlap/
-  midnight validation, revision conflict handling, rollback reason, and remote refetch after trip
-  revision changes.
+- **Single-day editor.** `date-selector.tsx` is a roving-tabindex tablist (arrow keys, Home/End)
+  above the timeline; only the selected destination-local day is rendered, and each day's scroll
+  position is remembered so switching back does not dump the traveler at a different hour. Moving an
+  activity to another day is no longer an arrow-key or multi-column drag: it is Return to pool →
+  switch date → place again, all three keyboard-reachable, matching the plan's stated model.
+- **`lib/poi/choice-pool.ts`** (pure, 28 tests): the deterministic canonical category mapping
+  (`food`, `nature`, `shopping`, `heritage`, `culture`, `entertainment`, `local_wildcard`) over
+  owned/provider tags -- no model classifies at render time; a conservative duplicate resolver
+  (provider Place ID, else identical normalized name within 150 m) that merges provider results
+  *into* curated rows so provider content can never overwrite owned safety evidence; explicit
+  `curated | provider | unverified` trust; and Phase 1 gate eligibility decided **before** the drag.
+  Gating deliberately keys on whether a venue *serves food*, not on its display category, so a mall
+  filed under Shopping is still evaluated by the dietary/halal gate.
+- **`lib/poi/opening-hours.ts`** (pure, 20 tests): normalizes Google Places `periods` into
+  destination-local intervals, correctly handling split days, overnight periods (both the head and
+  the tail date) and week-wrapping periods, plus `businessStatus` outranking any snapshot. A visit
+  must fit *wholly* inside one open interval to be droppable. Absent hours yield `unknown` -- never
+  "open" -- which permits an authorized placement but attaches the persistent
+  "Hours unverified — confirm before visiting" warning to the block.
+- **Pool UI**: `poi-choice-pool.tsx` (search + category tabs, side panel on desktop, bottom drawer
+  under 720px), `poi-choice-card.tsx` (owned vs. attributed provider description in separate
+  fields, duration, cost, opening status, halal/trust badges), `poi-detail-sheet.tsx` (full
+  description, provider attribution, hours, dietary evidence, sources, verification date).
+  Gate-`fail` candidates are undraggable and hidden behind an "Unavailable" disclosure.
+- **Scheduling**: drag a card onto the timeline (feasible open ranges are shaded and infeasible
+  drops are refused before commit) or use the keyboard-accessible "Add to day". Dragging a
+  pool-scheduled block back to the pool -- or its "Return to pool" button -- unschedules the
+  itinerary row and never touches the catalog row. A repeat visit requires explicit confirmation.
+- **Schema/RPCs** (`202609050012`): `poi_catalog` gains `latitude`/`longitude` (plain columns so the
+  resolver does not depend on PostGIS serialization or on which schema the extension lives in),
+  `provider_place_id`, owned `short_description`, `official_url`, and a permitted timestamped
+  provider hours snapshot; `itinerary_items` gains `poi_id`; `schedule_poi_item` and
+  `unschedule_itinerary_item` apply the same validation set as a drag. All 24 seed POIs now carry an
+  owned one-line description written from their already-cited sources.
+- **Two real access-control findings, fixed:** the pre-existing read policies only ever exposed
+  items belonging to an accepted Gemini proposal, so a pool-scheduled item would have been written
+  and then been invisible -- new narrow security-definer policies admit exactly that case. And
+  `itinerary_items`' column-level SELECT allow-list (which deliberately keeps legacy
+  profile-bearing columns out of the client's reach) had to gain `poi_id`, or the new policy would
+  have been unreachable regardless.
 
-Missing:
+**Previously implemented 2026-09-05, live-verified against the hosted Supabase project:**
 
-- The newly specified Calendar-style vertical 24-hour view, collapsed overnight presentation,
-  duration-proportional vertical geometry, 15-minute pointer/keyboard resizing, explicit travel
-  blocks, and locked-anchor unlock/confirmation flow.
-- Revalidation of resize operations against opening hours, transit time, daily planning windows,
-  pace, budget, and rendezvous deadlines; existing persistence covers movement only.
-- Designed animation of remote changes rather than an immediate refetch replacement.
-- Complete visual states for active, pending proposal, AI-suggested, and conflicted cards.
-- Full specified test matrix, including two-member collision behavior and remote animation.
+- `features/timeline/calendar-geometry.ts`: pure minute/pixel/time helpers (`timeToMinutes`,
+  `minutesToTime`, `snapTo`, `clampStart`, `clampDuration`, pixel conversions). 8 unit tests.
+- `day-column.tsx` rewritten into a real calendar grid: each day is a `position:relative` track
+  spanning the full 24 hours (1440 minutes at 1.2px/minute), with activity blocks positioned
+  absolutely by start time (`top`) and sized by duration (`height`) rather than the previous
+  list-reorder-by-drop-position model. Multiple days render side by side with a single shared,
+  sticky hour ruler (`timeline-pane.tsx`) -- vertical scroll moves the ruler and every day column
+  together natively (CSS `position: sticky`, no manual scroll-sync JS needed).
+- Overnight hours are reachable, not hidden: the track always spans 00:00-24:00, but the viewport
+  scrolls to 7am by default on load -- the same simplification Google Calendar itself uses, chosen
+  over non-linearly compressing collapsed bands, which would have complicated every pixel/minute
+  conversion for comparatively little benefit.
+- `activity-card.tsx` rewritten: real pointer-based drag (adapting the proven vertical-drag pattern
+  from `jigsaw-panel.tsx`) computes an exact target time from pointer position, detecting the day
+  column under the pointer via `document.elementFromPoint` for cross-day moves. Two 6px resize
+  handles (top/bottom) change duration in 15-minute increments -- bottom extends/shrinks the end
+  with the start fixed, top moves the start with the end fixed. Keyboard equivalents: Up/Down nudge
+  time by 30 minutes (unchanged from before), Left/Right move to the adjacent day, Shift+Up/Down
+  resize by 15 minutes, all announced via a shared `aria-live` region.
+- Server: `reorder_itinerary_item` (migration `202609050011`) gained an optional
+  `new_duration_minutes` parameter (defaults to preserving current duration, so existing callers
+  are unaffected) enforcing the same 15-480 minute domain contract Gemini's own activities are
+  validated against, plus the existing date/overlap/midnight/revision checks now applied uniformly
+  to resize as well as move.
+- **Fixed-commitment locking, not previously enforced at all**: the original function never
+  checked `itinerary_items.fixed_commitment`, so a "locked" reservation could silently be dragged
+  despite the plan's own Hard Constraints table naming "Immovable reservations." It now refuses to
+  move or resize a locked item. `unlock_itinerary_item` is the only way to make one editable again
+  -- a real persisted action gated behind an explicit UI confirmation (a click, not a silent
+  toggle), matching "changing one requires an explicit unlock."
+- `travel-block.tsx`: renders required travel as its own subordinate block immediately before an
+  activity, reading the pre-existing (but previously unused) `itinerary_items.travel_minutes`
+  column. Renders nothing when it is 0, which today means "no travel data yet" for every activity
+  (nothing populates this column yet) -- honest absence, not a fabricated transit estimate.
+- Rejection messages now reach the card with their specific reason (e.g. "Fixed reservations must
+  be unlocked...", "Overlaps another activity that day") instead of a generic blanket message --
+  the shared `databaseError` helper used everywhere else in the app intentionally stays generic, so
+  a small `itineraryEditError` wrapper in `lib/itinerary/repository.ts` scopes the more specific
+  passthrough to just these three RPCs, which only ever raise a small, deliberately-written set of
+  user-facing messages.
+- Tests: 8 pure geometry unit tests, 14 component tests (positioning, same-day/cross-day pointer
+  move, pointer resize from both handles with 15-minute snapping, keyboard move/resize, lock
+  rendering and inertness, unlock flow, rollback with reason, stale-revision refetch, travel-block
+  conditional rendering), 7 API-route tests, 9 repository unit tests, 7 new database tests (resize,
+  duration-domain rejection, resize-caused overlap, lock refusal, unlock, unlock authorization).
+- Live-verified in the hosted app: the calendar renders real trip activities positioned and sized
+  correctly; dragging a card by pointer to a new time persisted (200, confirmed by the card moving
+  and staying at its new position after reload).
+
+The binding plan was subsequently refined from simultaneous multi-day columns to a single selected
+day with a date switcher and categorized POI pool. The delivered calendar engine remains reusable,
+but the new interaction model below is not implemented and Task 3.4 is therefore no longer complete.
+
+Documented scope limits, not silently under-built:
+
+- **No live Google Places adapter exists.** `lib/providers/types.ts` still only declares a
+  `PlaceProvider` interface, and no API key is configured, so `buildChoicePool` is called with
+  curated rows only. Every provider-facing path is built and tested (merge, dedupe, attribution,
+  trust, hours normalization) and takes provider results the moment an adapter supplies them; the
+  pool is honestly corridor-only today rather than padded with invented candidates. Consequently
+  the `businessStatus`/`regularOpeningHours`/`currentOpeningHours` *fetch and refresh policy* from
+  the plan is not implemented either -- only the interpretation of a snapshot is.
+- **Travel-time estimates on pool cards read "Travel time unavailable".** Phase 4's
+  `ComputeRouteMatrix` is what supplies them; inventing a number here would be exactly the
+  fabrication this project avoids elsewhere.
+- **Thumbnails are not rendered.** Place photos are provider content with their own display and
+  caching terms, and there is no adapter to fetch them under those terms yet.
+- **Cross-day drag is intentionally gone**, per the updated plan: one day is rendered at a time and
+  a move to another date goes through the pool. The keyboard arrow-key day change was removed with
+  it, since Return to pool → date strip → Add to day is a complete keyboard-reachable replacement.
+
+- **Single-day selection is not implemented.** The current UI renders multiple day columns side by
+  side and supports direct cross-day dragging. It needs a top date strip, one rendered day at a time,
+  and preservation of each day's edits/scroll state when switching.
+- **The categorized POI choice pool is not implemented.** Missing: canonical Food/Nature/Shopping/
+  Heritage/Culture/Entertainment/Local-Wildcard mapping, search, desktop side panel/mobile drawer,
+  described POI cards, detail sheet, trust/safety badges, pool-to-timeline scheduling,
+  timeline-to-pool unscheduling, and duplicate-visit confirmation.
+- **POI detail fields/provider presentation are incomplete.** `poi_catalog` has no owned
+  `short_description`, `official_url`, or provider Place ID yet, and the UI has no compact versus
+  full-description contract or provider attribution boundary.
+- **Opening-hours acquisition is not implemented.** There is no Google Places
+  `businessStatus`/`regularOpeningHours`/`currentOpeningHours` fetch, destination-local interval
+  normalizer, refresh policy, valid-drop highlighting, closed-period rejection, or persistent
+  unknown-hours warning.
+- **Revalidation against opening hours, transit feasibility, Task 1.7 daily bounds, pace, budget,
+  and rendezvous deadlines is not implemented.** None of these have a data source yet (no
+  opening-hours field, no Task 1.7 day-window table, no rendezvous/split-session concept exists in
+  Phase 4). Only date/overlap/midnight/revision/duration-domain/lock are enforced today, matching
+  what real data supports; adding the others now would mean inventing checks against numbers that
+  don't exist.
+- **Remote edits still refetch rather than animate into place**, and multiplayer presence cursors
+  during a drag do not exist (folds into Task 3.2, not touched here).
+- **"AI-suggested" is not a distinct card visual state.** Active/pending/conflicted/locked are;
+  nothing in the active itinerary's data model currently distinguishes an AI-originated item from
+  any other, since every active item originates from an accepted Gemini proposal today.
+- **Live pointer-drag verification of the resize handles specifically was inconclusive** in one
+  manual browser session due to the automation surface's precision limits (a 6px hit target, and a
+  modifier-key dispatch quirk) -- not a defect in the shipped code, which is otherwise covered by
+  passing unit and component tests exercising the exact same pointer and keyboard code paths with
+  exact coordinates/events. Worth a follow-up manual spot-check with a real pointer device.
 
 ### Task 3.5 — Workspace shell and confirmation primitive: Partial
 
@@ -486,13 +620,16 @@ in a production-like environment, one stable contract release, and evidence of m
    Task 1.6 and the candidate confirmation UI in Task 1.3.
 5. Implement Task 1.2 contextual chat extraction, expiry/dismissal, and the separate contextual
    vector. Demonstrate that inference changes ranking but never changes confirmed facts.
-6. Finish Task 3.2 presence and Task 3.5 confirmation/focus/touch gaps; resolve ordinary-member
+6. Complete Task 3.4's redesigned day builder: one-date switcher, categorized POI pool,
+   compact/full descriptions, opening-hours retrieval, and valid-drop enforcement while preserving
+   the delivered calendar geometry and revision-checked editing core.
+7. Finish Task 3.2 presence and Task 3.5 confirmation/focus/touch gaps; resolve ordinary-member
    assistant authorization in Task 3.3.
-7. Close hosted auth, PostgREST RLS, Realtime, race, and create-to-reload baseline checks; add CI.
-8. Build Phase 2's stateless optimizer boundary and Knapsack scheduler.
-9. Continue in dependency order: Phase 4 routing → Phase 5 discovery → Phase 6 on-site tools →
+8. Close hosted auth, PostgREST RLS, Realtime, race, and create-to-reload baseline checks; add CI.
+9. Build Phase 2's stateless optimizer boundary and Knapsack scheduler.
+10. Continue in dependency order: Phase 4 routing → Phase 5 discovery → Phase 6 on-site tools →
    Phase 7 healing → Phase 8 VQA → Phase 9 acceptance/deployment/demo.
-10. After the explicit Phase 10 start gate, harden shared client contracts before creating the
+11. After the explicit Phase 10 start gate, harden shared client contracts before creating the
     Android project; then ship the focused companion before considering planning/map parity.
 
 ## Instructions for the next agent
