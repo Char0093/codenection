@@ -20,10 +20,9 @@ export type WorkspaceShellProps = {
 const TABLET_BREAKPOINT_QUERY = "(max-width: 768px)";
 
 function usePanesCollapsed(): boolean {
-  const [collapsed, setCollapsed] = useState(() => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
-    return window.matchMedia(TABLET_BREAKPOINT_QUERY).matches;
-  });
+  // Always start false so SSR and the client's first hydration pass agree; the effect below
+  // corrects it to the real viewport immediately after mount.
+  const [collapsed, setCollapsed] = useState(false);
   useEffect(() => {
     if (typeof window.matchMedia !== "function") return;
     const query = window.matchMedia(TABLET_BREAKPOINT_QUERY);
@@ -98,7 +97,7 @@ export function WorkspaceShell({
         </div>
       ) : collapsed ? (
         <div className="workspace-collapsed">
-          <div className="view-tabs workspace-pane-tabs" role="tablist" aria-label="Workspace pane">
+          <div className="workspace-pane-tabs" role="tablist" aria-label="Workspace pane">
             {(["map", "chat"] as const).map((tab) => (
               <button key={tab} type="button" role="tab" aria-selected={activeTab === tab} tabIndex={activeTab === tab ? 0 : -1}
                 onClick={() => setActiveTab(tab)}>

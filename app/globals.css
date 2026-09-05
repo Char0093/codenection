@@ -59,12 +59,14 @@ a { color: var(--teal-dark); }
 .trip-toolbar { width: min(1200px, calc(100% - 48px)); margin: 0 auto; padding: 22px 0; display: flex; gap: 16px; align-items: flex-end; }
 .trip-selector { display: grid; gap: 5px; min-width: 0; width: 370px; font-size: 12px; font-weight: 600; }
 .trip-toolbar > button { flex-shrink: 0; }
-.view-tabs { display: flex; gap: 26px; padding: 0 max(24px, calc((100% - 1200px) / 2)); border-bottom: 1px solid var(--line); background: var(--surface); }
-.view-tabs button { display: inline-flex; gap: 8px; align-items: center; min-height: 50px; padding: 0 2px; border: 0; border-bottom: 3px solid transparent; background: none; color: var(--muted); font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
-.view-tabs button[aria-selected="true"] { border-bottom-color: var(--blue); color: var(--teal-dark); }
-.workspace { width: min(1200px, calc(100% - 48px)); margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 390px); align-items: start; }
-.workspace-main { min-width: 0; padding: 32px 40px 64px 0; }
-.workspace-side { min-width: 0; min-height: 550px; border-left: 1px solid var(--line); padding: 32px 0 64px 30px; }
+.app-body { width: min(1200px, calc(100% - 48px)); margin: 0 auto; padding: 22px 0 64px; display: flex; gap: 32px; align-items: flex-start; }
+.side-nav { flex: 0 0 200px; min-width: 0; display: flex; flex-direction: column; gap: 2px; position: sticky; top: 22px; }
+.side-nav button { display: flex; gap: 10px; align-items: center; min-height: 44px; padding: 10px 14px; border: 0; border-radius: 6px; background: none; color: var(--muted); font-size: 13px; font-weight: 600; text-align: left; }
+.side-nav button[aria-selected="true"] { background: var(--teal-soft); color: var(--teal-dark); }
+.workspace-main { flex: 1 1 auto; min-width: 0; }
+/* A mutually-exclusive panel in .workspace-main, alongside setup/plan -- the shared [hidden] rule
+   already hides whichever tab isn't selected; used by both the chat and timeline panels. */
+.embedded-pane { height: 600px; display: flex; flex-direction: column; }
 .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 24px; }
 .section-heading h2 { display: flex; gap: 8px; align-items: center; min-width: 0; }
 .role-label { color: var(--blue); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
@@ -140,10 +142,8 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
 .dev-login-form .field-hint { margin: 0; }
 
 @media (max-width: 900px) {
-  .workspace { grid-template-columns: minmax(0, 1fr) minmax(260px, 0.8fr); }
-  .workspace-main { padding-right: 24px; }
-  .workspace-side { padding-left: 24px; }
   .segmented { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .embedded-pane { height: auto; min-height: 420px; }
 }
 @media (max-width: 680px) {
   .topbar { padding: 16px; gap: 12px; }
@@ -152,10 +152,9 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
   .trip-toolbar { width: calc(100% - 32px); gap: 10px; }
   .trip-selector { flex: 1; width: auto; }
   .trip-toolbar > button { padding: 10px; }
-  .view-tabs { padding: 0 16px; }
-  .workspace { width: calc(100% - 32px); grid-template-columns: minmax(0, 1fr); }
-  .workspace-main { padding: 26px 0 36px; }
-  .workspace-side { min-height: 0; padding: 26px 0 40px; border-left: 0; border-top: 1px solid var(--line); }
+  .app-body { width: calc(100% - 32px); flex-direction: column; padding: 16px 0 40px; gap: 0; }
+  .side-nav { flex-direction: row; overflow-x: auto; position: static; padding-bottom: 10px; border-bottom: 1px solid var(--line); margin-bottom: 16px; }
+  .embedded-pane { min-height: 360px; }
   .trip-fields { gap: 20px 12px; }
   .form-actions > button { flex: 1 1 auto; }
   .section-heading { margin-bottom: 22px; }
@@ -182,7 +181,9 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
 /* Top 60% spatial map, bottom 40% chatroom and action sheet. */
 .workspace-panes { display: grid; grid-template-rows: 60fr 40fr; flex: 1; min-height: 0; }
 .workspace-collapsed { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-.workspace-pane-tabs { padding: 0 12px; flex: none; }
+.workspace-pane-tabs { display: flex; gap: 20px; padding: 0 12px; flex: none; border-bottom: 1px solid var(--line); background: var(--surface); }
+.workspace-pane-tabs button { display: inline-flex; gap: 8px; align-items: center; min-height: 50px; padding: 0 2px; border: 0; border-bottom: 3px solid transparent; background: none; color: var(--muted); font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+.workspace-pane-tabs button[aria-selected="true"] { border-bottom-color: var(--blue); color: var(--teal-dark); }
 .workspace-collapsed > .workspace-map, .workspace-collapsed > .workspace-chat { flex: 1; min-height: 0; }
 .workspace-map { border-bottom: 1px solid var(--line); min-height: 0; overflow: hidden; }
 .workspace-chat { min-height: 0; overflow: hidden; display: flex; flex-direction: column; background: var(--surface); }

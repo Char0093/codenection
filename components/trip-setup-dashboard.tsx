@@ -2,16 +2,28 @@
 
 import React, { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { AlertCircle, Compass, FileText, LoaderCircle, LogOut, MapPin, Plus, RotateCcw, Save, Settings2, Sparkles, Users } from "lucide-react";
+import { AlertCircle, Compass, FileText, LoaderCircle, LogOut, Map as MapIcon, MessageSquare, Plus, RotateCcw, Save, Settings2, Sparkles, Users } from "lucide-react";
 import { budgetTiers, paceLevels, validateTripDates, type TripInput } from "@/lib/domain/trip";
 import type { ProposalRecord, TripRecord } from "@/lib/repositories/planning-repository";
 import { GeminiProposalReview } from "@/components/gemini-proposal-review";
 import { DietaryConstraintPicker } from "@/components/dietary-constraint-picker";
 import type { DietaryFlag } from "@/lib/domain/constraints";
+import { ChatPane } from "@/features/chat/chat-pane";
+import { TimelinePane } from "@/features/timeline/timeline-pane";
+import type { JigsawMember } from "@/features/timeline/jigsaw-panel";
 
-type View = "setup" | "plan";
+type View = "setup" | "plan" | "timeline" | "chat";
+const TABS: { id: View; label: string; icon: typeof Settings2 }[] = [
+  { id: "setup", label: "Trip Setup", icon: Settings2 },
+  { id: "plan", label: "Plan", icon: FileText },
+  { id: "timeline", label: "Timeline", icon: MapIcon },
+  { id: "chat", label: "Chat", icon: MessageSquare },
+];
 type Operation = "loading" | "saving" | "generating" | "deciding" | null;
-type TripDetail = { trip: TripRecord; proposals: ProposalRecord[]; dietaryFlags: DietaryFlag[] };
+type TripDetail = {
+  trip: TripRecord; proposals: ProposalRecord[]; dietaryFlags: DietaryFlag[];
+  members: JigsawMember[]; selfMemberId: string | null;
+};
 const emptyInput: TripInput = { destinationName: "", startDate: "", endDate: "", budgetTier: "standard", pace: "balanced", notes: "" };
 
 class HttpError extends Error {
@@ -50,6 +62,9 @@ export function TripSetupDashboard({ email }: { email: string }) {
   const [input, setInput] = useState<TripInput>(emptyInput);
   const [proposals, setProposals] = useState<ProposalRecord[]>([]);
   const [dietaryFlags, setDietaryFlags] = useState<DietaryFlag[]>([]);
+  const [members, setMembers] = useState<JigsawMember[]>([]);
+  const [selfMemberId, setSelfMemberId] = useState<string | null>(null);
+  const [decidingProposalId, setDecidingProposalId] = useState<string | null>(null);
   const [operation, setOperation] = useState<Operation>("loading");
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,6 +96,8 @@ export function TripSetupDashboard({ email }: { email: string }) {
         setInput(detail ? inputFromTrip(detail.trip) : { ...emptyInput });
         setProposals(detail?.proposals ?? []);
         setDietaryFlags(detail?.dietaryFlags ?? []);
+        setMembers(detail?.members ?? []);
+        setSelfMemberId(detail?.selfMemberId ?? null);
         setFailedTripId(null);
         setReconcileTripId(null);
         setTripUrl(detail?.trip.id ?? null);
@@ -131,6 +148,8 @@ export function TripSetupDashboard({ email }: { email: string }) {
     updateSavedTrip(detail.trip);
     setProposals(detail.proposals);
     setDietaryFlags(detail.dietaryFlags);
+    setMembers(detail.members ?? []);
+    setSelfMemberId(detail.selfMemberId ?? null);
     setReconcileTripId(null);
   }
 
@@ -155,6 +174,7 @@ export function TripSetupDashboard({ email }: { email: string }) {
   function newTrip() {
     if (locked.current || !ready) return;
     setTrip(null); setInput({ ...emptyInput }); setProposals([]); setDietaryFlags([]); setTripUrl(null);
+    setMembers([]); setSelfMemberId(null);
     setView("setup"); setError(null); setNotice(null); setFailedTripId(null);
     setReconcileTripId(null);
   }
@@ -198,6 +218,7 @@ export function TripSetupDashboard({ email }: { email: string }) {
       || !Number.isFinite(Date.parse(proposal.expiresAt)) || Date.parse(proposal.expiresAt) <= Date.now())) return;
     const current = begin("deciding");
     if (!current) return;
+    setDecidingProposalId(proposal.id);
     try {
       const { proposal: decided } = await request<{ proposal: ProposalRecord }>(
         `/api/trips/${encodeURIComponent(trip.id)}/proposals/${encodeURIComponent(proposal.id)}/decision`,
@@ -228,9 +249,10 @@ export function TripSetupDashboard({ email }: { email: string }) {
         setReconcileTripId(trip.id);
         setError("The decision may have been saved. Reload trip before making another decision.");
       } else setError(cause.message);
-    } finally { finish(current); }
+    } finally { finish(current); setDecidingProposalId(null); }
   }
 
+  const proposalsById = Object.fromEntries(proposals.map((proposal) => [proposal.id, proposal]));
   const active = proposals.find((item) => item.id === trip?.activeProposalId);
   const reviews = proposals.filter((item) => item.id !== trip?.activeProposalId);
 
@@ -247,22 +269,24 @@ export function TripSetupDashboard({ email }: { email: string }) {
         {trips.map((item) => <option key={item.id} value={item.id}>{item.destinationName} / {item.startDate}</option>)}
       </select></label>
       <button className="secondary-button" type="button" disabled={busy || !ready} onClick={newTrip}><Plus aria-hidden="true" />New trip</button>
-      {trip && <Link className="secondary-button" href={`/trips/${trip.id}/workspace`}><Users aria-hidden="true" />Open workspace</Link>}
+      {trip && <Link className="secondary-button" href={`/trips/${trip.id}/workspace`}><Users aria-hidden="true" />Timeline jigsaw</Link>}
     </div>
-    <div className="view-tabs" role="tablist" aria-label="Trip workspace">
-      {(["setup", "plan"] as const).map((item) => <button key={item} id={`${item}-tab`} type="button" role="tab"
-        aria-selected={view === item} aria-controls={`${item}-panel`} tabIndex={view === item ? 0 : -1}
-        onClick={() => setView(item)} onKeyDown={(event) => {
-          if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
-            event.preventDefault();
-            const next = event.key === "Home" ? "setup" : event.key === "End" ? "plan" : item === "setup" ? "plan" : "setup";
-            setView(next); document.getElementById(`${next}-tab`)?.focus();
-          }
-        }}>
-        {item === "setup" ? <Settings2 aria-hidden="true" /> : <FileText aria-hidden="true" />}{item === "setup" ? "Trip Setup" : "Plan"}
-      </button>)}
-    </div>
-    <div className="workspace">
+    <div className="app-body">
+      <nav className="side-nav" role="tablist" aria-label="Trip workspace" aria-orientation="vertical">
+        {TABS.map(({ id, label, icon: Icon }) => <button key={id} id={`${id}-tab`} type="button" role="tab"
+          aria-selected={view === id} aria-controls={`${id}-panel`} tabIndex={view === id ? 0 : -1}
+          onClick={() => setView(id)} onKeyDown={(event) => {
+            if (["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) {
+              event.preventDefault();
+              const index = TABS.findIndex((tab) => tab.id === id);
+              const next = event.key === "Home" ? TABS[0] : event.key === "End" ? TABS[TABS.length - 1]
+                : event.key === "ArrowDown" ? TABS[(index + 1) % TABS.length] : TABS[(index - 1 + TABS.length) % TABS.length];
+              setView(next.id); document.getElementById(`${next.id}-tab`)?.focus();
+            }
+          }}>
+          <Icon aria-hidden="true" />{label}
+        </button>)}
+      </nav>
       <div className="workspace-main">
         {operation && <div className="inline-notice" role="status"><LoaderCircle className="spin" aria-hidden="true" />
           {operation === "loading" ? "Loading trips..." : operation === "saving" ? "Saving trip..." : operation === "generating" ? "Generating proposal..." : "Updating proposal..."}</div>}
@@ -294,19 +318,26 @@ export function TripSetupDashboard({ email }: { email: string }) {
         </section>
         <section id="plan-panel" role="tabpanel" aria-labelledby="plan-tab" hidden={view !== "plan"}>
           <div className="section-heading"><h1>Plan</h1></div>
+          {active ? <GeminiProposalReview proposal={active} active />
+            : trip?.activeProposalId && <div className="empty-state"><Compass aria-hidden="true" /><h2>Active itinerary unavailable</h2>
+              <button className="secondary-button" type="button" disabled={busy} onClick={() => setReload((value) => value + 1)}><RotateCcw aria-hidden="true" />Retry</button></div>}
           {reviews.length === 0 ? <div className="empty-state"><FileText aria-hidden="true" /><h2>{active ? "No pending proposals" : "No proposals yet"}</h2>
             <button type="button" className="secondary-button" onClick={() => setView("setup")}><Settings2 aria-hidden="true" />Trip details</button></div>
             : reviews.map((proposal) => <GeminiProposalReview key={proposal.id} proposal={proposal}
               canDecide={trip?.role === "owner"} outdated={proposal.tripRevision !== trip?.revision} busy={busy || requiresReconciliation}
               onDecision={(decision) => void decide(proposal, decision)} />)}
         </section>
+        <section id="timeline-panel" role="tabpanel" aria-labelledby="timeline-tab" hidden={view !== "timeline"} className="embedded-pane" aria-label="Itinerary timeline">
+          {view === "timeline" && (trip ? <TimelinePane tripId={trip.id} startDate={trip.startDate} endDate={trip.endDate} revision={trip.revision} />
+            : <div className="empty-state"><MapIcon aria-hidden="true" /><h2>Select a trip to see its timeline</h2></div>)}
+        </section>
+        <section id="chat-panel" role="tabpanel" aria-labelledby="chat-tab" hidden={view !== "chat"} className="embedded-pane" aria-label="Group chat">
+          {view === "chat" && (trip ? <ChatPane tripId={trip.id} selfMemberId={selfMemberId} members={members} proposalsById={proposalsById}
+            canDecideProposals={trip.role === "owner"} activeProposalId={trip.activeProposalId} decidingProposalId={decidingProposalId}
+            onDecision={(proposalId, decision) => { const target = proposals.find((item) => item.id === proposalId); if (target) void decide(target, decision); }} />
+            : <div className="empty-state"><MessageSquare aria-hidden="true" /><h2>Select a trip to see its chat</h2></div>)}
+        </section>
       </div>
-      <aside className="workspace-side" aria-label="Current plan">
-        <div className="section-heading"><h2><MapPin aria-hidden="true" />{trip?.destinationName || "Itinerary"}</h2></div>
-        {active ? <GeminiProposalReview proposal={active} active />
-          : <div className="empty-state"><Compass aria-hidden="true" /><h2>{trip?.activeProposalId ? "Active itinerary unavailable" : "No active itinerary"}</h2>
-            {trip?.activeProposalId && <button className="secondary-button" type="button" disabled={busy} onClick={() => setReload((value) => value + 1)}><RotateCcw aria-hidden="true" />Retry</button>}</div>}
-      </aside>
     </div>
   </main>;
 }

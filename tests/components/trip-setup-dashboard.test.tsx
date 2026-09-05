@@ -7,9 +7,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TripSetupDashboard } from "@/components/trip-setup-dashboard";
 import { json, proposal, trip } from "./planning-fixtures";
 
+const { listMessages, sendMessage, openChatChannel } = vi.hoisted(() => ({
+  listMessages: vi.fn(),
+  sendMessage: vi.fn(),
+  openChatChannel: vi.fn(),
+}));
+vi.mock("@/lib/supabase/client", () => ({ createClient: () => ({}) }));
+vi.mock("@/lib/chat/repository", () => ({ listMessages, sendMessage }));
+vi.mock("@/lib/realtime/channel", () => ({ openChatChannel }));
+
 const fetchMock = vi.fn<typeof fetch>();
-beforeEach(() => { vi.stubGlobal("fetch", fetchMock); window.history.replaceState(null, "", "/"); });
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); fetchMock.mockReset(); });
+beforeEach(() => {
+  vi.stubGlobal("fetch", fetchMock);
+  window.history.replaceState(null, "", "/");
+  listMessages.mockResolvedValue([]);
+  openChatChannel.mockImplementation(() => ({ close: vi.fn() }));
+});
+afterEach(() => {
+  cleanup(); vi.unstubAllGlobals(); fetchMock.mockReset();
+  listMessages.mockReset(); sendMessage.mockReset(); openChatChannel.mockReset();
+});
 
 function load(record = trip, proposals = [] as ReturnType<typeof proposal>[]) {
   fetchMock.mockResolvedValueOnce(json({ trips: [record] })).mockResolvedValueOnce(json({ trip: record, proposals }));
@@ -18,9 +35,9 @@ function load(record = trip, proposals = [] as ReturnType<typeof proposal>[]) {
 }
 
 describe("trip workspace", () => {
-  it("loads real trips and exposes exactly the two scoped tabs", async () => {
+  it("loads real trips and exposes exactly the four scoped tabs", async () => {
     await load();
-    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Trip Setup", "Plan"]);
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Trip Setup", "Plan", "Timeline", "Chat"]);
     expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/trips", expect.objectContaining({ signal: expect.any(AbortSignal) }));
     expect(screen.queryByText(/people|profile|provider health|weather|consent|quiz|discovery|plan b/i)).not.toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/\p{Extended_Pictographic}/u);
@@ -70,16 +87,19 @@ describe("trip workspace", () => {
     const user = userEvent.setup();
     const active = proposal({ id: "active", status: "accepted" });
     await load({ ...trip, activeProposalId: active.id }, [active]);
+    await user.click(screen.getByRole("tab", { name: "Plan" }));
     expect(screen.getByRole("heading", { name: "Active itinerary" })).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Trip Setup" }));
     let finish!: (value: Response) => void;
     fetchMock.mockResolvedValueOnce(json({ trip: { ...trip, activeProposalId: active.id } }))
       .mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
     await user.click(screen.getByRole("button", { name: "Generate plan" }));
     await screen.findByText("Generating proposal...");
-    expect(screen.getByText("Market visit")).toBeVisible();
     expect(screen.getByRole("button", { name: "New trip" })).toBeDisabled();
     expect(screen.getByLabelText("Recent trips")).toBeDisabled();
     expect(screen.getByRole("button", { name: "Save trip" })).toBeDisabled();
+    await user.click(screen.getByRole("tab", { name: "Plan" }));
+    expect(screen.getByText("Market visit")).toBeVisible();
     finish(json({ error: "Generation unavailable" }, 503));
     expect(await screen.findByRole("alert")).toHaveTextContent("Generation unavailable");
     expect(screen.getByText("Market visit")).toBeVisible();

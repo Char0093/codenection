@@ -8,3 +8,4 @@ coverage/
 test-results/
 playwright-report/
 .claude/scheduled_tasks.lock
+supabase/.temp/
