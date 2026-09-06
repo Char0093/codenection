@@ -2230,3 +2230,22 @@ No mismatches found.
 **2. Inline Execution** — Execute tasks in this session using executing-plans, batch execution with checkpoints.
 
 **Which approach?**
+
+---
+
+## Post-implementation review overrides
+
+The plan above is retained as execution history. The implementation and approved design
+were hardened after review; these decisions override stale embedded snippets in this plan:
+
+- `epsilonToSurpriseDial` accepts only the five exact grid values; it does not choose the
+  nearest value for `0.2` or another off-grid epsilon.
+- The RPC rejects missing full-mode `vibe`, `pace`, and `socialRole` values explicitly as
+  SQLSTATE `22023`.
+- The RPC rejects fractional `walkingCapM` values before casting to `int`.
+- Reload replaces the active confirmed/pending constraint snapshot as well as the draft
+  and profile revision.
+- Back on the first Quick screen returns to full-mode step 1.
+
+RED/GREEN and final verification evidence is recorded in
+`docs/testing/onboarding-review-fixes.tdd.md`.
