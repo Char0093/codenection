@@ -29,7 +29,7 @@ afterEach(() => {
 });
 
 function load(record = trip, proposals = [] as ReturnType<typeof proposal>[]) {
-  fetchMock.mockResolvedValueOnce(json({ trips: [record] })).mockResolvedValueOnce(json({ trip: record, proposals }));
+  fetchMock.mockResolvedValueOnce(json({ trips: [record] })).mockResolvedValueOnce(json({ trip: record, proposals, needsOnboarding: false }));
   render(<TripSetupDashboard email="owner@example.com" />);
   return screen.findByDisplayValue(record.destinationName);
 }
@@ -355,6 +355,13 @@ describe("trip workspace", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Reject" })).toBeEnabled());
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Confirm itinerary" })).toBeEnabled();
+  });
+
+  it("shows the Travel DNA nudge only when onboarding is incomplete", async () => {
+    fetchMock.mockResolvedValueOnce(json({ trips: [trip] }))
+      .mockResolvedValueOnce(json({ trip, proposals: [], needsOnboarding: true }));
+    render(<TripSetupDashboard email="owner@example.com" />);
+    expect(await screen.findByRole("link", { name: /Start/ })).toHaveAttribute("href", `/trips/${trip.id}/onboarding`);
   });
 
   it("ignores a late conflict refresh after a newer workspace selection mounts", async () => {

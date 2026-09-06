@@ -7,6 +7,7 @@ import { budgetTiers, paceLevels, validateTripDates, type TripInput } from "@/li
 import type { ProposalRecord, TripRecord } from "@/lib/repositories/planning-repository";
 import { GeminiProposalReview } from "@/components/gemini-proposal-review";
 import { DietaryConstraintPicker } from "@/components/dietary-constraint-picker";
+import { TravelDnaNudge } from "@/components/travel-dna-nudge";
 import type { DietaryFlag } from "@/lib/domain/constraints";
 import { ChatPane } from "@/features/chat/chat-pane";
 import { TimelinePane } from "@/features/timeline/timeline-pane";
@@ -22,7 +23,7 @@ const TABS: { id: View; label: string; icon: typeof Settings2 }[] = [
 type Operation = "loading" | "saving" | "generating" | "deciding" | null;
 type TripDetail = {
   trip: TripRecord; proposals: ProposalRecord[]; dietaryFlags: DietaryFlag[];
-  members: JigsawMember[]; selfMemberId: string | null;
+  members: JigsawMember[]; selfMemberId: string | null; needsOnboarding: boolean;
 };
 const emptyInput: TripInput = { destinationName: "", startDate: "", endDate: "", budgetTier: "standard", pace: "balanced", notes: "" };
 
@@ -62,6 +63,7 @@ export function TripSetupDashboard({ email }: { email: string }) {
   const [input, setInput] = useState<TripInput>(emptyInput);
   const [proposals, setProposals] = useState<ProposalRecord[]>([]);
   const [dietaryFlags, setDietaryFlags] = useState<DietaryFlag[]>([]);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [members, setMembers] = useState<JigsawMember[]>([]);
   const [selfMemberId, setSelfMemberId] = useState<string | null>(null);
   const [decidingProposalId, setDecidingProposalId] = useState<string | null>(null);
@@ -96,6 +98,7 @@ export function TripSetupDashboard({ email }: { email: string }) {
         setInput(detail ? inputFromTrip(detail.trip) : { ...emptyInput });
         setProposals(detail?.proposals ?? []);
         setDietaryFlags(detail?.dietaryFlags ?? []);
+        setNeedsOnboarding(detail?.needsOnboarding ?? false);
         setMembers(detail?.members ?? []);
         setSelfMemberId(detail?.selfMemberId ?? null);
         setFailedTripId(null);
@@ -148,6 +151,7 @@ export function TripSetupDashboard({ email }: { email: string }) {
     updateSavedTrip(detail.trip);
     setProposals(detail.proposals);
     setDietaryFlags(detail.dietaryFlags);
+    setNeedsOnboarding(detail.needsOnboarding ?? false);
     setMembers(detail.members ?? []);
     setSelfMemberId(detail.selfMemberId ?? null);
     setReconcileTripId(null);
@@ -173,7 +177,7 @@ export function TripSetupDashboard({ email }: { email: string }) {
 
   function newTrip() {
     if (locked.current || !ready) return;
-    setTrip(null); setInput({ ...emptyInput }); setProposals([]); setDietaryFlags([]); setTripUrl(null);
+    setTrip(null); setInput({ ...emptyInput }); setProposals([]); setDietaryFlags([]); setNeedsOnboarding(false); setTripUrl(null);
     setMembers([]); setSelfMemberId(null);
     setView("setup"); setError(null); setNotice(null); setFailedTripId(null);
     setReconcileTripId(null);
@@ -314,6 +318,7 @@ export function TripSetupDashboard({ email }: { email: string }) {
                 <button className="primary-button" type="submit" value="generate"><Sparkles aria-hidden="true" />Generate plan</button></div>
             </fieldset>
           </form>
+          {trip && needsOnboarding && <TravelDnaNudge tripId={trip.id} />}
           {trip && <DietaryConstraintPicker tripId={trip.id} flags={dietaryFlags} disabled={busy} />}
         </section>
         <section id="plan-panel" role="tabpanel" aria-labelledby="plan-tab" hidden={view !== "plan"}>

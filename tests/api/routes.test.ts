@@ -4,10 +4,12 @@ import { AppError } from "@/lib/http/errors";
 const mocks = vi.hoisted(() => ({
   repository: { listTrips: vi.fn(), createTrip: vi.fn(), getTrip: vi.fn(), listProposals: vi.fn(), updateTrip: vi.fn() },
   generate: vi.fn(), decide: vi.fn(), listDietaryConstraints: vi.fn(), listTripMembers: vi.fn(), getUser: vi.fn(),
+  getOnboardingNeeded: vi.fn(),
 }));
 vi.mock("@/lib/repositories/server", () => ({ tripRepository: async () => mocks.repository }));
 vi.mock("@/app/actions/proposals", () => ({ generateTripProposal: mocks.generate, decideTripProposal: mocks.decide }));
 vi.mock("@/app/actions/constraints", () => ({ listMyDietaryConstraints: mocks.listDietaryConstraints }));
+vi.mock("@/app/actions/onboarding", () => ({ getOnboardingNeeded: mocks.getOnboardingNeeded }));
 vi.mock("@/lib/repositories/members", () => ({ listTripMembers: mocks.listTripMembers, colorForMemberIndex: () => "#182544" }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: { getUser: mocks.getUser } }) }));
 
@@ -54,10 +56,11 @@ describe("trip route handlers", () => {
     mocks.repository.getTrip.mockResolvedValue({ id });
     mocks.repository.listProposals.mockResolvedValue([{ status: "accepted" }]);
     mocks.listDietaryConstraints.mockResolvedValue(["halal"]);
+    mocks.getOnboardingNeeded.mockResolvedValue(true);
     mocks.getUser.mockResolvedValue({ data: { user: null } });
     mocks.listTripMembers.mockResolvedValue([]);
     expect(await (await load(request(), context)).json()).toEqual({
-      trip: { id }, proposals: [{ status: "accepted" }], dietaryFlags: ["halal"], members: [], selfMemberId: null,
+      trip: { id }, proposals: [{ status: "accepted" }], dietaryFlags: ["halal"], members: [], selfMemberId: null, needsOnboarding: true,
     });
   });
   it("does not query proposals after cross-trip denial", async () => {
