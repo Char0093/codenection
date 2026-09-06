@@ -28,7 +28,7 @@ async function actor(user: string | null, role = "authenticated") {
 /** Call the RPC as `member` with sane defaults; override via `answers`. */
 async function submit(answers: Record<string, unknown>, expectedRevision = 0, actingUser = member) {
   await actor(actingUser);
-  return db.query<{ submit_onboarding: string }>(
+  return db.query<{ submit_onboarding: number }>(
     "select public.submit_onboarding($1, $2, $3::jsonb) as submit_onboarding",
     [trip, expectedRevision, JSON.stringify(answers)],
   );
@@ -151,4 +151,140 @@ describe("202609060001 schema", () => {
     await expect(db.query(`insert into traveler_profiles(trip_id,trip_member_id) values ($1,$2)`,
       [trip, foreignMemberId])).rejects.toMatchObject({ code: "23503" });
   });
+});
+
+describe("submit_onboarding happy paths", () => {
+  it("creates a profile + confirmed constraints and returns revision 1", async () => {
+    const res = await submit(full({ dealbreakers: { dietary: ["halal", "no_peanut"], religiousAccess: ["prayer_space_needed"], mobility: [] } }));
+    expect(res.rows[0].submit_onboarding).toBe(1);
+    await actor(null, "postgres");
+    const profile = (await db.query<{ travel_vibe: string; budget_lean: string; pace: string; social_role: string; serendipity_epsilon: string; mobility_threshold_m: number; onboarding_completed_at: string }>(
+      "select * from traveler_profiles where trip_member_id=$1", [memberMemberId])).rows[0];
+    expect(profile).toMatchObject({ travel_vibe: "food", budget_lean: "standard", pace: "active", social_role: "gourmand", mobility_threshold_m: 2000 });
+    expect(profile.serendipity_epsilon).toBe("0.150");
+    expect(profile.onboarding_completed_at).not.toBeNull();
+    const flags = (await db.query<{ kind: string; flag: string; severity: string; confirmed_at: string | null; confirmed_by: string }>(
+      "select kind, flag, severity, confirmed_at, confirmed_by from trip_constraints where trip_member_id=$1 order by flag", [memberMemberId])).rows;
+    expect(flags).toEqual([
+      { kind: "dietary", flag: "halal", severity: "standard", confirmed_at: expect.any(Date), confirmed_by: memberMemberId },
+      { kind: "dietary", flag: "no_peanut", severity: "severe", confirmed_at: expect.any(Date), confirmed_by: memberMemberId },
+      { kind: "religious_access", flag: "prayer_space_needed", severity: "standard", confirmed_at: expect.any(Date), confirmed_by: memberMemberId },
+    ]);
+  });
+
+  it("writes 0.15 for a first quick submit and leaves the full-only fields default", async () => {
+    const res = await submit(quick({ budgetLean: "budget", walkingCapM: 1000 }));
+    expect(res.rows[0].submit_onboarding).toBe(1);
+    await actor(null, "postgres");
+    const p = (await db.query<{ serendipity_epsilon: string; pace: string; travel_vibe: string | null; social_role: string | null; budget_lean: string; mobility_threshold_m: number }>(
+      "select * from traveler_profiles where trip_member_id=$1", [memberMemberId])).rows[0];
+    expect(p.serendipity_epsilon).toBe("0.150");
+    expect(p.pace).toBe("balanced");
+    expect(p.travel_vibe).toBeNull();
+    expect(p.social_role).toBeNull();
+    expect(p.budget_lean).toBe("budget");
+    expect(p.mobility_threshold_m).toBe(1000);
+  });
+
+  it("preserves epsilon/vibe/pace/role on a quick redo of a completed profile", async () => {
+    await submit(full({ surpriseDial: 5, vibe: "nature", pace: "relaxed", socialRole: "navigator" })); // rev -> 1
+    const res = await submit(quick({ budgetLean: "luxury" }), 1);                                       // rev -> 2
+    expect(res.rows[0].submit_onboarding).toBe(2);
+    await actor(null, "postgres");
+    const p = (await db.query<{ serendipity_epsilon: string; travel_vibe: string; pace: string; social_role: string; budget_lean: string }>(
+      "select * from traveler_profiles where trip_member_id=$1", [memberMemberId])).rows[0];
+    expect(p.serendipity_epsilon).toBe("0.300");
+    expect(p).toMatchObject({ travel_vibe: "nature", pace: "relaxed", social_role: "navigator", budget_lean: "luxury" });
+  });
+
+  it("stores the plan's default severity for every supported flag", async () => {
+    for (const flag of DIETARY_FLAGS) {
+      await actor(null, "postgres");
+      await db.query("delete from trip_constraints where trip_member_id=$1", [memberMemberId]);
+      await db.query("delete from traveler_profiles where trip_member_id=$1", [memberMemberId]);
+      await submit(full({ dealbreakers: { dietary: [flag], religiousAccess: [], mobility: [] } }));
+      await actor(null, "postgres");
+      const row = (await db.query<{ severity: string }>(
+        "select severity from trip_constraints where trip_member_id=$1 and flag=$2", [memberMemberId, flag])).rows[0];
+      expect(row.severity).toBe(defaultSeverity(flag));
+    }
+    for (const flag of RELIGIOUS_ACCESS_FLAGS) {
+      await actor(null, "postgres");
+      await db.query("delete from trip_constraints where trip_member_id=$1", [memberMemberId]);
+      await db.query("delete from traveler_profiles where trip_member_id=$1", [memberMemberId]);
+      await submit(full({ dealbreakers: { dietary: [], religiousAccess: [flag], mobility: [] } }));
+      await actor(null, "postgres");
+      const row = (await db.query<{ severity: string }>(
+        "select severity from trip_constraints where trip_member_id=$1 and flag=$2 and kind='religious_access'", [memberMemberId, flag])).rows[0];
+      expect(row.severity).toBe(defaultReligiousAccessSeverity(flag));
+    }
+    for (const flag of MOBILITY_FLAGS) {
+      await actor(null, "postgres");
+      await db.query("delete from trip_constraints where trip_member_id=$1", [memberMemberId]);
+      await db.query("delete from traveler_profiles where trip_member_id=$1", [memberMemberId]);
+      await submit(full({ dealbreakers: { dietary: [], religiousAccess: [], mobility: [flag] } }));
+      await actor(null, "postgres");
+      const row = (await db.query<{ severity: string }>(
+        "select severity from trip_constraints where trip_member_id=$1 and flag=$2 and kind='mobility'", [memberMemberId, flag])).rows[0];
+      expect(row.severity).toBe(defaultMobilitySeverity(flag));
+    }
+  });
+});
+
+describe("submit_onboarding failure modes", () => {
+  it("raises 42501 for a non-member", async () => {
+    await db.query("insert into auth.users(id) values ($1)", [stranger]).catch(() => {});
+    await expect(submit(quick(), 0, stranger)).rejects.toMatchObject({ code: "42501" });
+  });
+
+  it("raises 40001 on a stale expected revision and rolls back the constraint writes", async () => {
+    await submit(full()); // rev -> 1
+    await expect(submit(full({ dealbreakers: { dietary: ["vegan"], religiousAccess: [], mobility: [] } }), 0))
+      .rejects.toMatchObject({ code: "40001" });
+    await actor(null, "postgres");
+    expect((await db.query("select 1 from trip_constraints where trip_member_id=$1 and flag='vegan'", [memberMemberId])).rows).toHaveLength(0);
+  });
+
+  it("raises 40001 when no row exists but a non-zero revision was supplied", async () => {
+    await expect(submit(quick(), 7)).rejects.toMatchObject({ code: "40001" });
+  });
+
+  it("raises P0001 PENDING_CONSTRAINT_CONFLICT when an unconfirmed row blocks the add", async () => {
+    await actor(null, "postgres");
+    await db.query(`insert into trip_constraints(trip_id,trip_member_id,kind,flag) values ($1,$2,'dietary','vegan')`, [trip, memberMemberId]);
+    await expect(submit(quick({ dealbreakers: { dietary: ["vegan"], religiousAccess: [], mobility: [] } })))
+      .rejects.toMatchObject({ code: "P0001", message: expect.stringContaining("PENDING_CONSTRAINT_CONFLICT") });
+  });
+
+  it("re-confirming an already-confirmed flag is a no-op, not a conflict", async () => {
+    await submit(quick({ dealbreakers: { dietary: ["halal"], religiousAccess: [], mobility: [] } }));   // rev -> 1
+    await expect(submit(quick({ dealbreakers: { dietary: ["halal"], religiousAccess: [], mobility: [] } }), 1)).resolves.toBeDefined();
+  });
+});
+
+describe("submit_onboarding input validation (independent of Zod)", () => {
+  const bad: Array<[string, Record<string, unknown>]> = [
+    ["unknown mode", { ...quick(), mode: "bogus" }],
+    ["missing budgetLean", (() => { const q = quick() as Record<string, unknown>; delete q.budgetLean; return q; })()],
+    ["dealbreakers not an object", { ...quick(), dealbreakers: "halal" }],
+    ["dietary not an array", { ...quick(), dealbreakers: { dietary: "halal", religiousAccess: [], mobility: [] } }],
+    ["dietary over vocabulary length", { ...quick(), dealbreakers: { dietary: Array(20).fill("halal"), religiousAccess: [], mobility: [] } }],
+    ["unknown dietary flag", { ...quick(), dealbreakers: { dietary: ["mystery"], religiousAccess: [], mobility: [] } }],
+    ["walkingCapM negative", { ...quick(), walkingCapM: -5 }],
+    ["walkingCapM too large", { ...quick(), walkingCapM: 999999 }],
+    ["walkingCapM not a number", { ...quick(), walkingCapM: "far" }],
+    ["invalid budgetLean enum", { ...quick(), budgetLean: "cheap" }],
+    ["full: invalid vibe", { ...full(), vibe: "space" }],
+    ["full: invalid pace", { ...full(), pace: "sprint" }],
+    ["full: invalid socialRole", { ...full(), socialRole: "captain" }],
+    ["full: surpriseDial out of range", { ...full(), surpriseDial: 9 }],
+  ];
+  for (const [name, answers] of bad) {
+    it(`raises 22023 for ${name} and writes nothing`, async () => {
+      await expect(submit(answers)).rejects.toMatchObject({ code: "22023" });
+      await actor(null, "postgres");
+      expect((await db.query("select 1 from traveler_profiles where trip_member_id=$1", [memberMemberId])).rows).toHaveLength(0);
+      expect((await db.query("select 1 from trip_constraints where trip_member_id=$1", [memberMemberId])).rows).toHaveLength(0);
+    });
+  }
 });
