@@ -16,12 +16,14 @@ describe("surprise dial <-> epsilon", () => {
     expect(() => surpriseDialToEpsilon(6)).toThrow();
     expect(() => surpriseDialToEpsilon(2.5)).toThrow();
   });
-  it("returns the nearest dial for a stored epsilon", () => {
+  it("returns a dial only for an exact stored grid value", () => {
     expect(epsilonToSurpriseDial(0)).toBe(1);
     expect(epsilonToSurpriseDial(0.15)).toBe(3);
     expect(epsilonToSurpriseDial(0.3)).toBe(5);
-    // 0.2 is 0.025 from grid value 0.225 (dial 4) and 0.05 from 0.15 (dial 3) -> 4.
-    expect(epsilonToSurpriseDial(0.2)).toBe(4);
+    expect(() => epsilonToSurpriseDial(0.2)).toThrow();
+  });
+  it("throws on a non-finite epsilon rather than returning a bogus dial", () => {
+    expect(() => epsilonToSurpriseDial(NaN)).toThrow(/finite number/);
   });
 });
 
@@ -42,6 +44,11 @@ describe("onboardingAnswersSchema", () => {
   it("accepts a quick submission without the full-only keys", () => {
     const parsed = onboardingAnswersSchema.parse({ mode: "quick", dealbreakers, walkingCapM: null, budgetLean: "budget" });
     expect(parsed.mode).toBe("quick");
+  });
+  it("rejects a quick submission carrying a full-only key", () => {
+    expect(() => onboardingAnswersSchema.parse({
+      mode: "quick", dealbreakers, walkingCapM: null, budgetLean: "budget", surpriseDial: 3,
+    })).toThrow();
   });
   it("rejects an unknown mode", () => {
     expect(() => onboardingAnswersSchema.parse({ ...full, mode: "bogus" })).toThrow();

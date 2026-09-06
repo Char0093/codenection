@@ -231,6 +231,21 @@ describe("submit_onboarding happy paths", () => {
   });
 });
 
+describe("traveler_profiles privacy", () => {
+  it("never returns another member's profile row, not even to the trip owner", async () => {
+    await submit(full());                     // member fills in their profile
+    for (const user of [tripOwner, otherMember]) {
+      await actor(user);
+      expect(
+        (await db.query(
+          "select social_role, budget_lean, travel_vibe from traveler_profiles where trip_member_id=$1",
+          [memberMemberId],
+        )).rows,
+      ).toHaveLength(0);
+    }
+  });
+});
+
 describe("submit_onboarding failure modes", () => {
   it("raises 42501 for a non-member", async () => {
     await db.query("insert into auth.users(id) values ($1)", [stranger]).catch(() => {});
@@ -243,6 +258,23 @@ describe("submit_onboarding failure modes", () => {
       .rejects.toMatchObject({ code: "40001" });
     await actor(null, "postgres");
     expect((await db.query("select 1 from trip_constraints where trip_member_id=$1 and flag='vegan'", [memberMemberId])).rows).toHaveLength(0);
+  });
+
+  it("rolls back an already-inserted constraint when a later flag raises P0001", async () => {
+    await actor(null, "postgres");
+    await db.query(
+      "insert into trip_constraints(trip_id,trip_member_id,kind,flag) values ($1,$2,'dietary','no_pork')",
+      [trip, memberMemberId],
+    );  // an UNCONFIRMED row that will block the 2nd flag
+    const before = (await db.query<{ revision: number }>("select revision from trips where id=$1", [trip])).rows[0].revision;
+    await expect(
+      submit(quick({ dealbreakers: { dietary: ["halal", "no_pork"], religiousAccess: [], mobility: [] } })),
+    ).rejects.toMatchObject({ code: "P0001" });
+    await actor(null, "postgres");
+    expect(
+      (await db.query("select 1 from trip_constraints where trip_member_id=$1 and flag='halal'", [memberMemberId])).rows,
+    ).toHaveLength(0);                                  // halal insert rolled back
+    expect((await db.query<{ revision: number }>("select revision from trips where id=$1", [trip])).rows[0].revision).toBe(before); // no revision bump survived
   });
 
   it("raises 40001 when no row exists but a non-zero revision was supplied", async () => {
@@ -272,8 +304,12 @@ describe("submit_onboarding input validation (independent of Zod)", () => {
     ["unknown dietary flag", { ...quick(), dealbreakers: { dietary: ["mystery"], religiousAccess: [], mobility: [] } }],
     ["walkingCapM negative", { ...quick(), walkingCapM: -5 }],
     ["walkingCapM too large", { ...quick(), walkingCapM: 999999 }],
+    ["walkingCapM fractional", { ...quick(), walkingCapM: 1.5 }],
     ["walkingCapM not a number", { ...quick(), walkingCapM: "far" }],
     ["invalid budgetLean enum", { ...quick(), budgetLean: "cheap" }],
+    ["full: missing vibe", (() => { const q = full() as Record<string, unknown>; delete q.vibe; return q; })()],
+    ["full: missing pace", (() => { const q = full() as Record<string, unknown>; delete q.pace; return q; })()],
+    ["full: missing socialRole", (() => { const q = full() as Record<string, unknown>; delete q.socialRole; return q; })()],
     ["full: invalid vibe", { ...full(), vibe: "space" }],
     ["full: invalid pace", { ...full(), pace: "sprint" }],
     ["full: invalid socialRole", { ...full(), socialRole: "captain" }],
