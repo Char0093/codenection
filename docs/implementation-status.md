@@ -255,19 +255,44 @@ Missing:
 - Conservative lowest-budget reducer and private dislike filtering.
 - Aggregate-only assistant wording and non-reconstruction tests.
 
-### Task 1.6 — Compact preference survey: Not started
+### Task 1.6 — Onboarding questionnaire (Travel DNA): Partial (slice 1 delivered)
 
-Missing:
+Implemented 2026-09-06 (`docs/superpowers/specs/2026-09-06-onboarding-survey-slice-design.md`):
 
-- Five one-question screens, under-60-second target, and Quick mode.
-- Explicit baseline writes for vibe, constraints, pace, budget, social role, and surprise tolerance.
-- Private social-role access control, overwrite behavior, and Group Conductor summary.
-- Clear separation preventing chat-derived signals from modifying survey fields.
-- Always-available post-onboarding preference editor with revision-checked individual-field updates.
-- Safety-edit confirmation and supersession audit trail, privacy-safe Realtime notice, and immediate
-  review marking for affected active items.
-- Future-only application versus a user-requested, confirmable current-itinerary diff; neither path
-  may silently rewrite the active itinerary.
+- `202609060001_onboarding_profile.sql`: `traveler_profiles` gains `travel_vibe`,
+  `budget_lean`, `onboarding_completed_at`, and a server-managed `profile_revision`
+  (BEFORE INSERT forces 1; BEFORE UPDATE bumps it and `updated_at`). A
+  `traveler_profiles_completed_shape` CHECK requires a completed row to carry a
+  `budget_lean` and an on-grid `serendipity_epsilon`. A composite
+  `(trip_id, trip_member_id)` FK plus a recreated UPDATE policy close the
+  202609050006 membership-pair gap. Column-scoped `insert`/`update` grants replace the
+  table-wide grant. The `submit_onboarding(uuid, bigint, jsonb)` RPC (`security invoker`,
+  one transaction) validates input independently of Zod, applies add-only dealbreaker
+  constraints through the existing self-confirmed `trip_constraints` path, and upserts
+  the profile with the completion marker last; SQLSTATEs `42501` / `40001` / `22023` /
+  `P0001` map to `403` / `409 STALE_PROFILE` / `422` / `409 PENDING_CONSTRAINT`.
+- `lib/domain/onboarding.ts`, `app/actions/onboarding.ts`
+  (`getMyOnboarding` / `getOnboardingNeeded` / `submitOnboarding`),
+  `app/api/trips/[tripId]/onboarding/route.ts`, `components/onboarding-wizard.tsx`
+  (five screens + Quick mode, nav gating on vibe and social role, STALE_PROFILE reload),
+  `app/trips/[tripId]/onboarding/page.tsx`, and a `components/travel-dna-nudge.tsx`
+  banner shown on the dashboard and workspace while `onboarding_completed_at` is null
+  (per-trip `sessionStorage` dismissal).
+- Tests: `tests/domain/onboarding.test.ts`, `tests/database/onboarding-rls.test.ts`
+  (schema, CHECK, grants, composite FK, and full RPC behavior incl. atomic rollback,
+  RPC-side validation, and a per-flag severity-sync check against
+  `lib/domain/constraints.ts`), `tests/components/onboarding-wizard.test.tsx`,
+  `tests/components/travel-dna-nudge.test.tsx`, `tests/components/workspace-client.test.tsx`,
+  `tests/api/onboarding.test.ts`.
+
+Deliberately deferred: the always-available **My Travel Preferences** editor and its
+route/API; the "Group Conductor" summary endpoint (needs a member-invite flow);
+realtime requirements-changed announcements; the **Apply to future** /
+**Review current itinerary** post-edit flow (needs Task 3.5's primitive);
+`interest_vector` embedding (Task 1.3); and **removal / downgrade / supersession of a
+confirmed dealbreaker** — this slice's Step 2 is add-only, and the wizard points
+removals at the dashboard dietary picker (dietary) or a future constraint-review flow
+(religious-access, mobility).
 
 ### Task 1.7 — Daily planning windows before generation: Not started
 
