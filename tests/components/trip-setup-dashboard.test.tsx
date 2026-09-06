@@ -38,6 +38,7 @@ describe("trip workspace", () => {
   it("loads real trips and exposes exactly the four scoped tabs", async () => {
     await load();
     expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Trip Setup", "Plan", "Timeline", "Chat"]);
+    expect(screen.queryByRole("link", { name: "Timeline jigsaw" })).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/trips", expect.objectContaining({ signal: expect.any(AbortSignal) }));
     expect(screen.queryByText(/people|profile|provider health|weather|consent|quiz|discovery|plan b/i)).not.toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/\p{Extended_Pictographic}/u);
@@ -79,6 +80,7 @@ describe("trip workspace", () => {
     fetchMock.mockResolvedValueOnce(json({ trip }));
     await user.click(screen.getByRole("button", { name: "Save trip" }));
     expect(await screen.findByText("Trip saved.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Start" })).toHaveAttribute("href", `/trips/${trip.id}/onboarding`);
     expect(fetchMock.mock.calls[1][0]).toBe("/api/trips");
     expect(fetchMock.mock.calls[1][1]?.method).toBe("POST");
   });

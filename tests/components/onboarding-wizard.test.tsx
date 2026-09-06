@@ -37,6 +37,8 @@ describe("OnboardingWizard", () => {
   it("gates step 1 on a vibe choice in full mode", async () => {
     const user = userEvent.setup();
     render(<OnboardingWizard tripId="t1" initial={emptySnapshot} successHref="/trips/t1/workspace" />);
+    expect(screen.getByRole("heading", { name: "What kind of traveler are you?" })).toBeInTheDocument();
+    expect(screen.getByText("Choose the travel style you generally enjoy most.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
     await user.click(screen.getByRole("radio", { name: /Food & markets/ }));
     expect(screen.getByRole("button", { name: "Next" })).toBeEnabled();

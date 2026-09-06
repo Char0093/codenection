@@ -26,7 +26,12 @@ export default async function OnboardingPage({ params }: { params: Promise<{ tri
 
   return (
     <main className="app-shell">
-      <div className="section-heading"><h1>Travel DNA — {trip.destinationName}</h1></div>
+      <div className="section-heading">
+        <div>
+          <h1>Your Travel DNA</h1>
+          <p className="field-hint">Tell us how you generally like to travel. We’ll use it to tune suggestions for {trip.destinationName}.</p>
+        </div>
+      </div>
       <OnboardingWizard tripId={trip.id} initial={snapshot} successHref={`/trips/${trip.id}/workspace`} />
     </main>
   );

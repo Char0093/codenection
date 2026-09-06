@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState, type FormEvent } from "react";
-import Link from "next/link";
-import { AlertCircle, Compass, FileText, LoaderCircle, LogOut, Map as MapIcon, MessageSquare, Plus, RotateCcw, Save, Settings2, Sparkles, Users } from "lucide-react";
+import { AlertCircle, Compass, FileText, LoaderCircle, LogOut, Map as MapIcon, MessageSquare, Plus, RotateCcw, Save, Settings2, Sparkles } from "lucide-react";
 import { budgetTiers, paceLevels, validateTripDates, type TripInput } from "@/lib/domain/trip";
 import type { ProposalRecord, TripRecord } from "@/lib/repositories/planning-repository";
 import { GeminiProposalReview } from "@/components/gemini-proposal-review";
@@ -190,6 +189,7 @@ export function TripSetupDashboard({ email }: { email: string }) {
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canEdit || !ready || locked.current) return;
+    const isNewTrip = trip === null;
     const generate = (event.nativeEvent as SubmitEvent).submitter?.getAttribute("value") === "generate";
     const dateError = validateTripDates(input.startDate, input.endDate);
     if (!input.destinationName.trim() || dateError) { setError(dateError || "Enter a destination."); return; }
@@ -202,6 +202,7 @@ export function TripSetupDashboard({ email }: { email: string }) {
       );
       if (current.signal.aborted) return;
       updateSavedTrip(saved);
+      if (isNewTrip) setNeedsOnboarding(true);
       if (generate) {
         setOperation("generating");
         const { proposal } = await request<{ proposal: ProposalRecord }>(
@@ -273,7 +274,6 @@ export function TripSetupDashboard({ email }: { email: string }) {
         {trips.map((item) => <option key={item.id} value={item.id}>{item.destinationName} / {item.startDate}</option>)}
       </select></label>
       <button className="secondary-button" type="button" disabled={busy || !ready} onClick={newTrip}><Plus aria-hidden="true" />New trip</button>
-      {trip && <Link className="secondary-button" href={`/trips/${trip.id}/workspace`}><Users aria-hidden="true" />Timeline jigsaw</Link>}
     </div>
     <div className="app-body">
       <nav className="side-nav" role="tablist" aria-label="Trip workspace" aria-orientation="vertical">

@@ -29,11 +29,11 @@ type Draft = {
 
 const SURPRISE_LABELS = ["stick to the plan", "mostly planned", "balanced", "mostly open", "surprise me"];
 const STEP_TITLES: Record<number, string> = {
-  1: "What's this trip about?",
-  2: "Anything that must be respected?",
-  3: "Energy and budget",
-  4: "Your role in the group",
-  5: "How much spontaneity?",
+  1: "What kind of traveler are you?",
+  2: "What do you need when you travel?",
+  3: "How do you like to travel?",
+  4: "What role do you naturally take?",
+  5: "How spontaneous are you?",
 };
 
 function draftFrom(snapshot: OnboardingSnapshot): Draft {
@@ -154,7 +154,7 @@ export function OnboardingWizard({ tripId, initial, successHref }: {
 
       {step === 1 && (
         <fieldset className="onboarding-cards">
-          <legend className="field-hint">Pick the one that fits best.</legend>
+          <legend className="field-hint">Choose the travel style you generally enjoy most.</legend>
           {TRAVEL_VIBES.map((vibe) => (
             <label key={vibe} className="onboarding-card">
               <input type="radio" name="vibe" checked={draft.vibe === vibe}
@@ -173,9 +173,9 @@ export function OnboardingWizard({ tripId, initial, successHref }: {
       {step === 2 && (
         <div className="onboarding-dealbreakers">
           <p className="field-hint">
-            Tap anything that must be respected. You can add more later. Removing a dietary flag is done
-            on the trip dashboard; religious-access and mobility flags become editable when constraint
-            review ships.
+            Select anything you generally need respected when you travel. You can add more later.
+            Removing a dietary flag is done on the trip dashboard; religious-access and mobility flags
+            become editable when constraint review ships.
           </p>
           <ChipGroup title="Dietary" flags={DIETARY_FLAGS} labels={DIETARY_FLAG_LABELS}
             selected={draft.dietary} existing={snapshot.dealbreakers.dietary}
@@ -187,7 +187,7 @@ export function OnboardingWizard({ tripId, initial, successHref }: {
             selected={draft.mobility} existing={snapshot.dealbreakers.mobility}
             onToggle={(flag) => toggleFlag("mobility", flag)} />
           <fieldset className="onboarding-walking">
-            <legend>Comfortable walking distance between stops</legend>
+            <legend>Your comfortable walking distance between stops</legend>
             <div className="segmented">
               {WALKING_CAP_PRESETS.map((preset) => (
                 <label key={String(preset.value)}>
@@ -204,7 +204,7 @@ export function OnboardingWizard({ tripId, initial, successHref }: {
       {step === 3 && (
         <div className="onboarding-sliders">
           <fieldset>
-            <legend>Budget lean</legend>
+            <legend>Usual budget style</legend>
             <div className="segmented">
               {budgetTiers.map((tier) => (
                 <label key={tier.value}>
@@ -217,7 +217,7 @@ export function OnboardingWizard({ tripId, initial, successHref }: {
           </fieldset>
           {mode === "full" && (
             <fieldset>
-              <legend>Daily pace</legend>
+              <legend>Preferred daily pace</legend>
               <div className="segmented">
                 {paceLevels.map((level) => (
                   <label key={level.value}>
@@ -247,7 +247,7 @@ export function OnboardingWizard({ tripId, initial, successHref }: {
 
       {step === 5 && (
         <div className="onboarding-dial">
-          <label htmlFor="surprise-dial">Slide toward how you want this trip to feel.</label>
+          <label htmlFor="surprise-dial">Slide toward how you usually like to travel.</label>
           <input id="surprise-dial" type="range" min={1} max={5} step={1} value={draft.surpriseDial}
             aria-valuetext={`${draft.surpriseDial} of 5 — ${SURPRISE_LABELS[draft.surpriseDial - 1]}`}
             onChange={(event) => setDraft({ ...draft, surpriseDial: Number(event.target.value) })} />
