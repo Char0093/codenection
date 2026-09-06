@@ -80,10 +80,12 @@ export async function getOnboardingNeeded(tripId: string): Promise<boolean> {
   tripIdSchema.parse(tripId);
   const client = await createClient();
   await verifiedUser(client);
+  // .limit(1) rather than .maybeSingle(): this runs on every dashboard GET, and a future
+  // cross-member read policy must not turn a multi-row read into a 404 for the whole page.
   const { data, error } = await client
-    .from("traveler_profiles").select("onboarding_completed_at").eq("trip_id", tripId).maybeSingle();
+    .from("traveler_profiles").select("onboarding_completed_at").eq("trip_id", tripId).limit(1);
   if (error) databaseError(error);
-  return !data || data.onboarding_completed_at == null;
+  return !data || data.length === 0 || data[0].onboarding_completed_at == null;
 }
 
 function mapRpcError(error: { code?: string; message?: string }): AppError {

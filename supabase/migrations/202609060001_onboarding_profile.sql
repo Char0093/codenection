@@ -52,6 +52,11 @@ create trigger traveler_profiles_bump_revision
   before update on public.traveler_profiles
   for each row execute function public.traveler_profiles_bump_revision();
 
+-- Functions default to PUBLIC EXECUTE in PostgreSQL; these two are trigger-only helpers
+-- that no role calls directly, so close them explicitly (repo convention: see 202609030004).
+revoke all on function public.traveler_profiles_set_initial_revision() from public, anon, service_role;
+revoke all on function public.traveler_profiles_bump_revision() from public, anon, service_role;
+
 -- Column-scoped writes: id / created_at / updated_at / profile_revision are never
 -- client-writable. Replaces the table-wide grant from 202609050006.
 revoke insert, update on public.traveler_profiles from authenticated;
@@ -158,10 +163,12 @@ begin
     raise exception 'walkingCapM must be a number or null' using errcode = '22023';
   end if;
   if jsonb_typeof(p_answers->'walkingCapM') = 'number' then
-    v_cap := (p_answers->>'walkingCapM')::int;
-    if v_cap < 0 or v_cap > 50000 then
+    if (p_answers->>'walkingCapM')::numeric <> trunc((p_answers->>'walkingCapM')::numeric)
+       or (p_answers->>'walkingCapM')::numeric < 0
+       or (p_answers->>'walkingCapM')::numeric > 50000 then
       raise exception 'walkingCapM out of range' using errcode = '22023';
     end if;
+    v_cap := (p_answers->>'walkingCapM')::int;
   else
     v_cap := null;
   end if;
@@ -171,13 +178,16 @@ begin
   end if;
 
   if v_mode = 'full' then
-    if (p_answers->>'vibe') not in ('heritage','food','nature','urban') then
+    if (p_answers->>'vibe') is null
+       or (p_answers->>'vibe') not in ('heritage','food','nature','urban') then
       raise exception 'invalid vibe' using errcode = '22023';
     end if;
-    if (p_answers->>'pace') not in ('relaxed','balanced','active','intense') then
+    if (p_answers->>'pace') is null
+       or (p_answers->>'pace') not in ('relaxed','balanced','active','intense') then
       raise exception 'invalid pace' using errcode = '22023';
     end if;
-    if (p_answers->>'socialRole') not in ('navigator','chronicler','gourmand','go_with_the_flow','negotiator') then
+    if (p_answers->>'socialRole') is null
+       or (p_answers->>'socialRole') not in ('navigator','chronicler','gourmand','go_with_the_flow','negotiator') then
       raise exception 'invalid socialRole' using errcode = '22023';
     end if;
     if jsonb_typeof(p_answers->'surpriseDial') is distinct from 'number'

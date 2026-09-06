@@ -15,7 +15,7 @@ describe("TravelDnaNudge", () => {
     expect(screen.getByRole("link", { name: /Start/ })).toHaveAttribute("href", "/trips/trip-9/onboarding");
   });
 
-  it("dismisses for the browser session, per trip", async () => {
+  it("dismisses for the browser session, and a remount for the same trip stays dismissed", async () => {
     const user = userEvent.setup();
     const { unmount } = render(<TravelDnaNudge tripId="trip-9" />);
     await user.click(screen.getByRole("button", { name: "Dismiss" }));
@@ -24,7 +24,20 @@ describe("TravelDnaNudge", () => {
     unmount();
     render(<TravelDnaNudge tripId="trip-9" />);
     expect(screen.queryByRole("link", { name: /Start/ })).not.toBeInTheDocument();
-    render(<TravelDnaNudge tripId="trip-10" />);
+  });
+
+  it("still renders for a different tripId when the prop changes on the same instance", () => {
+    const { rerender } = render(<TravelDnaNudge tripId="trip-9" />);
+    rerender(<TravelDnaNudge tripId="trip-10" />);
+    expect(screen.getByRole("link", { name: /Start/ })).toHaveAttribute("href", "/trips/trip-10/onboarding");
+  });
+
+  it("resets the dismissal when the tripId prop changes without a remount", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<TravelDnaNudge tripId="trip-9" />);
+    await user.click(screen.getByRole("button", { name: "Dismiss" }));
+    expect(screen.queryByRole("link", { name: /Start/ })).not.toBeInTheDocument();
+    rerender(<TravelDnaNudge tripId="trip-10" />);
     expect(screen.getByRole("link", { name: /Start/ })).toBeInTheDocument();
   });
 });

@@ -52,16 +52,12 @@ export function surpriseDialToEpsilon(dial: number): number {
  * (`onboardingCompletedAt == null ? SURPRISE_DIAL_DEFAULT : epsilonToSurpriseDial(...)`);
  * a completed row always carries an exact grid value. */
 export function epsilonToSurpriseDial(epsilon: number): number {
-  let bestIndex = 0;
-  let bestDistance = Infinity;
-  EPSILON_GRID.forEach((value, index) => {
-    const distance = Math.abs(value - epsilon);
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      bestIndex = index;
-    }
-  });
-  return bestIndex + 1;
+  if (!Number.isFinite(epsilon)) {
+    throw new RangeError(`epsilonToSurpriseDial: expected a finite number, got ${epsilon}`);
+  }
+  const index = EPSILON_GRID.findIndex((value) => value === epsilon);
+  if (index < 0) throw new RangeError(`epsilonToSurpriseDial: ${epsilon} is not on the supported epsilon grid`);
+  return index + 1;
 }
 
 const walkingCapSchema = z.number().int().min(0).max(50000).nullable();

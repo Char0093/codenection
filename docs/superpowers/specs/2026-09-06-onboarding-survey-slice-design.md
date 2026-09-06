@@ -66,28 +66,41 @@ create type public.traveler_travel_vibe as enum ('heritage', 'food', 'nature', '
 
 ### 3.3 Concurrency
 
-`BEFORE UPDATE` trigger on `traveler_profiles` (`security definer`, `set search_path = ''`):
-sets `new.updated_at = now()` and `new.profile_revision = old.profile_revision + 1`,
-ignoring any client-supplied value.
+`BEFORE UPDATE` trigger on `traveler_profiles` (`security invoker` — the PostgreSQL
+default — with `set search_path = ''`): sets `new.updated_at = now()` and
+`new.profile_revision = old.profile_revision + 1`, ignoring any client-supplied value.
 
 `BEFORE INSERT` trigger forces `new.profile_revision = 1`.
+
+Invoker, not definer: column-level `UPDATE` privileges are checked against the columns
+named in the statement's own `SET` list, never against columns a trigger assigns, so
+`security definer` would grant the trigger no ability it needs while needlessly widening
+its authority. Both trigger helpers are also `revoke all ... from public, anon,
+service_role` (nothing calls them directly).
 
 ### 3.4 Column-scoped grants (replace the table-wide grant from `202609050006`)
 
 ```
-revoke insert on public.traveler_profiles from authenticated;
-grant insert (trip_id, trip_member_id, travel_vibe, budget_lean, pace, social_role,
-              serendipity_epsilon, mobility_threshold_m, onboarding_completed_at)
+revoke insert, update on public.traveler_profiles from authenticated;
+grant insert (trip_id, trip_member_id, interest_vector, budget_daily_cap, budget_total_cap,
+              pace, mobility_threshold_m, serendipity_epsilon, social_role,
+              travel_vibe, budget_lean, onboarding_completed_at)
   on public.traveler_profiles to authenticated;
-
-revoke update on public.traveler_profiles from authenticated;
-grant update (travel_vibe, budget_lean, pace, social_role, serendipity_epsilon,
-              mobility_threshold_m, onboarding_completed_at)
+grant update (interest_vector, budget_daily_cap, budget_total_cap, pace, mobility_threshold_m,
+              serendipity_epsilon, social_role, travel_vibe, budget_lean, onboarding_completed_at)
   on public.traveler_profiles to authenticated;
 ```
 
-`id`, `trip_id`, `trip_member_id`, `created_at`, `updated_at`, `profile_revision` are
-not client-writable. A `security invoker` RPC (§4) is subject to the same grants.
+`id`, `trip_id` (update only), `trip_member_id` (update only), `created_at`, `updated_at`,
+`profile_revision` are not client-writable. A `security invoker` RPC (§4) is subject to
+the same grants.
+
+The list keeps the three pre-existing `202609050006` soft-baseline columns
+(`interest_vector`, `budget_daily_cap`, `budget_total_cap`) client-writable — a deliberate
+backward-compat choice carried over from the plan, so this migration only *adds* the new
+step-1/3 columns rather than also narrowing what `202609050006` already allowed.
+`interest_vector` in particular stays client-writable pending Task 1.3, which will own the
+vibe→embedding path and can tighten the grant then.
 
 ### 3.5 RLS invariant fix (member/trip pair)
 
@@ -323,6 +336,8 @@ Screens — one primary interaction each, no free-text fields:
 
 Navigation: Back / Next; the final screen's button is **Finish** →
 `POST /api/trips/{tripId}/onboarding` with `{ expectedRevision, answers }`.
+On the first Quick screen, Back returns to full-mode step 1 so choosing Quick never
+traps the member in the shortened flow.
 `fetch` wrapper copied from `DietaryConstraintPicker` (`cache: "no-store"`, JSON,
 throw on `!ok` with the parsed `error`).
 
@@ -337,8 +352,9 @@ Responses:
 - `200` → `router.replace(successHref)`.
 - `409 STALE_PROFILE` → message + a **Reload** button. Reload issues
   `GET /api/trips/{tripId}/onboarding` and, on success, calls `reseed(snapshot)` —
-  replacing `draft`, `expectedRevision`, and `step` (→ 1) from the fresh snapshot — then
-  clears `error`. `router.refresh()` is **not** relied on to reset local state. (Tested:
+  replacing the active confirmed/pending constraint metadata, `draft`,
+  `expectedRevision`, and `step` (→ 1) from the fresh snapshot — then clears `error`.
+  `router.refresh()` is **not** relied on to reset local state. (Tested:
   after a simulated `409` + Reload, the next submit sends the new `expectedRevision` and
   the draft reflects the refetched snapshot.)
 - `409 PENDING_CONSTRAINT` / `422` → inline error, stay on the current step.
@@ -387,7 +403,7 @@ one trip does not hide it on another. Completing the survey clears
 ## 7. Testing
 
 - **`tests/domain/onboarding.test.ts`** — `surpriseDialToEpsilon` grid + guard;
-  `epsilonToSurpriseDial` grid + contract; schema rejects unknown `mode`, extra keys
+  `epsilonToSurpriseDial` exact-grid contract; schema rejects unknown `mode`, extra keys
   (strict), oversize dealbreaker arrays, invalid enums, `walkingCapM` out of bounds;
   dedupe collapses repeats.
 - **`tests/components/onboarding-wizard.test.tsx`** (RTL, like
@@ -427,7 +443,8 @@ one trip does not hide it on another. Completing the survey clears
   - composite-FK mismatch (member from another trip) is rejected;
   - **RPC validation is independent of Zod:** call the RPC directly with invalid JSON —
     `mode: "bogus"`, missing `budgetLean`, `dealbreakers.dietary` as a string,
-    an over-long array, a bad enum value, `surpriseDial: 9`, `walkingCapM: -5` — each
+    an over-long array, missing full-mode fields, a bad enum value, `surpriseDial: 9`,
+    fractional or out-of-range `walkingCapM` — each
     raises `22023` and writes nothing;
   - **severity sync:** for every flag in all three vocabularies, a one-flag submit stores
     the severity that the corresponding `lib/domain/constraints.ts` helper returns.

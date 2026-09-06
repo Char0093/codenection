@@ -11,9 +11,10 @@ export function TravelDnaNudge({ tripId }: { tripId: string }) {
 
   useEffect(() => {
     try {
-      if (sessionStorage.getItem(storageKey(tripId)) === "1") setDismissed(true);
+      setDismissed(sessionStorage.getItem(storageKey(tripId)) === "1");
     } catch {
-      // sessionStorage unavailable (private mode): fall back to dismissed-for-this-mount.
+      // sessionStorage unavailable: a new trip starts visible, then dismisses for this mount.
+      setDismissed(false);
     }
   }, [tripId]);
 

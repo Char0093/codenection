@@ -58,6 +58,7 @@ export function OnboardingWizard({ tripId, initial, successHref }: {
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<"full" | "quick">("full");
+  const [snapshot, setSnapshot] = useState(initial);
   const [draft, setDraft] = useState<Draft>(() => draftFrom(initial));
   const [expectedRevision, setExpectedRevision] = useState(initial.profileRevision);
   const [stepIndex, setStepIndex] = useState(0);
@@ -79,6 +80,7 @@ export function OnboardingWizard({ tripId, initial, successHref }: {
     : true;
 
   function reseed(snapshot: OnboardingSnapshot) {
+    setSnapshot(snapshot);
     setDraft(draftFrom(snapshot));
     setExpectedRevision(snapshot.profileRevision);
     setStepIndex(0);
@@ -176,13 +178,13 @@ export function OnboardingWizard({ tripId, initial, successHref }: {
             review ships.
           </p>
           <ChipGroup title="Dietary" flags={DIETARY_FLAGS} labels={DIETARY_FLAG_LABELS}
-            selected={draft.dietary} existing={initial.dealbreakers.dietary}
+            selected={draft.dietary} existing={snapshot.dealbreakers.dietary}
             onToggle={(flag) => toggleFlag("dietary", flag)} />
           <ChipGroup title="Religious access" flags={RELIGIOUS_ACCESS_FLAGS} labels={RELIGIOUS_ACCESS_FLAG_LABELS}
-            selected={draft.religiousAccess} existing={initial.dealbreakers.religiousAccess}
+            selected={draft.religiousAccess} existing={snapshot.dealbreakers.religiousAccess}
             onToggle={(flag) => toggleFlag("religiousAccess", flag)} />
           <ChipGroup title="Mobility" flags={MOBILITY_FLAGS} labels={MOBILITY_FLAG_LABELS}
-            selected={draft.mobility} existing={initial.dealbreakers.mobility}
+            selected={draft.mobility} existing={snapshot.dealbreakers.mobility}
             onToggle={(flag) => toggleFlag("mobility", flag)} />
           <fieldset className="onboarding-walking">
             <legend>Comfortable walking distance between stops</legend>
@@ -265,8 +267,16 @@ export function OnboardingWizard({ tripId, initial, successHref }: {
       )}
 
       <div className="onboarding-nav">
-        <button type="button" className="secondary-button" disabled={pending || stepIndex === 0}
-          onClick={() => setStepIndex((index) => Math.max(0, index - 1))}>
+        <button type="button" className="secondary-button"
+          disabled={pending || (mode === "full" && stepIndex === 0)}
+          onClick={() => {
+            if (mode === "quick" && stepIndex === 0) {
+              setMode("full");
+              setStepIndex(0);
+            } else {
+              setStepIndex((index) => Math.max(0, index - 1));
+            }
+          }}>
           Back
         </button>
         {isLast ? (
@@ -304,7 +314,10 @@ function ChipGroup({ title, flags, labels, selected, existing, onToggle }: {
             <button key={flag} type="button" className="flag-chip"
               aria-pressed={confirmed || selected.has(flag)}
               disabled={locked}
-              title={confirmed ? "Already set — manage it on the trip dashboard"
+              title={confirmed
+                ? (title === "Dietary"
+                    ? "Already set — remove it under Dietary conditions on the trip dashboard"
+                    : "Already set — removing this needs constraint review, coming with Task 1.3")
                 : pending ? "Suggested — review coming soon" : undefined}
               onClick={() => onToggle(flag)}>
               {labels[flag]}{pending ? " (suggested)" : ""}

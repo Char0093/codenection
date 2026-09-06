@@ -278,6 +278,11 @@ Implemented 2026-09-06 (`docs/superpowers/specs/2026-09-06-onboarding-survey-sli
   `app/trips/[tripId]/onboarding/page.tsx`, and a `components/travel-dna-nudge.tsx`
   banner shown on the dashboard and workspace while `onboarding_completed_at` is null
   (per-trip `sessionStorage` dismissal).
+- Chat-derived signals stay separated from the survey's own fields: production constraint
+  creation goes through `setDietaryConstraint` (`app/actions/constraints.ts`) or the
+  `submit_onboarding` RPC, with their severity maps locked together by a database test.
+  No production application path outside `app/actions/onboarding.ts` writes
+  `traveler_profiles`, so chat-derived signals cannot modify survey fields.
 - Tests: `tests/domain/onboarding.test.ts`, `tests/database/onboarding-rls.test.ts`
   (schema, CHECK, grants, composite FK, and full RPC behavior incl. atomic rollback,
   RPC-side validation, and a per-flag severity-sync check against
