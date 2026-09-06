@@ -72,3 +72,34 @@ export const tripInputSchema = z.strictObject({
 });
 
 export type TripInput = z.infer<typeof tripInputSchema>;
+
+// --- Trip groups (spec 2026-09-06-first-login-travel-dna-chat-groups-design.md) ---
+//
+// A "trip group" is just a `trips` row — there is no separate chat-groups model. It is
+// created with a name only; destination and dates stay null until planning begins (§2.3),
+// and the group is `draft` until it has both (§3.3). Generation/scheduling re-check `ready`
+// server-side and in the database; `isTripReady` is the shared pure predicate.
+
+export const tripGroupNameSchema = z
+  .string()
+  .trim()
+  .min(1, "A group name is required.")
+  .max(120)
+  .refine(hasNoLikelySensitiveData, ordinaryTextMessage);
+
+export const createTripGroupSchema = z.strictObject({ name: tripGroupNameSchema });
+export type CreateTripGroupInput = z.infer<typeof createTripGroupSchema>;
+
+export const tripStatusSchema = z.enum(["draft", "ready"]);
+export type TripStatus = z.infer<typeof tripStatusSchema>;
+
+export function isTripReady(fields: {
+  destinationName: string | null;
+  startDate: string | null;
+  endDate: string | null;
+}): boolean {
+  const { destinationName, startDate, endDate } = fields;
+  if (!destinationName || !destinationName.trim()) return false;
+  if (!startDate || !endDate) return false;
+  return validateTripDates(startDate, endDate) === null;
+}

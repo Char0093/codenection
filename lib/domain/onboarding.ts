@@ -1,3 +1,8 @@
+// Travel DNA is a global, per-user preference baseline collected once at first login
+// (spec 2026-09-06-first-login-travel-dna-chat-groups-design.md). It carries no trip
+// scope: these contracts describe the answers and the CAS-checked submission body only.
+// The five answer groups, the epsilon grid, strict objects, vocabulary caps, and the
+// Quick-mode defaults are load-bearing — keep them locked with tests, not prose.
 import { z } from "zod";
 import { budgetTierSchema, paceLevelSchema, type BudgetTier, type PaceLevel } from "@/lib/domain/trip";
 import {

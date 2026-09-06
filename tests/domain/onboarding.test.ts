@@ -45,6 +45,12 @@ describe("onboardingAnswersSchema", () => {
     const parsed = onboardingAnswersSchema.parse({ mode: "quick", dealbreakers, walkingCapM: null, budgetLean: "budget" });
     expect(parsed.mode).toBe("quick");
   });
+  it("accepts the walking-cap boundary values 0 and 50000", () => {
+    for (const walkingCapM of [0, 50000]) {
+      expect(onboardingAnswersSchema.parse({ mode: "quick", dealbreakers, walkingCapM, budgetLean: "standard" }).mode).toBe("quick");
+    }
+    expect(onboardingAnswersSchema.safeParse({ mode: "quick", dealbreakers, walkingCapM: 50001, budgetLean: "standard" }).success).toBe(false);
+  });
   it("rejects a quick submission carrying a full-only key", () => {
     expect(() => onboardingAnswersSchema.parse({
       mode: "quick", dealbreakers, walkingCapM: null, budgetLean: "budget", surpriseDial: 3,

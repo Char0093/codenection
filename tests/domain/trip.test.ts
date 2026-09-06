@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { tripInputSchema, validateTripDates } from "@/lib/domain/trip";
+import { tripInputSchema, validateTripDates, createTripGroupSchema, isTripReady } from "@/lib/domain/trip";
 
 const input = {
   destinationName: " George Town ", startDate: "2026-10-03", endDate: "2026-10-05",
@@ -53,5 +53,35 @@ describe("validateTripDates", () => {
   it("rejects reversed and oversized ranges", () => {
     expect(validateTripDates("2026-10-04", "2026-10-03")).toContain("end date");
     expect(validateTripDates("2026-10-01", "2026-10-15")).toContain("14 days");
+  });
+});
+
+describe("createTripGroupSchema", () => {
+  it("trims a group name and rejects blank, too long, or extra keys", () => {
+    expect(createTripGroupSchema.parse({ name: "  Melaka crew  " })).toEqual({ name: "Melaka crew" });
+    expect(createTripGroupSchema.safeParse({ name: "   " }).success).toBe(false);
+    expect(createTripGroupSchema.safeParse({ name: "x".repeat(121) }).success).toBe(false);
+    expect(createTripGroupSchema.safeParse({ name: "ok", destinationName: "Melaka" }).success).toBe(false);
+  });
+  it("applies the sensitive-data guard to the group name", () => {
+    const result = createTripGroupSchema.safeParse({ name: "Trip for people with diabetes" });
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.message).toContain("sensitive personal");
+  });
+});
+
+describe("isTripReady", () => {
+  it("is true only with a destination and a valid date range", () => {
+    expect(isTripReady({ destinationName: "Melaka", startDate: "2026-12-12", endDate: "2026-12-14" })).toBe(true);
+  });
+  it.each([
+    { destinationName: null, startDate: "2026-12-12", endDate: "2026-12-14" },
+    { destinationName: "  ", startDate: "2026-12-12", endDate: "2026-12-14" },
+    { destinationName: "Melaka", startDate: null, endDate: "2026-12-14" },
+    { destinationName: "Melaka", startDate: "2026-12-12", endDate: null },
+    { destinationName: "Melaka", startDate: "2026-12-14", endDate: "2026-12-12" },
+    { destinationName: "Melaka", startDate: "2026-13-01", endDate: "2026-13-02" },
+  ])("is false while draft or invalid %j", (fields) => {
+    expect(isTripReady(fields)).toBe(false);
   });
 });
