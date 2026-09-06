@@ -1,5 +1,11 @@
 # Onboarding survey (Travel DNA) — slice 1 design
 
+> **Historical implementation record (delivered 2026-09-06).** This trip-scoped slice remains
+> documented for migration and compatibility work, but its entry-flow and profile-ownership
+> decisions are superseded by
+> [`2026-09-06-first-login-travel-dna-chat-groups-design.md`](./2026-09-06-first-login-travel-dna-chat-groups-design.md).
+> New work must follow the global first-login design and its implementation plan.
+
 > Status: approved for implementation planning, 2026-09-06.
 > Binding specification: `Implementation_Plan.md` §II-a ("Hybrid preference model")
 > and Task 1.6 ("Onboarding questionnaire (Travel DNA)"). This document does **not**

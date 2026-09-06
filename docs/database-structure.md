@@ -6,7 +6,8 @@ This file defines the MVP Supabase/Postgres structure for the Travel Planner app
 
 ## Core Principles
 
-- Every domain row belongs to a trip directly or through a trip-owned parent.
+- Trip activity belongs to a trip directly or through a trip-owned parent. The explicit exception is
+  reusable Travel DNA, which belongs directly to `auth.users.id` and is self-only.
 - `auth.users.id` is the source user identity.
 - `trip_members.id` is the source traveler identity inside a trip.
 - Sensitive profile data stays in `member_profiles`, protected by RLS.
@@ -32,6 +33,60 @@ Recommended Postgres enums:
 
 ## Tables
 
+### `user_travel_profiles`
+
+One global Travel DNA row per authenticated user. This is the canonical first-login baseline, not a
+trip preference form.
+
+Required columns:
+
+- `user_id uuid primary key references auth.users(id) on delete cascade`
+- `travel_vibe traveler_travel_vibe null`
+- `budget_lean budget_tier null`
+- `pace pace_level not null default 'balanced'`
+- `mobility_threshold_m int null`
+- `serendipity_epsilon numeric not null default 0.15`
+- `social_role traveler_social_role null`
+- `interest_vector vector(64) null`
+- `onboarding_completed_at timestamptz null`
+- `profile_revision bigint not null default 1`
+- `created_at timestamptz not null default now()`
+- `updated_at timestamptz not null default now()`
+
+Rules:
+
+- Only the owning user can read or write the raw row; server planning uses narrow projections.
+- Chat inference never overwrites explicit answers.
+- Completion is revision-checked and transactional.
+- A completed row requires non-null `budget_lean` and an epsilon on the five-value grid
+  (`0`, `0.075`, `0.15`, `0.225`, `0.3`).
+
+### `user_travel_constraints`
+
+Typed, confirmed global requirements reusable across trips.
+
+Required columns:
+
+- `id uuid primary key default gen_random_uuid()`
+- `user_id uuid not null references auth.users(id) on delete cascade`
+- `kind text not null`
+- `flag text not null`
+- `severity constraint_severity not null`
+- `source text not null default 'manual'`
+- `confirmed_at timestamptz not null`
+- `supersedes_id uuid null references user_travel_constraints(id)`
+- `retired_at timestamptz null`
+- `created_at timestamptz not null default now()`
+
+Rules:
+
+- RLS is self-only.
+- An active row has `retired_at is null`. A revision retires the previous active row and inserts a
+  replacement whose `supersedes_id` points to it, in one transaction. Removing a requirement retires
+  it without inserting a replacement.
+- Enforce at most one active row per `(user_id, kind, flag)` with a partial unique index.
+- The trip hard-constraint gate combines active global requirements with active trip-specific rows.
+
 ### `trips`
 
 Trip-level setup and defaults.
@@ -41,10 +96,11 @@ Required columns:
 - `id uuid primary key default gen_random_uuid()`
 - `owner_user_id uuid not null references auth.users(id)`
 - `name text not null`
-- `destination_name text not null`
+- `setup_status text not null default 'draft'`
+- `destination_name text null`
 - `destination_place_id text null`
-- `start_date date not null`
-- `end_date date not null`
+- `start_date date null`
+- `end_date date null`
 - `budget_tier budget_tier not null default 'standard'`
 - `pace pace_level not null default 'balanced'`
 - `base_currency char(3) not null default 'USD'`
@@ -54,6 +110,13 @@ Required columns:
 - `notes text null`
 - `created_at timestamptz not null default now()`
 - `updated_at timestamptz not null default now()`
+
+Rules:
+
+- A name-only draft supports chat immediately.
+- Destination and dates are required before generation, enforced server-side when transitioning out
+  of draft/setup rather than by initial row nullability.
+- One `trips` row is one chat group; no parallel `chat_groups` table is introduced.
 
 ### `trip_members`
 
@@ -355,6 +418,7 @@ Required columns:
 
 ## Recommended Indexes
 
+- `user_travel_constraints(user_id, kind, flag)`
 - `trip_members(trip_id)`
 - `trip_members(user_id)`
 - `member_profiles(trip_member_id)`
@@ -380,6 +444,8 @@ Enable RLS on all application tables.
 
 Baseline access rules:
 
+- A user can read and update only their own `user_travel_profiles` and
+  `user_travel_constraints` rows; trip membership never grants raw cross-user profile access.
 - A user can read a trip if they are linked to a `trip_members` row for that trip.
 - A user can update trip setup only if their `trip_members.role` is `owner` or `planner`.
 - A user can read member display data for members in their trips.
@@ -391,19 +457,20 @@ Baseline access rules:
 ## Migration Order
 
 1. Enable extensions and enums.
-2. Create `trips`.
-3. Create `trip_members`.
-4. Create `member_profiles`.
-5. Create `destinations`.
-6. Create `itinerary_days` and `itinerary_items`.
-7. Create `constraints`.
-8. Create `subgroups`, `subgroup_members`, and `split_sessions`.
-9. Create `expenses`, `expense_shares`, and `settlements`.
-10. Create `chat_messages` and `provider_events`.
-11. Create agentic support tables from `docs/agentic-architecture.md` if the agentic layer is in scope.
-12. Add indexes.
-13. Enable RLS and policies.
-14. Add update timestamp triggers.
+2. Create `user_travel_profiles` and `user_travel_constraints` with self-only RLS.
+3. Create draft-capable `trips`.
+4. Create `trip_members`.
+5. Create `member_profiles`.
+6. Create `destinations`.
+7. Create `itinerary_days` and `itinerary_items`.
+8. Create `constraints`.
+9. Create `subgroups`, `subgroup_members`, and `split_sessions`.
+10. Create `expenses`, `expense_shares`, and `settlements`.
+11. Create `chat_messages` and `provider_events`.
+12. Create agentic support tables from `docs/agentic-architecture.md` if the agentic layer is in scope.
+13. Add indexes.
+14. Enable RLS and policies.
+15. Add update timestamp triggers.
 
 ## Out of Scope for MVP Schema
 

@@ -95,11 +95,13 @@ The reference scenario is a four-person friend group on a 3-day city trip in Mal
 
 ## II-a. Hybrid preference model: compact survey and contextual chat learning
 
-A first-launch survey provides a small, reliable baseline; it is not a personality test and does
-not try to predict the whole trip. The full flow is five one-question screens, targeted at under 60
-seconds per member. A "Quick mode" captures dealbreakers and budget only, then applies visible,
-editable defaults. When a group leader invites members, each invite carries the same prompt, so
-onboarding scales with the group rather than being a solo setup step.
+A first-login survey provides a small, reusable baseline before the user enters any trip. It asks
+about the person's general travel style, not what they want for one specific trip. The full flow is
+five one-question screens, targeted at under 60 seconds. A "Quick mode" captures dealbreakers and
+budget only, then applies visible, editable defaults. Completion redirects to `/chats`, the
+authenticated home where the user can create or open a trip chat group. Returning users skip the
+gate and can edit **My Travel Preferences** later. Invitations do not own onboarding; an invited
+user completes the same account-level survey after sign-in if they have not already done so.
 
 Chat then supplies the changing part of preference discovery. Messages, pasted chat, voice
 transcripts, and shared public-link captions may produce **expiring discovery signals** such as
@@ -119,10 +121,11 @@ requests outrank older inferred interests, and the survey remains the fallback a
 signals expire. The UI must explain material recommendations with both the signal and its source,
 for example: "Suggested because the group recently mentioned architecture and cafes."
 
-Two visibility tiers apply throughout: a **public** answer is visible to the rest of the group for
-coordination; a **private** answer (the social-role step, by default) is visible only to the
-arbiter logic server-side, never returned to another member's client -- the same social-face
-protection Task 1.5's blind-preference ballot already gives budget answers.
+Global Travel DNA rows are self-only. Planning code receives only the narrow derived values needed
+for the active trip; another member never receives the raw profile. A **private** answer such as
+social role remains visible only to the owning user and authorized server-side arbiter logic. Any
+group-visible coordination summary must be aggregate and non-attributable -- the same social-face
+protection Task 1.5's blind-preference ballot gives budget answers.
 
 Survey completion never freezes a member's profile. An always-available **My Travel Preferences**
 screen lets the member revisit individual answers without repeating the whole wizard. Stable soft
@@ -141,17 +144,18 @@ privacy/deletion request still hard-deletes their profile and constraint data un
 
 | Step | UI | Feeds | Mechanism |
 | --- | --- | --- | --- |
-| 1. Travel vibe | Single-select image cards: heritage, food, nature, urban. | Module 5 exploration engine | Seeds the stable baseline of `interest_vector`; chat-derived discovery signals may temporarily reweight it. |
-| 2. Dealbreaker vault | Multi-select toggle chips: halal, vegetarian/vegan, named allergens, mobility access, a walking-distance cap. | Task 1.1 `trip_constraints` | Each chip is a direct, self-confirmed write to the existing typed dietary/mobility enum -- the same self-confirmation model the dietary picker already uses, not a second constraint system. |
-| 3. Energy & wallet | Two sliders: budget lean, pace. | Module 2 Knapsack; the existing `pace_level` enum | Pace reuses the trip's existing relaxed/balanced/active/intense scale and `paceDailyDurationCaps` rather than inventing a second one; budget seeds the member's personal cost-tier lean inside the group's shared Knapsack objective. |
-| 4. Social role | Single-select carousel (Navigator, Chronicler, Gourmand, Go-with-the-flow, Negotiator); private by default. | Level 0 jigsaw minimax regret | A per-member regret-weight multiplier on `evaluateTeam`'s scoring -- see the Task 3.0 addendum below. |
-| 5. Surprise dial | A single 1-5 dial. | Module 5 `ε`-greedy recommender | Sets the per-trip `ε` (already spec'd in Task 5.1 as "default 0.2, configurable per trip") directly from the dial position, mapped linearly across 0.0-0.3. |
+| 1. Travel vibe | Single-select image cards: heritage, food, nature, urban. | Module 5 exploration engine | Seeds the global stable baseline in `user_travel_profiles`; trip chat signals may temporarily reweight it. |
+| 2. Dealbreaker vault | Multi-select toggle chips: halal, vegetarian/vegan, named allergens, mobility access, a walking-distance cap. | Global `user_travel_constraints` plus Task 1.1 trip overrides | Each chip is a direct, self-confirmed typed requirement. The trip gate evaluates the union of the user's global confirmed requirements and any trip-specific confirmed rows. |
+| 3. Energy & wallet | Two sliders: budget lean, pace. | Module 2 Knapsack; the existing `pace_level` enum | Pace reuses relaxed/balanced/active/intense and `paceDailyDurationCaps`; budget is a reusable personal lean that may be overridden for one trip. |
+| 4. Social role | Single-select carousel (Navigator, Chronicler, Gourmand, Go-with-the-flow, Negotiator); private by default. | Level 0 jigsaw minimax regret | Stores a private global baseline used only through a narrow server-side projection; see the Task 3.0 addendum below. |
+| 5. Surprise dial | A single 1-5 dial. | Module 5 `ε`-greedy recommender | Sets the user's global surprise-tolerance default, mapped linearly across 0.0-0.3. A trip may explicitly override it without changing the global answer. |
 
 **Group Conductor:** once three or more members complete the questionnaire, the leader sees an
 aggregate "Harmony Compass" -- overlapping vibe choices, a pace-mismatch warning ("2 Marathoners
 vs. 1 Snail -- expect a Level 2 micro-split"), and a consensus forecast. This is a read-only
-summary over already-confirmed `trip_constraints` and `traveler_profiles` rows; it opens no new
-write path and no new trust boundary.
+summary over narrow projections of global profiles plus confirmed global and trip-specific
+constraints; it never returns raw cross-user profile rows and opens no new write path or trust
+boundary.
 
 **Safety note:** none of this bypasses [Section VII](#vii-hard-constraint-gate). The dealbreaker
 vault writes the exact typed-enum rows the hard-constraint gate already enforces, not a second,
@@ -336,9 +340,20 @@ It does not call the private optimizer or Gemini directly and does not embed the
 
 ## VI. Persistence model
 
-New tables extend the existing `trips` / `trip_members` / itinerary schema. All are trip-scoped with RLS mirroring the current policies (`can_view_trip`, `can_manage_trip`, owner-only activation). Requires the `postgis` and `vector` extensions.
+Most domain tables extend the existing `trips` / `trip_members` / itinerary schema and remain
+trip-scoped with RLS mirroring the current policies (`can_view_trip`, `can_manage_trip`, owner-only
+activation). The explicit exception is the signed-in user's reusable Travel DNA, which is keyed to
+`auth.users.id` and self-only. Requires the `postgis` and `vector` extensions.
 
-- `traveler_profiles` — per member: `interest_vector vector(64)` (the explicit survey baseline), `budget_daily_cap numeric`, `budget_total_cap numeric`, `pace`, `mobility_threshold_m int`, `serendipity_epsilon numeric` (0.0-0.3, Task 1.6's surprise dial), `social_role` enum (Task 1.6; private -- never returned in a cross-member API response). Chat inference never overwrites these fields. **No free-text medical data.**
+- `user_travel_profiles` — one self-only row per `auth.users.id`: the explicit global survey
+  baseline (`travel_vibe`, `budget_lean`, `pace`, `mobility_threshold_m`,
+  `serendipity_epsilon`, private `social_role`, `interest_vector`, completion timestamp, and
+  revision). Chat inference never overwrites these fields. **No free-text medical data.**
+- `user_travel_constraints` — self-confirmed, typed global dietary, religious-access, and mobility
+  requirements. Ordinary edits preserve supersession/audit history; only an explicit privacy
+  deletion hard-deletes them.
+- `traveler_profiles` — compatibility and optional per-trip override rows during migration from the
+  delivered trip-scoped onboarding slice. They are not the canonical first-login profile.
 - `trip_interest_signals` — derived discovery tags from chat, pasted text, voice, or public-link captions: `trip_id`, nullable `trip_member_id`, typed `tag`, `source`, `confidence`, `scope` (`moment` | `day` | `trip`), `source_message_id` when applicable, `expires_at`, and dismissal metadata. Store the derived tag and a short user-visible source label, not copied raw third-party content. Members can inspect and dismiss their own inferred signals; RLS prevents cross-trip access.
 - `trip_constraints` — hard constraints as typed rows: `kind` (`dietary` | `religious_access` | `mobility`), `flag` (enum), `severity` (`severe` | `standard`), `source` (`chat` | `voice` | `social` | `manual`), `confirmed_by`, `confirmed_at`. Nothing is enforced until `confirmed_at` is set.
 - `trip_day_windows` — one row per participating member and trip-local date: `trip_member_id`, `local_date`, `available_from time`, `preferred_start time`, `finish_by time`, `timezone text`, and `revision`, unique on `(trip_member_id, local_date)`. `available_from` / `finish_by` are hard scheduling bounds; `preferred_start` is a visible soft preference. Defaults are explicit and editable before generation, never inferred silently from pace or browser timezone.
@@ -372,7 +387,15 @@ Gate output is `pass` | `warn` (needs explicit human confirmation) | `fail` (nev
 ## VIII. Complete execution lifecycle
 
 ```text
-[Group-chat setup]
+[First login and Travel DNA]
+- Each new user completes the account-level survey once, before trip UI.
+- Completion redirects to /chats; returning users go there directly.
+       │
+       ▼
+[Trip chat-group setup]
+- Create or open one chat group; each group is exactly one `trips` row.
+- The selected group's history is scoped by `chat_messages.trip_id`.
+- Invite UI is deferred; future acceptance creates a `trip_members` row.
 Amira (Halal, budget-flexible) · Ben (peanut allergy, RM150/day) ·
 Chloe (photography) · Danish (heritage, student RM150/day)
        │
@@ -503,24 +526,36 @@ Public confirmation (Task 1.3) works for facts a member is willing to say out lo
 
 ### Task 1.6: Onboarding questionnaire (Travel DNA)
 
-**Files:** create `supabase/migrations/2026090X0006_onboarding_profile.sql`, `components/onboarding-wizard.tsx`, `components/travel-preferences-editor.tsx`, `app/actions/onboarding.ts`, `app/trips/[tripId]/onboarding/page.tsx`, `app/trips/[tripId]/preferences/page.tsx`, `app/api/trips/[tripId]/onboarding/summary/route.ts`, `app/api/trips/[tripId]/preferences/route.ts`, `tests/components/onboarding-wizard.test.tsx`, `tests/components/travel-preferences-editor.test.tsx`, `tests/database/onboarding-rls.test.ts`.
+**Current direction:** the delivered trip-scoped slice is preserved as compatibility history. New
+work follows
+`docs/superpowers/specs/2026-09-06-first-login-travel-dna-chat-groups-design.md` and
+`docs/superpowers/plans/2026-09-06-first-login-travel-dna-chat-groups.md`.
+
+**Files:** create `supabase/migrations/202609060002_user_travel_profile_chat_groups.sql`,
+`app/onboarding/page.tsx`, `app/chats/page.tsx`, `app/api/onboarding/route.ts`,
+`app/api/chats/route.ts`; modify the onboarding domain/actions/wizard, authenticated entry guard,
+planning projections, and preferences editor; add domain, database, API, component, and browser
+tests.
 
 See [Section II-a](#ii-a-hybrid-preference-model-compact-survey-and-contextual-chat-learning) for the compact five-screen design and its
 mapping onto the modules above.
 
-- [ ] Five-step wizard plus a "Quick mode" toggle on step one (dealbreakers and budget only, the
-      rest defaulted); one primary interaction per screen, no free-text fields, under 60 seconds
-      to complete, and every default remains visible and editable later.
-- [ ] Steps 1, 3, and 5 write `traveler_profiles` (`interest_vector` seed, `pace`,
-      `serendipity_epsilon`); step 2 writes `trip_constraints` rows through the existing
-      self-confirmed path from Task 1.1, not a second constraint system; step 4 writes
-      `traveler_profiles.social_role`, defaulting to private.
+- [ ] Gate first authenticated entry on a global completion timestamp: incomplete users go to
+      `/onboarding`; completed users and successful submissions go to `/chats`. Login, auth callback,
+      onboarding, and onboarding API paths are exempt from redirect loops.
+- [ ] Keep the five-step wizard and Quick mode, but phrase every answer as the user's general travel
+      baseline. No trip id, destination, dates, or trip name appears in the global onboarding
+      contract or page.
+- [ ] Steps 1, 3, 4, and 5 write the self-only `user_travel_profiles` row. Step 2 writes typed,
+      self-confirmed `user_travel_constraints`; it does not create trip rows. The hard gate later
+      evaluates global confirmed requirements together with explicit trip-specific overrides.
 - [ ] `pace` reuses the trip's existing `pace_level` enum. This step does not introduce a second
       pace scale.
-- [ ] `social_role` is never included in any API response readable by a member other than its
-      owner; only server-side jigsaw evaluation logic (Task 3.0's regret-weight addendum) reads it.
-- [ ] Redoing the questionnaire overwrites the previous answer per field; it never accumulates
-      history. Chat-derived discovery signals never write to or overwrite questionnaire fields.
+- [ ] `social_role` and raw global profile rows are never included in another member's response;
+      server planning and jigsaw code receives only a narrow derived projection.
+- [ ] Use a server-managed profile revision and transactional RPC so stale edits fail and no partial
+      completion is possible. Redoing soft answers replaces values; safety edits preserve
+      supersession history. Chat-derived discovery signals never write questionnaire fields.
 - [ ] Provide an always-available **My Travel Preferences** editor after onboarding. A member can
       change one field without repeating the wizard; soft preference writes are revision-checked,
       idempotent upserts and affect only subsequent ranking/generation by default.
@@ -534,21 +569,28 @@ mapping onto the modules above.
       schedule checks and creates a pending minimal-diff proposal using Task 3.5's confirmation
       primitive. A stricter safety edit immediately flags affected active cards as requiring review,
       but never silently removes, replaces, or activates an item.
-- [ ] Realtime announces a generic requirements/preferences change to the group without exposing
-      private budget caps, `social_role`, or medical detail beyond confirmed typed flags. Only the
-      owning member sees their complete fields marked private.
+- [ ] Backfill each existing user deterministically from their most recently completed
+      `traveler_profiles` row, keeping old trip-scoped rows available during a compatibility window.
+      Backfill only clearly general, confirmed manual constraints.
+- [ ] Realtime may announce a generic requirements/preferences change to an active trip without
+      exposing private budget caps, `social_role`, or medical detail beyond the confirmed typed
+      flags required for safe group planning.
 - [ ] "Group Conductor" summary endpoint: vibe overlap, a pace-mismatch flag (both an
       `active`/`intense` and a `relaxed` pace present among confirmed members), and a consensus
       percentage, computed read-only from already-confirmed rows.
-- [ ] Tests: quick mode skips steps 3-5 with sane defaults, each step's answer lands in the field
-      the Section II-a table specifies, `social_role` never appears in a cross-member response,
-      redoing the questionnaire replaces rather than duplicates rows, the pace-mismatch flag fires
-      only when both extremes are present among confirmed members; editing one soft preference
-      changes future ranking without mutating the active itinerary; a safety edit requires
-      confirmation and preserves its audit trail; concurrent stale edits fail; itinerary review
-      creates a pending diff; and group events contain no private value.
+- [ ] Tests: first login redirects to onboarding; completion redirects to chat-group home; returning
+      users skip onboarding; deep links resume only after authorization; Quick mode stores documented
+      defaults; cross-user reads fail; backfill tie-breaking is deterministic; stale revisions roll
+      back atomically; safety edits preserve their audit trail; and planning combines global defaults
+      with trip-specific overrides without mutating the global profile.
 
-**Phase 1 exit criteria:** the compact survey establishes an explicit, later-editable baseline; ingested chat, voice, and social input produce expiring discovery signals and candidate constraints; a chat message about live jazz changes attraction ranking without changing the stored survey vector; a day-scoped indoor request expires after that day; dismissed inferred interests do not reappear from the same source; only human-confirmed constraints are enforced; the gate rejects a peanut-risk food POI and an unverified-halal POI in an automated test; a blind ballot set with one `BUDGET` vote locks the group ceiling to `BUDGET` without exposing who voted it; a completed onboarding questionnaire seeds `interest_vector`, `pace`, `serendipity_epsilon`, and a private `social_role` without leaking the latter to other members; editing a soft preference changes future suggestions without silently changing the active itinerary, while reviewing that itinerary creates only a confirmable pending diff; the reference-corridor seed data loads cleanly; the open baseline items above are closed.
+**Phase 1 exit criteria:** first login establishes one explicit, later-editable global baseline before
+trip UI and lands the user on `/chats`; ingested trip chat, voice, and social input produce expiring
+discovery signals and candidate constraints; a live-jazz message changes attraction ranking without
+changing the global survey vector; only human-confirmed constraints are enforced; the gate evaluates
+global requirements plus trip overrides and rejects unsafe POIs; private fields never leak; editing a
+soft preference changes future suggestions without silently changing an active itinerary; the
+reference-corridor seed loads cleanly; and the open baseline items above are closed.
 
 ### Task 1.7: Daily planning windows before generation
 
@@ -633,12 +675,32 @@ with a useful message.
 **Priority: high.** This is the product's only interface. Every later module surfaces through it, so
 the realtime, authorization, and confirmation primitives established here are reused everywhere.
 
-The workspace lives at `/trips/[tripId]/workspace` as a dual-layer contextual surface: the **top
+`/chats` is the authenticated product home. It lists the user's trip chat groups and creates a
+name-only draft trip; a chat group is not a separate entity or table -- it is one `trips` row, and
+its history is scoped by `chat_messages.trip_id`. Selecting one opens `/trips/[tripId]/chat`.
+
+The selected-trip planning workspace lives at `/trips/[tripId]/workspace` as a dual-layer contextual surface: the **top
 60%** is the Google 3D/vector spatial map, the **bottom 40%** is the realtime chatroom and action sheet.
 Pre-trip mode replaces the whole surface with the full-screen **day builder**: a categorized POI
 choice pool beside one selected date's 24-hour timeline. Only one date is rendered at a time; a
 date strip switches days without discarding edits. The pool is a desktop side panel and collapses
 to a bottom drawer on narrow screens. See `docs/features/collaborative-workspace.md`.
+
+### Task 3.0a: Chat-group home and draft trip creation
+
+**Files:** create `app/chats/page.tsx`, chat-group list/create components,
+`app/api/chats/route.ts`, and tests; modify `trips` to support an explicit draft/setup state.
+
+- [ ] List only trips in which the current user has membership, ordered by latest message or trip
+      activity, with a clear empty state and **Create chat group** action.
+- [ ] Create a name-only draft `trips` row plus its owner `trip_members` row transactionally, then
+      open `/trips/[tripId]/chat`. Destination and dates become required only before generation.
+- [ ] Keep one shared selected-trip navigation for Chat, Plan, and Timeline. Do not render a duplicate
+      top-level Timeline/Jigsaw link when Timeline already exists in the left sidebar.
+- [ ] Defer invitation UI and token delivery. The future boundary remains trip-scoped: accepting a
+      single-use, expiring invite creates one `trip_members` row with the selected role.
+- [ ] Tests: membership isolation, empty/list states, atomic create, reload persistence, draft trips
+      blocked from generation, and no duplicate selected-trip navigation targets.
 
 ### Task 3.0: Level 0 bargaining engine and jigsaw panel — DELIVERED
 
@@ -878,7 +940,7 @@ airplane mode still renders the last-synced itinerary and emergency contacts.
 
 **Files:** create `lib/serendipity/recommender.ts`, `lib/serendipity/diversity.ts`, `tests/serendipity/*.test.ts`.
 
-- [ ] Exploitation set: rank POIs against the explicit survey baseline plus active, non-dismissed contextual discovery signals from Task 1.2. A current-turn request receives the highest soft-preference weight; expired signals contribute zero. Exploration set: sample high-variance POIs (low baseline similarity, distinct tags, still gate-`pass`) with probability ε, default 0.2 and configurable per trip.
+- [ ] Exploitation set: rank POIs against the explicit global survey baseline plus active, non-dismissed contextual discovery signals from Task 1.2. A current-turn request receives the highest soft-preference weight; expired signals contribute zero. Exploration set: sample high-variance POIs (low baseline similarity, distinct tags, still gate-`pass`) with probability ε from the user's global surprise tolerance unless the active trip explicitly overrides it.
 - [ ] Every exploration candidate runs through the [gate](#vii-hard-constraint-gate); a `fail` is dropped and resampled, never surfaced with a warning.
 - [ ] Diversity metric plus dedupe against `serendipity_log` history so the same surprise is not re-shown.
 - [ ] Deterministic under a seed. Tests cover ε=0 (pure exploitation), ε=1 (all exploration, still constraint-safe), dedupe, and an allergen-risk POI being filtered out of the exploration pool.

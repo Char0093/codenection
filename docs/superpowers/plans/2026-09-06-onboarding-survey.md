@@ -1,5 +1,11 @@
 # Onboarding Survey (Travel DNA) — Slice 1 Implementation Plan
 
+> **Historical implementation record (completed).** Do not use this plan for new entry-flow work.
+> The global first-login Travel DNA and trip chat-group migration is now owned by
+> [`2026-09-06-first-login-travel-dna-chat-groups.md`](./2026-09-06-first-login-travel-dna-chat-groups.md),
+> with its canonical design in
+> [`../specs/2026-09-06-first-login-travel-dna-chat-groups-design.md`](../specs/2026-09-06-first-login-travel-dna-chat-groups-design.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Let a trip member complete a compact five-screen travel-preference survey (with a Quick mode) whose answers persist atomically across `traveler_profiles` and `trip_constraints`, and nudge members who have not completed it.

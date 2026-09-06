@@ -1,6 +1,6 @@
 # WanderSync Implementation Status
 
-> Snapshot: 2026-09-05. `Implementation_Plan.md` remains the binding specification. This file
+> Snapshot: 2026-09-06. `Implementation_Plan.md` remains the binding specification. This file
 > records what the repository currently implements so the next development agent can select work
 > without relying on the plan's stale checkboxes.
 
@@ -20,9 +20,9 @@
 | Area | Status | Summary |
 | --- | --- | --- |
 | Delivered foundation | Delivered locally | Auth, trip CRUD, Gemini itinerary proposals, deterministic schedule validation, proposal confirmation, RLS, revisions, and rate reservations. |
-| Phase 1: preferences and safety | Partial | Full typed constraint schema, `traveler_profiles`/`poi_catalog` with RLS, 24 (of 40-50) researched-and-cited seed POIs, the deterministic hard-constraint gate (wired into Gemini proposal validation), and constraint-aware POI grounding (Task 1.1/5.x pulled forward) now exist -- live-verified both blocking (no verified venue) and succeeding (a verified venue exists). Context extraction, hybrid preference signals, the compact survey, and pre-generation daily planning windows do not yet exist. Gate `warn`s are computed but not yet surfaced in the UI; `claimed`-status venues cannot yet be safely suggested pending that UI. |
+| Phase 1: preferences and safety | Partial | The typed constraint schema, trip-scoped onboarding slice, `poi_catalog`, deterministic hard-constraint gate, and constraint-aware POI grounding exist. Product direction now requires migrating onboarding to a global first-login Travel DNA profile with self-only constraints and deterministic backfill; that rework is designed but not implemented. Context extraction, hybrid preference signals, and pre-generation daily planning windows remain. Gate `warn`s are computed but not yet surfaced in the UI. |
 | Phase 2: optimizer and ledger | Not started, except math helper | No Python service, optimizer client, Knapsack solver, Redis integration, or receipt ledger persistence. |
-| Phase 3: collaborative workspace | Partial, substantial | Jigsaw engine, chat, assistant proposals, responsive workspace, and the full day builder exist: single-day timeline with a date switcher, categorized POI choice pool with descriptions/detail sheets, pool-to-timeline scheduling, and opening-hours-aware drop validation. Pending: applying migration `202609050012` and re-seeding on the hosted project, a live Google Places adapter (only the interface exists, so the pool is curated-only), travel-time estimates, presence, confirmation wiring, PWA behavior, and some synchronization details. |
+| Phase 3: collaborative workspace | Partial, substantial | Jigsaw engine, trip chat, assistant proposals, responsive workspace, and the day builder exist. The new `/chats` authenticated home, name-only draft group creation, `/trips/[tripId]/chat` entry route, and consolidated Chat/Plan/Timeline navigation are designed but not implemented. Invite delivery remains explicitly deferred. |
 | Phases 4–9 | Not started | Routing, split/merge execution, serendipity, on-site tools, self-healing, VQA, deployment, and full demo path remain. |
 | Phase 10: Android companion | Conditional, not started | Post-web Kotlin/Compose companion. It starts only after Phase 9, one stable API release, and demonstrated user demand. |
 
@@ -39,7 +39,7 @@
 | Retire `codex/phase-0-1` | Not done | Both local and `origin/codex/phase-0-1` branches still exist. | Delete/abandon the branch only when explicitly authorized; do not merge the Telegram work. |
 | GitHub Actions CI | Not started | No `.github/workflows/ci.yml`. | Add Node and future Python verification gates. |
 | Remove old `web/` scaffold and direct Phoenix dependency | Delivered | No `web/` directory and no direct `@supabase/phoenix` dependency. | Update the stale checkbox in the binding plan when plan status is reconciled. |
-| Local verification | Delivered | On 2026-09-05: 494 Vitest tests, 4 Playwright browser tests (desktop + mobile), `tsc --noEmit`, `eslint`, and `next build` all passed. | Re-run before relying on this if the harness or dependencies change. |
+| Local verification | Delivered | On 2026-09-06, after the documentation update and with the five restored onboarding source/test files present, `npm run lint`, `npm run typecheck`, all 773 tests, and `npm run build` passed. The earlier review ledger also records 99.45% statement coverage. | Browser and hosted multi-session gates remain separate. |
 
 ## Phase 1 — Intent, preferences, and hard constraints
 
@@ -257,6 +257,12 @@ Missing:
 
 ### Task 1.6 — Onboarding questionnaire (Travel DNA): Partial (slice 1 delivered)
 
+**Direction changed after delivery.** The implementation below is a trip-scoped compatibility slice,
+not the final entry flow. The approved design now requires one account-level first-login survey,
+followed by redirect to `/chats`; see
+`docs/superpowers/specs/2026-09-06-first-login-travel-dna-chat-groups-design.md` and
+`docs/superpowers/plans/2026-09-06-first-login-travel-dna-chat-groups.md`.
+
 Implemented 2026-09-06 (`docs/superpowers/specs/2026-09-06-onboarding-survey-slice-design.md`):
 
 - `202609060001_onboarding_profile.sql`: `traveler_profiles` gains `travel_vibe`,
@@ -289,6 +295,15 @@ Implemented 2026-09-06 (`docs/superpowers/specs/2026-09-06-onboarding-survey-sli
   `lib/domain/constraints.ts`), `tests/components/onboarding-wizard.test.tsx`,
   `tests/components/travel-dna-nudge.test.tsx`, `tests/components/workspace-client.test.tsx`,
   `tests/api/onboarding.test.ts`.
+- Delivery history: RED review tests landed in `d3a27c3`, fixes in `ca215f8`, and the final
+  evidence/status commit in `a5a4b89` (also `origin/main`). The whole-branch review reported no
+  Critical findings. Its four Important findings were fixed: constraint tooltips are kind-specific,
+  nudge state resets on trip changes, and the cross-member privacy and mid-loop rollback tests now
+  exercise the intended cases rather than passing vacuously.
+- The database-backed review verified cross-member profile-read denial, add-only constraint
+  enforcement, server-owned `profile_revision`, self-only RPC writes, and transactional rollback.
+  This does not replace the separate hosted multi-session/PostgREST acceptance gates elsewhere in
+  this status document.
 
 Deliberately deferred: the always-available **My Travel Preferences** editor and its
 route/API; the "Group Conductor" summary endpoint (needs a member-invite flow);
@@ -298,6 +313,16 @@ realtime requirements-changed announcements; the **Apply to future** /
 confirmed dealbreaker** — this slice's Step 2 is add-only, and the wizard points
 removals at the dashboard dietary picker (dietary) or a future constraint-review flow
 (religious-access, mobility).
+
+Required migration work (not started):
+
+- Add self-only `user_travel_profiles` and audit-preserving `user_travel_constraints`.
+- Backfill each user deterministically from their most recently completed trip profile; preserve
+  `traveler_profiles` as compatibility/read-migration input during the transition.
+- Move the wizard/API to `/onboarding` and `/api/onboarding`, remove trip framing, enforce the
+  first-login gate, and redirect completion to `/chats`.
+- Update planning to combine global defaults with trip-specific overrides through narrow server
+  projections; never return another user's raw global profile.
 
 ### Task 1.7 — Daily planning windows before generation: Not started
 
@@ -312,7 +337,7 @@ Missing:
 
 ### Phase 1 completion gate
 
-Claude should not mark Phase 1 complete until the survey baseline, contextual signals, constraint
+Development should not mark Phase 1 complete until the global survey baseline, contextual signals, constraint
 review, POI reference data, daily planning windows, and deterministic safety gate work together.
 The acceptance path must show that a live-jazz message changes attraction ranking while a severe
 peanut constraint still rejects an unsafe or unknown food POI, that a later soft-preference edit
@@ -329,6 +354,19 @@ each day's hard time bounds while explaining a material deviation from the prefe
 | Task 2.4 Receipt-OCR ledger | Partial foundation only | `lib/domain/debt-simplify.ts` implements equal splitting, balances, and simplified transfers. Expenses tables/RLS, OCR, confirmation, weighted/subgroup splitting, reversals, and ledger UI/API are missing. |
 
 ## Phase 3 — Collaborative workspace
+
+### Task 3.0a — Chat-group home and draft trip creation: Not started
+
+Approved direction:
+
+- `/chats` becomes the authenticated home after Travel DNA and lists membership-scoped trips.
+- One chat group is one `trips` row; no `chat_groups` table is planned.
+- Name-only draft creation opens `/trips/[tripId]/chat`; generation waits for valid destination and
+  dates.
+- Chat, Plan, and Timeline share one selected-trip sidebar without a duplicate top Timeline/Jigsaw
+  entry. Invitation mechanics remain deferred.
+
+See `docs/superpowers/specs/2026-09-06-first-login-travel-dna-chat-groups-design.md`.
 
 ### Task 3.0 — Bargaining engine and jigsaw panel: Delivered with addenda outstanding
 
@@ -647,20 +685,25 @@ in a production-like environment, one stable contract release, and evidence of m
    halal venues can be suggested and accepted safely; wire real numeric cost/distance data once
    Task 2.3 exists, so Budget/Mobility per-item enforcement stops being inert; grow `verified`-tier
    POI coverage, especially for Melaka, which currently has none.
-4. Implement Task 1.7's pre-generation daily planning windows, then the compact survey portion of
-   Task 1.6 and the candidate confirmation UI in Task 1.3.
-5. Implement Task 1.2 contextual chat extraction, expiry/dismissal, and the separate contextual
+4. Implement the approved first-login Travel DNA migration in dependency order: global schema/RPC,
+   deterministic backfill, auth gate, global wizard/API, then `/chats` and draft-group creation.
+   Keep the delivered trip-scoped onboarding available only for the planned compatibility window.
+5. Consolidate selected-trip Chat/Plan/Timeline navigation and remove duplicate top-level
+   Timeline/Jigsaw entry points. Keep invitation mechanics deferred.
+6. Implement Task 1.7's pre-generation daily planning windows and the candidate confirmation UI in
+   Task 1.3.
+7. Implement Task 1.2 contextual chat extraction, expiry/dismissal, and the separate contextual
    vector. Demonstrate that inference changes ranking but never changes confirmed facts.
-6. Complete Task 3.4's redesigned day builder: one-date switcher, categorized POI pool,
+8. Complete Task 3.4's redesigned day builder: one-date switcher, categorized POI pool,
    compact/full descriptions, opening-hours retrieval, and valid-drop enforcement while preserving
    the delivered calendar geometry and revision-checked editing core.
-7. Finish Task 3.2 presence and Task 3.5 confirmation/focus/touch gaps; resolve ordinary-member
+9. Finish Task 3.2 presence and Task 3.5 confirmation/focus/touch gaps; resolve ordinary-member
    assistant authorization in Task 3.3.
-8. Close hosted auth, PostgREST RLS, Realtime, race, and create-to-reload baseline checks; add CI.
-9. Build Phase 2's stateless optimizer boundary and Knapsack scheduler.
-10. Continue in dependency order: Phase 4 routing → Phase 5 discovery → Phase 6 on-site tools →
+10. Close hosted auth, PostgREST RLS, Realtime, race, and create-to-reload baseline checks; add CI.
+11. Build Phase 2's stateless optimizer boundary and Knapsack scheduler.
+12. Continue in dependency order: Phase 4 routing → Phase 5 discovery → Phase 6 on-site tools →
    Phase 7 healing → Phase 8 VQA → Phase 9 acceptance/deployment/demo.
-11. After the explicit Phase 10 start gate, harden shared client contracts before creating the
+13. After the explicit Phase 10 start gate, harden shared client contracts before creating the
     Android project; then ship the focused companion before considering planning/map parity.
 
 ## Instructions for the next agent

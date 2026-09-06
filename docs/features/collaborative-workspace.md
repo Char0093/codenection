@@ -2,13 +2,31 @@
 
 ## Purpose
 
-The workspace is the trip command center. It replaces the retired Telegram bot and Mini App with a
-native, web-based, multi-user surface inside the Next.js app. Groups coordinate, plan, and adapt in
-one place, with no second platform to install or link.
+The product opens on a chat-group home after onboarding. Each chat group is one trip, giving every
+conversation a single authorization, planning, and history boundary. Selecting a group opens its
+native web chat and planning workspace.
+
+## Chat-group home
+
+- `/chats` is the authenticated home after first-login Travel DNA.
+- List only trips in which the current user has a `trip_members` row, ordered by recent message or
+  trip activity. Provide a useful empty state and **Create chat group** action.
+- A new group creates a name-only draft trip and its owner membership transactionally. Destination,
+  dates, budget, and pace can be completed later; itinerary generation remains disabled until the
+  required setup is valid.
+- Do not create a separate `chat_groups` table. The `trips` row is the group and
+  `chat_messages.trip_id` scopes its history.
+- Invitation UI and delivery are deferred. A future invite is trip-scoped and accepting it creates
+  one membership row; token design must be single-use, expiring, and stored hashed.
 
 ## Layout
 
-A dual-pane interface scoped to a single trip (`/trips/[tripId]/workspace`):
+A selected trip opens at `/trips/[tripId]/chat`. Chat, Plan, and Timeline share one left-side
+navigation shell; the planning surface may continue to use `/trips/[tripId]/workspace` during the
+route migration. Do not duplicate a Timeline/Jigsaw control in the top bar when the sidebar already
+contains it.
+
+The planning workspace is a dual-pane interface scoped to that single trip:
 
 ```text
 ┌──────────────────────────────┬───────────────────────────────────────┐
@@ -21,7 +39,7 @@ A dual-pane interface scoped to a single trip (`/trips/[tripId]/workspace`):
 └──────────────────────────────┴───────────────────────────────────────┘
 ```
 
-Below the tablet breakpoint the panes become tabs; the timeline is the default tab.
+Below the tablet breakpoint the panes become tabs; chat is the selected-trip entry tab.
 
 ## Pane 1: Multi-user realtime chat
 
@@ -32,7 +50,7 @@ Below the tablet breakpoint the panes become tabs; the timeline is the default t
   another trip's channel receives nothing it is not already authorized to read.
 - The AI assistant participates as a distinguished non-human author. It answers only when addressed
   (an `@ai` mention or the assistant composer), never on every message.
-- The assistant is given the trip context and recent chat window, and it can **propose** itinerary
+- The assistant is given only the selected trip context and a bounded recent chat window, and it can **propose** itinerary
   changes. It cannot mutate state: proposals render as inline cards that an authorized member accepts
   or dismisses. This is the same propose/confirm boundary the retired bot used.
 

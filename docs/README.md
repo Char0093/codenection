@@ -14,7 +14,10 @@ When instructions conflict, use this order:
 
 The MVP must deliver:
 
-- Responsive web app for one active trip per group.
+- First-login Travel DNA onboarding that stores a reusable, self-only preference baseline and then
+  redirects to the chat-group home.
+- Responsive web app with a `/chats` home for the user's trip groups; one chat group is exactly one
+  trip, and selecting it scopes chat history and planning to that trip.
 - Supabase-backed trip, member, itinerary, split/merge, chat, provider, and ledger data.
 - Constraint-aware itinerary generation with deterministic scoring.
 - Map, weather, and currency integration adapters.
@@ -25,15 +28,17 @@ The MVP must deliver:
 ## Required Docs
 
 - `implementation-status.md`: point-in-time delivery status, remaining acceptance work, and the recommended next execution order for development agents.
+- `superpowers/specs/2026-09-06-first-login-travel-dna-chat-groups-design.md`: current product and data-ownership decision for first-login onboarding and trip chat groups.
+- `superpowers/plans/2026-09-06-first-login-travel-dna-chat-groups.md`: ordered implementation plan for that migration.
 - `framework.md`: stack, architecture, coding boundaries, Supabase usage, testing expectations.
 - `database-structure.md`: Supabase/Postgres schema, table boundaries, indexes, and RLS model.
 - `agentic-architecture.md`: bounded agent roles, proposal workflow, human confirmation rules, and eval requirements.
-- `features/trip-dashboard.md`: trip setup and overview behavior.
-- `features/member-profiles.md`: member consent, accessibility, dietary, health, and preference profiles.
+- `features/trip-dashboard.md`: selected-trip setup and overview behavior.
+- `features/member-profiles.md`: global Travel DNA, member consent, accessibility, dietary, health, and trip overrides.
 - `features/itinerary-planning.md`: scoring, hard constraints, explanations, and itinerary generation.
 - `features/map-coordination.md`: map display, rendezvous anchors, and split/merge coordination.
 - `features/shared-ledger.md`: expenses, subgroup attribution, currency conversion, and settlement.
-- `features/collaborative-workspace.md`: realtime group chat, embedded AI assistant, draggable flashcard timeline, and confirmation boundaries.
+- `features/collaborative-workspace.md`: chat-group home, trip-scoped realtime chat, embedded AI assistant, draggable timeline, and confirmation boundaries.
 - `features/provider-adapters.md`: real and mock provider contracts.
 - `features/privacy-safety.md`: consent, retention, RLS, export/delete, and safety boundaries.
 

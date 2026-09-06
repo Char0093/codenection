@@ -2,11 +2,15 @@
 
 ## Purpose
 
-The trip dashboard is the command center for one active group trip. It shows setup progress, trip constraints, group readiness, itinerary status, expense status, and coordination alerts.
+The trip dashboard is the setup and overview surface for the currently selected chat group/trip.
+The cross-trip entry point is `/chats`, not this dashboard.
 
 ## MVP Behavior
 
-- Create and edit one trip with destination, start date, end date, budget tier, pace, home currency, and notes.
+- Create the group from `/chats` with a name only, then complete destination, start date, end date,
+  budget tier, pace, home currency, and notes here.
+- Treat an incomplete group as a draft: chat remains usable, while itinerary generation clearly
+  identifies and blocks on missing required setup.
 - Show members, consent state, profile completion, and outstanding confirmations.
 - Show itinerary generation status and top conflicts.
 - Show current split/merge state if the group is branched.
@@ -36,10 +40,11 @@ Use these tables:
 - Generated itinerary with conflicts.
 - Active split session.
 - Provider degraded or mocked state.
+- Name-only draft with chat enabled and planning disabled.
 
 ## Non-Goals
 
-- Multi-trip portfolio management.
+- Cross-trip analytics or portfolio management beyond the membership list on `/chats`.
 - Public itinerary sharing.
 - Native mobile dashboard.
 - Full booking management.
