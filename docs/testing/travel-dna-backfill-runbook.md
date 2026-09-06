@@ -155,17 +155,30 @@ select * from public.active_user_travel_constraints;  -- permission denied (no g
 
 ## 4. Idempotency check (safe to run on hosted)
 
+Record the counts, run the backfill body **twice** more, then re-check:
+
 ```sql
 select
   (select count(*) from public.user_travel_profiles)    as before_p,
-  (select count(*) from public.user_travel_constraints) as before_c \gset
+  (select count(*) from public.user_travel_constraints) as before_c;
 
+select public._run_travel_dna_backfill();
 select public._run_travel_dna_backfill();
 
 select
   (select count(*) from public.user_travel_profiles)    as after_p,
   (select count(*) from public.user_travel_constraints) as after_c;
--- after_p = before_p, after_c = before_c ; profile_revision on every backfilled row still 1
+-- after_p = before_p, after_c = before_c
+```
+
+Revision check — a backfill never issues an UPDATE, so **backfilled** rows stay at
+`profile_revision = 1`. Native profiles (`backfilled_from_trip_member_id is null`) may
+legitimately be higher and are not part of this assertion.
+
+```sql
+select count(*) as backfilled_rows_with_unexpected_revision
+from public.user_travel_profiles
+where backfilled_from_trip_member_id is not null and profile_revision <> 1;   -- expect 0
 ```
 
 ## 5. Rollback (only while compatibility code is still in place)
