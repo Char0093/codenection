@@ -115,15 +115,38 @@ load-bearing guarantee). No other RLS/policy changes.
 Dial 1–5 → `{0.0, 0.075, 0.15, 0.225, 0.3}` (linear across 0.0–0.3).
 `SURPRISE_DIAL_DEFAULT = 3` → `0.15`.
 
-- **Quick mode writes `serendipity_epsilon = 0.15` explicitly**, so Quick and
-  "full, dial untouched" agree.
-- The column default `0.2` now only ever applies to a row that was created without
-  going through the wizard (e.g. a future caps path) and is therefore incomplete.
+- **Quick mode sets `serendipity_epsilon = 0.15` only when the profile is new or
+  incomplete** (`onboarding_completed_at IS NULL` before this write). A Quick redo of an
+  already-completed profile leaves the stored epsilon untouched (see §4 step 5). So a
+  fresh Quick completion and a "full, dial untouched" completion both land on `0.15`.
+- The column default `0.2` is not otherwise produced by the supported path. Rows that
+  bypass the wizard and write `onboarding_completed_at` directly are prevented from
+  leaving a non-grid epsilon by the §3.7 CHECK; a `0.2` value can therefore only exist
+  on an *incomplete* row.
 - `epsilonToSurpriseDial` is defined only for the five grid values. Wizard prefill is
   `onboardingCompletedAt == null ? SURPRISE_DIAL_DEFAULT : epsilonToSurpriseDial(epsilon)`,
   so a legacy `0.2` on an incomplete row shows dial 3, never 4.
 
-### 3.7 Revision semantics
+### 3.7 Completed-profile invariant
+
+`onboarding_completed_at` and the soft-baseline columns are separately client-writable
+(§3.4), so a direct table write could otherwise mark a profile complete while leaving
+`budget_lean` null or `serendipity_epsilon` off-grid. Enforce the shape at the database:
+
+```
+alter table public.traveler_profiles
+  add constraint traveler_profiles_completed_shape check (
+    onboarding_completed_at is null
+    or (budget_lean is not null
+        and serendipity_epsilon in (0.0, 0.075, 0.15, 0.225, 0.3))
+  );
+```
+
+`travel_vibe` and `social_role` stay nullable on a completed row — Quick mode
+legitimately leaves both null. `pace` is already `not null` with a default. The
+wizard's own nav gating (§6) is a UX layer on top of this, not a substitute for it.
+
+### 3.8 Revision semantics
 
 `traveler_profiles` writes do **not** bump `trips.revision`. Step-2 `trip_constraints`
 writes bump it via the existing `trip_constraints_bump_revision` trigger — once per
@@ -156,8 +179,10 @@ All object references schema-qualified. The whole body is one transaction: any
    not null and outside `[0, 50000]`; (`full`) `surpriseDial` outside `[1,5]`,
    `budgetLean` ∉ `budget_tier`, `pace` ∉ `pace_level`, `vibe` ∉ `traveler_travel_vibe`,
    `socialRole` ∉ `traveler_social_role`. Any failure → `raise ... using errcode = '22023'`.
-3. **CAS precheck.** Read `profile_revision`. Row exists and `<> p_expected_revision`
-   → `raise '40001'`. No row and `p_expected_revision <> 0` → `raise '40001'`.
+3. **CAS precheck.** Read `profile_revision` **and `onboarding_completed_at`** into
+   `v_existing_revision` / `v_prev_completed_at`. Row exists and
+   `v_existing_revision <> p_expected_revision` → `raise '40001'`. No row and
+   `p_expected_revision <> 0` → `raise '40001'`.
 4. **Dealbreakers, add-only.** For each submitted `(kind, flag)`:
    `insert into public.trip_constraints (trip_id, trip_member_id, kind, flag, severity,
    source, confirmed_by, confirmed_at) values (..., v_severity, 'manual', v_member_id, now())
@@ -169,21 +194,29 @@ All object references schema-qualified. The whole body is one transaction: any
    `wheelchair_accessible_required` → `severe`; every other supported flag → `standard`.
    This must stay equal to `defaultSeverity` / `defaultReligiousAccessSeverity` /
    `defaultMobilitySeverity` in `lib/domain/constraints.ts` (test in §7).
-5. **Profile last.**
-   - No row:
-     `insert into public.traveler_profiles (...) values (...) on conflict (trip_member_id)
-     do nothing returning profile_revision into v_new_revision;`
-     `if v_new_revision is null then raise '40001'; end if;` (loses the race → rolls back
-     step 4).
-   - Row exists:
-     `update public.traveler_profiles set <mode fields>, onboarding_completed_at = now()
+5. **Profile last.** Column set by mode:
+   - **`full`** writes `travel_vibe, pace, social_role, budget_lean,
+     mobility_threshold_m, onboarding_completed_at`, and
+     `serendipity_epsilon = <grid(surpriseDial)>` — same list on insert and update.
+   - **`quick`** writes `budget_lean, mobility_threshold_m, onboarding_completed_at`, and
+     `serendipity_epsilon` computed as `0.15` when `v_prev_completed_at is null` else the
+     existing stored value. It never writes `travel_vibe`, `pace`, or `social_role`.
+     Result: `0.15` (and null/default vibe/pace/role) on a first Quick completion;
+     epsilon + vibe + pace + role all preserved on a Quick redo of a completed profile.
+   - **No row** (`v_existing_revision is null`):
+     `insert into public.traveler_profiles (trip_id, trip_member_id, <mode columns>)
+     values (..., v_now for completed_at, 0.15 for quick epsilon) on conflict
+     (trip_member_id) do nothing returning profile_revision into v_new_revision;`
+     `if v_new_revision is null then raise '40001'; end if;` (lost the create race →
+     rolls back step 4).
+   - **Row exists:**
+     `update public.traveler_profiles set <mode columns>, onboarding_completed_at = v_now
      where trip_member_id = v_member_id and profile_revision = p_expected_revision
      returning profile_revision into v_new_revision;`
-     `if v_new_revision is null then raise '40001'; end if;`
-   - `quick` sets `budget_lean, mobility_threshold_m, serendipity_epsilon = 0.15,
-     onboarding_completed_at`. `full` also sets `travel_vibe, pace, social_role,
-     serendipity_epsilon = <grid(dial)>`. On a `quick` redo the four full-only fields
-     are left untouched (preserved, not reset).
+     `if v_new_revision is null then raise '40001'; end if;` For a `quick` update the
+     `serendipity_epsilon` assignment is
+     `case when v_prev_completed_at is null then 0.15
+      else public.traveler_profiles.serendipity_epsilon end`.
 6. `return v_new_revision;`
 
 ## 5. Server action + API
@@ -246,10 +279,25 @@ Props: `{ tripId: string; initial: OnboardingSnapshot; successHref: string }`.
 On a `200` the wizard calls `router.replace(successHref)` itself (`replace`, not `push`,
 so Back does not reopen the completed wizard).
 
-State: `mode` (`full` / `quick`, toggled on step 1), `step`, `draft` seeded from
-`initial` (dealbreaker `Set`s from `dealbreakers.*.confirmed`; `surpriseDial` via the
-§3.6 rule), `pending`, `error`, `expectedRevision = initial.profileRevision` (echoed in
-the POST body).
+State: `mode` (`full` / `quick`, toggled on step 1), `step`, `draft`, `pending`, `error`,
+`expectedRevision`. A single internal `reseed(snapshot)` builds `draft` + sets
+`expectedRevision` + resets `step` to 1; it is used both by the `useState` initializer
+and by the Reload affordance (below). `mode` is user intent, not server state, so
+`reseed` leaves it alone.
+
+`draft` from a snapshot, per field:
+
+| Field | From snapshot | Default when snapshot value is null |
+| --- | --- | --- |
+| `vibe` | `profile.travelVibe` | `null` (must be chosen in full mode) |
+| `dietary` / `religiousAccess` / `mobility` `Set`s | `dealbreakers.<kind>.confirmed` | empty `Set` |
+| `walkingCapM` | `profile.mobilityThresholdM` | `null` ("No limit") |
+| `budgetLean` | `profile.budgetLean` | `"standard"` |
+| `pace` | `profile.pace` | `"balanced"` |
+| `socialRole` | `profile.socialRole` | `null` (must be chosen in full mode) |
+| `surpriseDial` | `onboardingCompletedAt == null ? 3 : epsilonToSurpriseDial(profile.serendipityEpsilon)` | `3` |
+
+`expectedRevision = snapshot.profileRevision` (echoed in the POST body).
 
 Screens — one primary interaction each, no free-text fields:
 
@@ -276,10 +324,23 @@ Screens — one primary interaction each, no free-text fields:
 Navigation: Back / Next; the final screen's button is **Finish** →
 `POST /api/trips/{tripId}/onboarding` with `{ expectedRevision, answers }`.
 `fetch` wrapper copied from `DietaryConstraintPicker` (`cache: "no-store"`, JSON,
-throw on `!ok` with the parsed `error`). Responses:
+throw on `!ok` with the parsed `error`).
+
+**Nav gating.** Full mode: `Next` on step 1 is disabled until `vibe` is chosen; `Next`
+on step 4 is disabled until `socialRole` is chosen. Quick mode skips both of those
+screens and requires neither. Every other screen has a valid default
+(`budgetLean = "standard"`, `pace = "balanced"`, walking cap `null`, `surpriseDial = 3`,
+dealbreakers may be empty), so no other step gates.
+
+Responses:
 
 - `200` → `router.replace(successHref)`.
-- `409 STALE_PROFILE` → message + a "Reload" affordance (re-fetches the snapshot).
+- `409 STALE_PROFILE` → message + a **Reload** button. Reload issues
+  `GET /api/trips/{tripId}/onboarding` and, on success, calls `reseed(snapshot)` —
+  replacing `draft`, `expectedRevision`, and `step` (→ 1) from the fresh snapshot — then
+  clears `error`. `router.refresh()` is **not** relied on to reset local state. (Tested:
+  after a simulated `409` + Reload, the next submit sends the new `expectedRevision` and
+  the draft reflects the refetched snapshot.)
 - `409 PENDING_CONSTRAINT` / `422` → inline error, stay on the current step.
 
 Progress indicator ("Step 3 of 5" or a "Quick" badge). Finish disabled while `pending`.
@@ -302,8 +363,15 @@ the trip name as heading. `export const dynamic = "force-dynamic";`
 ### Nudge
 
 Dismissible, non-blocking banner: "Complete your Travel DNA · about 60 seconds" + a link
-to `/trips/[tripId]/onboarding`. Shown while `needsOnboarding` is true. Dismiss is
-component state only (per session), not persisted.
+to `/trips/[tripId]/onboarding`. Rendered while `needsOnboarding` is true **and** the
+per-trip dismissal key is absent.
+
+Dismissal persists for the browser session: `sessionStorage` key
+`travel-dna-nudge-dismissed:{tripId}`, read on mount and written on Dismiss, every access
+wrapped in `try/catch` (private-mode / disabled storage falls back to
+dismissed-for-this-mount `useState`). Keying by `tripId` means dismissing the nudge on
+one trip does not hide it on another. Completing the survey clears
+`needsOnboarding`, so the banner does not depend on the key being cleared.
 
 - **Workspace:** `app/trips/[tripId]/workspace/page.tsx` also calls `getMyOnboarding` and
   passes `needsOnboarding` to `WorkspaceClient`; the banner renders in
@@ -326,17 +394,30 @@ component state only (per session), not persisted.
   `tests/components/trip-setup-dashboard.test.tsx`) — full path renders all five steps;
   Quick toggle collapses to two screens and submits `mode: "quick"`; every answer lands
   in the POST body; Back preserves entered answers; confirmed dealbreaker chips render
-  locked with the correct per-kind hint; `409 STALE_PROFILE` shows the reload affordance;
-  a failed POST surfaces an inline error; focus moves to the step heading on navigation.
+  locked with the correct per-kind hint; a failed POST surfaces an inline error; focus
+  moves to the step heading on navigation.
+  **Nav gating:** in full mode `Next` on step 1 is disabled until a vibe is picked and on
+  step 4 until a social role is picked; in Quick mode the flow completes without either.
+  **Reload:** a simulated `409 STALE_PROFILE` renders the Reload button; clicking it
+  issues the `GET`, and the subsequent submit carries the refetched `expectedRevision`
+  and a draft rebuilt from the new snapshot.
   `fetch` mocked; `next/navigation` `router.replace` mocked and asserted on `200`.
 - **`tests/database/onboarding-rls.test.ts`** (PGlite, like
   `tests/database/constraints-rls.test.ts`):
   - migration applies cleanly in the shared PGlite instance;
   - `submit_onboarding` happy path: creates the `traveler_profiles` row + confirmed
     `trip_constraints`, sets `onboarding_completed_at`, returns `1`;
-  - **Quick-mode assertion:** after a `mode: "quick"` submit the stored row has
+  - **Quick-mode assertion:** a first `mode: "quick"` submit stores
     `serendipity_epsilon = 0.15`, `pace = 'balanced'`, `travel_vibe is null`,
     `social_role is null`;
+  - **Quick-redo preservation:** complete via `mode: "full"` with `surpriseDial = 5`
+    (epsilon `0.3`) and a chosen vibe/pace/social role, then submit `mode: "quick"` with
+    the bumped `expectedRevision`; assert `serendipity_epsilon` is still `0.3` and
+    `travel_vibe` / `pace` / `social_role` are unchanged;
+  - **Completed-profile CHECK:** a direct `authenticated` `update` that sets
+    `onboarding_completed_at = now()` while `budget_lean` is null, or that sets
+    `serendipity_epsilon` to an off-grid value (e.g. `0.2`) on a completed row, is
+    rejected by `traveler_profiles_completed_shape`;
   - **CAS:** a second call with a stale `expectedRevision` raises `40001` and leaves
     **no** partial `trip_constraints` writes (atomic rollback asserted);
   - **non-member** caller → `42501`;
@@ -352,6 +433,11 @@ component state only (per session), not persisted.
     the severity that the corresponding `lib/domain/constraints.ts` helper returns.
 - **`tests/api/onboarding.test.ts`** — `GET` pre-completion response shape; `POST`
   same-origin enforcement; `422` on a malformed body; `409` code mapping.
+- **Nudge** — extend `tests/components/trip-setup-dashboard.test.tsx` (and the workspace
+  client/shell test): banner shows when `needsOnboarding` and hides after Dismiss;
+  Dismiss writes the per-trip `sessionStorage` key and the banner stays hidden on
+  remount; a different `tripId` still shows it; the dashboard clears/sets
+  `needsOnboarding` on load, trip switch, refresh, and new-trip reset.
 - `docs/implementation-status.md` Task 1.6 → **Partial**, listing what shipped and the
   add-only dealbreaker caveat + the deferred list.
 - `npm run lint`, `npm test`, `npm run build`.
