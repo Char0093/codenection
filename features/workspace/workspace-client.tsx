@@ -3,10 +3,11 @@
 import React, { useEffect, useState } from "react";
 import { WorkspaceShell } from "@/features/workspace/workspace-shell";
 import { ChatPane } from "@/features/chat/chat-pane";
+import { TravelDnaNudge } from "@/components/travel-dna-nudge";
 import type { JigsawMember } from "@/features/timeline/jigsaw-panel";
 import type { ProposalRecord } from "@/lib/repositories/planning-repository";
 
-export function WorkspaceClient({ tripId, tripName, members, selfMemberId, canDecideProposals, initialActiveProposalId, mapSlot }: {
+export function WorkspaceClient({ tripId, tripName, members, selfMemberId, canDecideProposals, initialActiveProposalId, mapSlot, needsOnboarding }: {
   tripId: string;
   tripName: string;
   members: readonly JigsawMember[];
@@ -14,6 +15,7 @@ export function WorkspaceClient({ tripId, tripName, members, selfMemberId, canDe
   canDecideProposals: boolean;
   initialActiveProposalId: string | null;
   mapSlot: React.ReactNode;
+  needsOnboarding: boolean;
 }) {
   const [proposals, setProposals] = useState<ProposalRecord[]>([]);
   const [activeProposalId, setActiveProposalId] = useState<string | null>(initialActiveProposalId);
@@ -54,9 +56,14 @@ export function WorkspaceClient({ tripId, tripName, members, selfMemberId, canDe
     }
   }
 
-  return <WorkspaceShell tripName={tripName} members={members} blocks={[]}
-    mapSlot={mapSlot}
-    chatSlot={<ChatPane tripId={tripId} selfMemberId={selfMemberId} members={members}
-      proposalsById={proposalsById} canDecideProposals={canDecideProposals}
-      activeProposalId={activeProposalId} decidingProposalId={decidingProposalId} onDecision={handleDecision} />} />;
+  return (
+    <>
+      {needsOnboarding && <TravelDnaNudge tripId={tripId} />}
+      <WorkspaceShell tripName={tripName} members={members} blocks={[]}
+        mapSlot={mapSlot}
+        chatSlot={<ChatPane tripId={tripId} selfMemberId={selfMemberId} members={members}
+          proposalsById={proposalsById} canDecideProposals={canDecideProposals}
+          activeProposalId={activeProposalId} decidingProposalId={decidingProposalId} onDecision={handleDecision} />} />
+    </>
+  );
 }

@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { WorkspaceClient } from "@/features/workspace/workspace-client";
 import { TimelinePane } from "@/features/timeline/timeline-pane";
+import { getOnboardingNeeded } from "@/app/actions/onboarding";
 import { tripRepository } from "@/lib/repositories/server";
 import { colorForMemberIndex, listTripMembers } from "@/lib/repositories/members";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
@@ -26,6 +27,7 @@ export default async function WorkspacePage({ params }: { params: Promise<{ trip
   const memberRows = await listTripMembers(client, tripId);
   const members = memberRows.map((row, index) => ({ id: row.id, displayName: row.displayName, color: colorForMemberIndex(index) }));
   const selfMemberId = memberRows.find((row) => row.userId === user.id)?.id ?? null;
+  const needsOnboarding = await getOnboardingNeeded(trip.id);
 
   return (
     <WorkspaceClient
@@ -36,6 +38,7 @@ export default async function WorkspacePage({ params }: { params: Promise<{ trip
       canDecideProposals={trip.role === "owner"}
       initialActiveProposalId={trip.activeProposalId}
       mapSlot={<TimelinePane tripId={trip.id} startDate={trip.startDate} endDate={trip.endDate} revision={trip.revision} />}
+      needsOnboarding={needsOnboarding}
     />
   );
 }
