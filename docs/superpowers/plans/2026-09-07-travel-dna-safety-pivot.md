@@ -82,7 +82,7 @@ Each slice has (or gets, just before execution) its own detailed sub-plan file.
 | Slice | Sub-plan file | Covers (prior-plan tasks) | Ships |
 | --- | --- | --- | --- |
 | **1. Contracts + schema + backfill** ✅ **DONE** (commits `9e9330c`, `ba9e4e4`, `c6b3a62` on `feat/travel-dna-safety-pivot`) | `2026-09-07-safety-pivot-slice-1-contracts-schema.md` | Tasks 1–3, redone | Safety-only onboarding contract; `202609060004` drops 4 profile columns + reworks `submit_user_onboarding` + replaces `create_trip_group` with the organizer frame + adds `trip_member_entries` / `submit_member_entry` / `trip_alignment_summary`; `202609060005` reworks the backfill. Tests only — no app code. Full suite green (857), lint/typecheck/build clean. |
-| **2. First-login gate + global onboarding** | `2026-09-07-safety-pivot-slice-2-gate-onboarding.md` (write before exec) | Tasks 4–5 | `lib/onboarding/gate.ts`; `app/actions/user-onboarding.ts`; `app/api/onboarding/route.ts`; `app/onboarding/page.tsx`; `app/preferences/page.tsx`; `middleware.ts` gate; `components/onboarding-wizard.tsx` → two-screen safety-first + `endpoint` prop (trip-scoped callers unchanged). |
+| **2. First-login gate + global onboarding** ✅ **DONE** (commits `33f08ac`, `2be3e85`, `fc34728`, `a1dafd1`, `2a0cdc8` on `feat/travel-dna-safety-pivot`) | `2026-09-07-safety-pivot-slice-2-gate-onboarding.md` | Tasks 4–5 | `lib/onboarding/gate.ts`; `app/actions/user-onboarding.ts`; `app/api/onboarding/route.ts`; `app/onboarding/page.tsx`; `app/preferences/page.tsx`; `middleware.ts` gate; **new** `components/user-onboarding-wizard.tsx` (two-screen safety-first) — the frozen five-screen `components/onboarding-wizard.tsx` is untouched. Full suite green (891), lint/typecheck/build clean. |
 | **3. Chat-group home + organizer trip creation** | `2026-09-07-safety-pivot-slice-3-chats-home.md` (write before exec) | Task 6 | `app/chats/page.tsx` + list/create components; `app/api/chats/route.ts` (GET membership-scoped list, POST organizer frame → `201`); root `/` redirect to `/onboarding` \| `/chats`; ordering by recent chat activity without unbounded message reads. |
 | **4. Pre-join preview + member entry + alignment summary** | `2026-09-07-safety-pivot-slice-4-member-entry.md` (write before exec) | New surface in the revised spec (§2.4, §3.3) | Trip-preview + member-entry components; `submit_member_entry` RPC; `trip_alignment_summary` `security definer` aggregate fn; destination-specific candidate-card ratings. Invitation **send/accept UI stays deferred** — the boundary is fixed and the current member (organizer) can fill their own entry. |
 | **5. Selected-trip navigation consolidation** | `2026-09-07-safety-pivot-slice-5-nav.md` (write before exec) | Task 7 | Shared Chat/Plan/Timeline shell, Chat default; remove duplicate top-level Timeline/Jigsaw links; redirect legacy `/trips/[tripId]/workspace` into the shell; every screen has a visible route back to the group list. |
@@ -121,6 +121,17 @@ Each slice has (or gets, just before execution) its own detailed sub-plan file.
     PGlite `beforeAll` hooks couple `202609060004` and `202609060005`.
   - `user_travel_profiles` keeps `backfilled_from_trip_member_id` (added by `202609060003`);
     only the four pre-pivot answer columns drop.
+- **Slice 2 deviations from its sub-plan** (all green, no scope change):
+  - New `components/user-onboarding-wizard.tsx` rather than mutating the delivered
+    five-screen `components/onboarding-wizard.tsx` — the two contracts (safety-only vs the
+    frozen trip-scoped shape) can't cleanly share one component, and the compat flow must
+    keep working. Mirrors the Slice 1 `onboarding.ts` / `onboarding-legacy.ts` split.
+  - `successHref` interim default is `/` (the dashboard). Slice 3 makes it `/chats` and adds
+    the completed-user root redirect.
+  - Gate middleware cases live in the existing `tests/api/auth.test.ts` harness (it already
+    routes `mocks.fetch`); no separate `tests/middleware.test.ts`.
+  - `isOnboardingComplete` fails **open** on a DB error (returns `true`) so a transient blip
+    can't strand a completed user at `/onboarding`; the submit RPC still CAS-checks.
 - **"dates or duration".** Slice 1 accepts either an explicit `startDate`+`endDate` pair
   (≤14 days, the path that can reach `status = 'ready'`) **or** a `plannedDurationDays`
   integer (1–14). Duration-only frames enable chat but stay `draft` until real dates are
