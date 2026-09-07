@@ -3,6 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { verifiedUser } from "@/lib/supabase/auth";
 import { AppError } from "@/lib/http/errors";
+import { isGateExempt, isOnboardingComplete } from "@/lib/onboarding/gate";
+import { safeRedirectPath } from "@/lib/supabase/redirect";
 
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
@@ -42,6 +44,15 @@ export async function middleware(request: NextRequest) {
     response = failure.status === 401 && !path.startsWith("/api/")
       ? NextResponse.redirect(new URL("/login", request.url))
       : NextResponse.json({ error: failure.message, code: failure.code }, { status: failure.status });
+  }
+  // First-login onboarding gate: an authenticated user without a completed global Travel DNA
+  // profile is redirected to /onboarding, keeping their target as a safe ?next. /login, /auth/*,
+  // /onboarding, and /api/* are exempt so this cannot loop.
+  if (!failure && !publicRoute && !isGateExempt(path) && !(await isOnboardingComplete(client))) {
+    const target = new URL("/onboarding", request.url);
+    const next = safeRedirectPath(path + request.nextUrl.search);
+    if (next !== "/") target.searchParams.set("next", next);
+    response = NextResponse.redirect(target);
   }
   cookies.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
   response.headers.set("Cache-Control", "private, no-store");
