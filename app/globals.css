@@ -444,6 +444,85 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
 .travel-dna-nudge { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .travel-dna-nudge > span { flex: 1; min-width: 0; }
 
+/* Centers the onboarding sheet on the page, the way the referenced questionnaire preview
+   presents its "device" card. Layout only -- no color tokens here, so the sheet below reads
+   the app's normal palette (:root), same as every other page. */
+.onboarding-shell { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px 16px; }
+
+/* ---------- Onboarding "sheet" (adapted from the teammate's questionnaire-modal preview,
+   branch user-interface: docs/previews/travel-questionnaire-modal.html) ----------
+   Carried over: the rounded sheet card with a grabber, the progress-bar stepper with
+   dotted step labels, checkmark-tick selection, segmented-pill toggles, a sticky footer,
+   and a completion summary -- reading the app's own teal/navy/gold tokens (:root), not the
+   preview's dark slate/teal/emerald palette. Not carried over: its fixed-height sliding step
+   track (our step count differs per selection -- up to 19 chips on step 1 -- so steps swap
+   in place instead of sliding in a clipped viewport) and its disabled-until-valid gating
+   (dealbreakers are optional here: "pick nothing and continue" is a real product decision,
+   not a placeholder).
+   Scoped under .onb-sheet, an addition alongside the existing .onboarding class, so the
+   frozen five-screen trip-scoped wizard (components/onboarding-wizard.tsx), which also
+   uses the bare .onboarding and .flag-chip classes, is completely unaffected. */
+.onb-sheet {
+  position: relative;
+  max-width: 440px;
+  margin: 0 auto;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 24px;
+  background: var(--surface);
+  box-shadow: 0 30px 70px -32px rgba(20, 20, 26, 0.16), 0 1px 2px rgba(20, 20, 26, 0.05);
+  overflow: hidden;
+}
+.onb-grabber { width: 36px; height: 4px; margin: 12px auto 0; border-radius: 999px; background: var(--line-strong); }
+.onb-head { display: flex; justify-content: center; padding: 12px 24px 0; }
+.onb-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.onb-sheet h1 { margin: 10px 24px 6px; font-size: 20px; outline: none; }
+.onb-subtitle { margin: 0 24px 18px; }
+.onb-stepper { margin: 0 24px 18px; display: flex; flex-direction: column; gap: 8px; }
+.onb-bar { height: 4px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.onb-bar > i { display: block; height: 100%; background: var(--teal); border-radius: 999px; transition: width 0.4s ease; }
+.onb-segs { display: flex; justify-content: space-between; }
+.onb-segs span { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.onb-segs span::before { content: ""; width: 5px; height: 5px; border-radius: 999px; background: currentColor; opacity: 0.4; }
+.onb-segs span[data-state="current"] { color: var(--ink); }
+.onb-segs span[data-state="current"]::before { opacity: 1; transform: scale(1.3); }
+.onb-segs span[data-state="done"] { color: var(--teal); }
+.onb-segs span[data-state="done"]::before { opacity: 1; }
+.onb-body { padding: 0 24px 8px; }
+.onb-body h2 { margin: 0 0 4px; font-size: 16px; outline: none; }
+.onb-footer { display: flex; gap: 10px; padding: 16px 24px 22px; border-top: 1px solid var(--line); }
+.onb-btn { flex: 1; min-height: 46px; padding: 12px 16px; border-radius: 12px; border: 1px solid transparent; font-size: 14px; font-weight: 700; }
+.onb-btn-ghost { flex: 0 0 auto; min-width: 96px; background: transparent; border-color: var(--line-strong); color: var(--muted); }
+.onb-btn-ghost:hover:not(:disabled) { color: var(--ink); border-color: var(--muted); }
+.onb-btn-primary { background: var(--teal); color: #fff; }
+.onb-btn-primary:hover:not(:disabled) { background: var(--teal-dark); }
+
+.onb-sheet .flag-chip { display: inline-flex; align-items: center; gap: 6px; }
+.chip-tick { width: 15px; height: 15px; flex: none; display: grid; place-items: center; border-radius: 999px; border: 1.5px solid var(--line-strong); color: #fff; }
+.onb-sheet .flag-chip[aria-pressed="true"] .chip-tick { background: var(--teal); border-color: var(--teal); }
+
+.onb-fieldset-label { margin: 0 0 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.onb-toggle { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 16px; }
+.onb-toggle button { padding: 12px 10px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface); text-align: center; }
+.onb-toggle button b { display: block; font-size: 13px; font-weight: 700; }
+.onb-toggle button span { display: block; margin-top: 2px; font-size: 11px; color: var(--muted); }
+.onb-toggle button[aria-pressed="true"] { border-color: var(--teal); background: var(--teal-soft); box-shadow: inset 0 0 0 1px var(--teal); }
+.onb-toggle button[aria-pressed="true"] b { color: var(--teal-dark); }
+
+.onb-done { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 40px 28px 34px; text-align: center; }
+.onb-mark { width: 56px; height: 56px; margin-bottom: 10px; display: grid; place-items: center; border-radius: 999px; background: var(--teal); color: #fff; }
+.onb-done h2 { margin: 0; font-size: 18px; outline: none; }
+.onb-done p { margin: 0; font-size: 13px; color: var(--muted); }
+.onb-summary { margin-top: 18px; width: 100%; border: 1px solid var(--line-strong); border-radius: 12px; text-align: left; font-size: 12.5px; }
+.onb-summary div { display: flex; justify-content: space-between; gap: 12px; padding: 10px 13px; }
+.onb-summary div + div { border-top: 1px solid var(--line); }
+.onb-summary dt { color: var(--muted); }
+.onb-summary dd { margin: 0; font-weight: 600; text-align: right; }
+
+@media (max-width: 420px) {
+  .onb-sheet { border-radius: 18px; }
+}
+
 /* Chat-group home (spec 2026-09-06-first-login-travel-dna-chat-groups §2.3). */
 .chat-home-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .chat-home-row { border: 1px solid var(--line-strong); border-radius: 8px; }

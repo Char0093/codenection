@@ -19,16 +19,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
   const successHref = safeRedirectPath(next ?? null);
 
   return (
-    <main className="app-shell">
-      <div className="section-heading">
-        <div>
-          <h1>Your Travel DNA</h1>
-          <p className="field-hint">
-            A one-time safety check — the needs you always want respected. About 10 seconds, and you
-            can skip anything. We confirm these again for each trip you join.
-          </p>
-        </div>
-      </div>
+    <main className="app-shell onboarding-shell">
       <UserOnboardingWizard initial={snapshot} successHref={successHref} />
     </main>
   );

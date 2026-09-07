@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Check } from "lucide-react";
 import {
   DIETARY_FLAGS, DIETARY_FLAG_LABELS,
   RELIGIOUS_ACCESS_FLAGS, RELIGIOUS_ACCESS_FLAG_LABELS,
@@ -14,7 +15,13 @@ import {
 // Global first-login Travel DNA (spec §2.2, revised 2026-09-07): one safety-vault screen
 // plus one OPTIONAL exploration dial. Targets ~10 seconds; picking nothing is fine. This is
 // deliberately separate from the frozen five-screen trip-scoped `onboarding-wizard.tsx`.
+//
+// Presentation borrows the sheet/stepper/chip-tick/segmented-pill/completion-summary
+// language from the teammate's questionnaire-modal preview (branch user-interface,
+// docs/previews/travel-questionnaire-modal.html) on the app's own neutral tokens rather
+// than that preview's dark slate/teal/emerald palette -- see the .onb-* rules in globals.css.
 const SURPRISE_LABELS = ["familiar classics", "mostly familiar", "a balanced mix", "mostly new", "open-ended discovery"];
+const STEP_LABELS = ["Dietary & access", "Style"];
 
 type Draft = {
   dietary: Set<string>;
@@ -37,10 +44,16 @@ function draftFrom(snapshot: OnboardingSnapshot): Draft {
   };
 }
 
-export function UserOnboardingWizard({ initial, successHref, endpoint = "/api/onboarding" }: {
+export function UserOnboardingWizard({
+  initial, successHref, endpoint = "/api/onboarding",
+  title = "Your Travel DNA",
+  subtitle = "A one-time safety check — the needs you always want respected. About 10 seconds, and you can skip anything. We confirm these again for each trip you join.",
+}: {
   initial: OnboardingSnapshot;
   successHref: string;
   endpoint?: string;
+  title?: string;
+  subtitle?: string;
 }) {
   const router = useRouter();
   const [snapshot, setSnapshot] = useState(initial);
@@ -50,9 +63,19 @@ export function UserOnboardingWizard({ initial, successHref, endpoint = "/api/on
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stale, setStale] = useState(false);
+  const [finished, setFinished] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
 
-  useEffect(() => { headingRef.current?.focus(); }, [step]);
+  useEffect(() => { headingRef.current?.focus(); }, [step, finished]);
+
+  // Hold the "you're all set" summary on screen briefly before leaving, matching the
+  // completion moment in the referenced questionnaire preview -- purely a transition; the
+  // save already succeeded by the time this state is set.
+  useEffect(() => {
+    if (!finished) return;
+    const id = setTimeout(() => router.replace(successHref), 1100);
+    return () => clearTimeout(id);
+  }, [finished, router, successHref]);
 
   function reseed(next: OnboardingSnapshot) {
     setSnapshot(next);
@@ -91,7 +114,7 @@ export function UserOnboardingWizard({ initial, successHref, endpoint = "/api/on
         body: JSON.stringify({ expectedRevision, answers: buildAnswers() }),
       });
       const data = await response.json().catch(() => null);
-      if (response.ok) { router.replace(successHref); return; }
+      if (response.ok) { setFinished(true); return; }
       if (data?.code === "STALE_PROFILE") { setStale(true); setError(data.error ?? "Your preferences changed elsewhere."); return; }
       setError(data?.error ?? `Could not save your answers (${response.status}).`);
     } catch {
@@ -115,81 +138,132 @@ export function UserOnboardingWizard({ initial, successHref, endpoint = "/api/on
     }
   }
 
+  if (finished) {
+    return (
+      <section className="onboarding onb-sheet" aria-labelledby="user-onboarding-done-heading">
+        <div className="onb-grabber" aria-hidden="true" />
+        <div className="onb-done" aria-live="polite">
+          <div className="onb-mark" aria-hidden="true"><Check size={26} strokeWidth={2.6} /></div>
+          <h2 id="user-onboarding-done-heading" ref={headingRef} tabIndex={-1}>You&apos;re all set</h2>
+          <p>Here&apos;s what you confirmed.</p>
+          <dl className="onb-summary">
+            <div><dt>Dietary</dt><dd>{summarize(draft.dietary, DIETARY_FLAG_LABELS)}</dd></div>
+            <div><dt>Religious access</dt><dd>{summarize(draft.religiousAccess, RELIGIOUS_ACCESS_FLAG_LABELS)}</dd></div>
+            <div><dt>Mobility</dt><dd>{summarize(draft.mobility, MOBILITY_FLAG_LABELS)}</dd></div>
+            <div>
+              <dt>Exploration</dt>
+              <dd>{draft.dialSkipped ? "Balanced default" : `${draft.surpriseDial} of 5 — ${SURPRISE_LABELS[draft.surpriseDial - 1]}`}</dd>
+            </div>
+          </dl>
+        </div>
+      </section>
+    );
+  }
+
   return (
-    <section className="onboarding" aria-labelledby="user-onboarding-heading">
-      <p className="onboarding-progress">
-        <span className="onboarding-step-count">Step {step} of 2</span>
-      </p>
-      <h2 id="user-onboarding-heading" ref={headingRef} tabIndex={-1}>
-        {step === 1 ? "Your dietary and access needs" : "How adventurous should suggestions be?"}
-      </h2>
+    <section className="onboarding onb-sheet" aria-labelledby="user-onboarding-heading">
+      <div className="onb-grabber" aria-hidden="true" />
+      <div className="onb-head">
+        <span className="onb-eyebrow">Step {step} of 2</span>
+      </div>
+      <h1>{title}</h1>
+      <p className="onb-subtitle field-hint">{subtitle}</p>
 
-      {step === 1 && (
-        <div className="onboarding-dealbreakers">
-          <p className="field-hint">
-            Confirm anything you always need respected on a trip. You can pick nothing and continue —
-            you will confirm these again for each trip you join.
-          </p>
-          <ChipGroup title="Dietary" flags={DIETARY_FLAGS} labels={DIETARY_FLAG_LABELS}
-            selected={draft.dietary} confirmed={snapshot.dealbreakers.dietary.confirmed}
-            onToggle={(flag) => toggleFlag("dietary", flag)} />
-          <ChipGroup title="Religious access" flags={RELIGIOUS_ACCESS_FLAGS} labels={RELIGIOUS_ACCESS_FLAG_LABELS}
-            selected={draft.religiousAccess} confirmed={snapshot.dealbreakers.religiousAccess.confirmed}
-            onToggle={(flag) => toggleFlag("religiousAccess", flag)} />
-          <ChipGroup title="Mobility" flags={MOBILITY_FLAGS} labels={MOBILITY_FLAG_LABELS}
-            selected={draft.mobility} confirmed={snapshot.dealbreakers.mobility.confirmed}
-            onToggle={(flag) => toggleFlag("mobility", flag)} />
+      <div className="onb-stepper">
+        <div className="onb-bar"><i style={{ width: `${(step / 2) * 100}%` }} /></div>
+        <div className="onb-segs">
+          {STEP_LABELS.map((label, index) => {
+            const stepNumber = index + 1;
+            const state = stepNumber === step ? "current" : stepNumber < step ? "done" : undefined;
+            return <span key={label} data-state={state}>{label}</span>;
+          })}
         </div>
-      )}
+      </div>
 
-      {step === 2 && (
-        <div className="onboarding-dial">
-          <label className="onboarding-quick">
-            <input type="checkbox" checked={draft.dialSkipped}
-              onChange={(event) => setDraft({ ...draft, dialSkipped: event.target.checked })} />
-            Skip this — use a balanced default
-          </label>
-          <label htmlFor="surprise-dial">How far from the familiar should suggestions go?</label>
-          <input id="surprise-dial" type="range" min={1} max={5} step={1}
-            value={draft.surpriseDial} disabled={draft.dialSkipped}
-            aria-valuetext={`${draft.surpriseDial} of 5 — ${SURPRISE_LABELS[draft.surpriseDial - 1]}`}
-            onChange={(event) => setDraft({ ...draft, surpriseDial: Number(event.target.value) })} />
-          <p aria-hidden="true">
-            {draft.dialSkipped
-              ? "Balanced default"
-              : `${draft.surpriseDial} of 5 — ${SURPRISE_LABELS[draft.surpriseDial - 1]}`}
+      <div className="onb-body">
+        <h2 id="user-onboarding-heading" ref={headingRef} tabIndex={-1}>
+          {step === 1 ? "Your dietary and access needs" : "How adventurous should suggestions be?"}
+        </h2>
+
+        {step === 1 && (
+          <div className="onboarding-dealbreakers">
+            <p className="field-hint">
+              Confirm anything you always need respected on a trip. You can pick nothing and continue —
+              you will confirm these again for each trip you join.
+            </p>
+            <ChipGroup title="Dietary" flags={DIETARY_FLAGS} labels={DIETARY_FLAG_LABELS}
+              selected={draft.dietary} confirmed={snapshot.dealbreakers.dietary.confirmed}
+              onToggle={(flag) => toggleFlag("dietary", flag)} />
+            <ChipGroup title="Religious access" flags={RELIGIOUS_ACCESS_FLAGS} labels={RELIGIOUS_ACCESS_FLAG_LABELS}
+              selected={draft.religiousAccess} confirmed={snapshot.dealbreakers.religiousAccess.confirmed}
+              onToggle={(flag) => toggleFlag("religiousAccess", flag)} />
+            <ChipGroup title="Mobility" flags={MOBILITY_FLAGS} labels={MOBILITY_FLAG_LABELS}
+              selected={draft.mobility} confirmed={snapshot.dealbreakers.mobility.confirmed}
+              onToggle={(flag) => toggleFlag("mobility", flag)} />
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className="onboarding-dial">
+            <p className="onb-fieldset-label">Exploration</p>
+            <div className="onb-toggle">
+              <button type="button" aria-pressed={draft.dialSkipped}
+                onClick={() => setDraft({ ...draft, dialSkipped: true })}>
+                <b>Balanced default</b>
+                <span>Skip this question</span>
+              </button>
+              <button type="button" aria-pressed={!draft.dialSkipped}
+                onClick={() => setDraft({ ...draft, dialSkipped: false })}>
+                <b>Customize</b>
+                <span>Pick how far to explore</span>
+              </button>
+            </div>
+            <label htmlFor="surprise-dial">How far from the familiar should suggestions go?</label>
+            <input id="surprise-dial" type="range" min={1} max={5} step={1}
+              value={draft.surpriseDial} disabled={draft.dialSkipped}
+              aria-valuetext={`${draft.surpriseDial} of 5 — ${SURPRISE_LABELS[draft.surpriseDial - 1]}`}
+              onChange={(event) => setDraft({ ...draft, surpriseDial: Number(event.target.value) })} />
+            <p aria-hidden="true">
+              {draft.dialSkipped
+                ? "Balanced default"
+                : `${draft.surpriseDial} of 5 — ${SURPRISE_LABELS[draft.surpriseDial - 1]}`}
+            </p>
+          </div>
+        )}
+
+        {error && (
+          <p className="error-notice" role="alert">
+            <span>{error}</span>
+            {stale && (
+              <button type="button" className="secondary-button" disabled={pending} onClick={() => void reload()}>
+                Reload
+              </button>
+            )}
           </p>
-        </div>
-      )}
+        )}
+      </div>
 
-      {error && (
-        <p className="error-notice" role="alert">
-          <span>{error}</span>
-          {stale && (
-            <button type="button" className="secondary-button" disabled={pending} onClick={() => void reload()}>
-              Reload
-            </button>
-          )}
-        </p>
-      )}
-
-      <div className="onboarding-nav">
-        <button type="button" className="secondary-button" disabled={pending || step === 1}
+      <div className="onb-footer">
+        <button type="button" className="onb-btn onb-btn-ghost" disabled={pending} hidden={step === 1}
           onClick={() => setStep(1)}>
           Back
         </button>
         {step === 1 ? (
-          <button type="button" className="primary-button" disabled={pending} onClick={() => setStep(2)}>
+          <button type="button" className="onb-btn onb-btn-primary" disabled={pending} onClick={() => setStep(2)}>
             Next
           </button>
         ) : (
-          <button type="button" className="primary-button" disabled={pending} onClick={() => void finish()}>
+          <button type="button" className="onb-btn onb-btn-primary" disabled={pending} onClick={() => void finish()}>
             Finish
           </button>
         )}
       </div>
     </section>
   );
+}
+
+function summarize(flags: Set<string>, labels: Record<string, string>): string {
+  return flags.size ? [...flags].map((flag) => labels[flag]).join(", ") : "None selected";
 }
 
 function ChipGroup({ title, flags, labels, selected, confirmed, onToggle }: {
@@ -206,12 +280,14 @@ function ChipGroup({ title, flags, labels, selected, confirmed, onToggle }: {
       <div className="flag-grid" role="group" aria-label={title}>
         {flags.map((flag) => {
           const isConfirmed = confirmed.includes(flag);
+          const isOn = isConfirmed || selected.has(flag);
           return (
             <button key={flag} type="button" className="flag-chip"
-              aria-pressed={isConfirmed || selected.has(flag)}
+              aria-pressed={isOn}
               disabled={isConfirmed}
               title={isConfirmed ? "Already saved — editing saved requirements is coming with the preferences editor" : undefined}
               onClick={() => onToggle(flag)}>
+              <span className="chip-tick" aria-hidden="true">{isOn && <Check size={10} strokeWidth={3.2} />}</span>
               {labels[flag]}
             </button>
           );

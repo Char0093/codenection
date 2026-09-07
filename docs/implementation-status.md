@@ -468,18 +468,36 @@ Missing:
 
 ### Task 3.3 — Embedded AI assistant: Partial, substantial
 
+**Program audit (2026-09-07):** the authorization gap this section previously flagged as
+unconfirmed was real and is now fixed. `reserve_generation` is owner/planner-only by design
+(full itinerary generation) and correctly rejects ordinary members — but `askTripAssistant`
+was reusing that same RPC after its own membership check, so it silently 403'd for every
+non-owner/planner member despite the UI and this doc both saying any member could ask.
+`202609070001` adds a separate `reserve_assistant_prompt` RPC (membership-gated, no
+ready-status requirement, its own quota table) and `app/actions/assistant.ts` now calls it.
+Same audit also closed a chat-spam gap: `chat_messages` had no rate limit at all, and the
+direct-PostgREST `sendMessage` path has no server hop to enforce one in application code, so a
+table-level trigger caps 15 inserts/30s per member. **Re-audit (2026-09-08)** found that
+trigger's own check-then-act (`select count(*)` then compare) was itself raceable under
+concurrent inserts from the same member; it now serializes per `author_member_id` with the
+same `pg_advisory_xact_lock` pattern `reserve_generation`/`reserve_assistant_prompt` use, and
+was verified against **real concurrent connections** on the hosted project (PGlite cannot
+exercise cross-transaction races — see the doc below for why) — 10 simultaneous inserts for a
+member at 14 prior messages produced exactly 1 success and 9 correctly rate-limited.
+`202609070001` (with the lock fix) is now applied to the hosted project. See
+`docs/testing/program-audit-2026-09-07.md` for the full record.
+
 Implemented:
 
 - `@ai` addressing, bounded 20-message context, untrusted-input system instruction, structured
   Gemini response, plain assistant messages, pending itinerary proposal cards, and owner-only
   activation through the existing proposal path.
-- Generation reservation is reused for rate limiting.
+- Its own reservation/rate limit (`reserve_assistant_prompt`, `202609070001`), independent of
+  the owner/planner-only generation quota it was previously and incorrectly reusing.
 
 Missing or unresolved:
 
 - A dedicated assistant composer entry point.
-- Confirm the intended authorization: UI permits any member to ask, but `reserve_generation` is
-  documented as owner/planner-only, which may reject ordinary members.
 - Hosted prompt-injection and cross-trip isolation validation.
 
 ### Task 3.4 — Calendar timeline editing, persistence, and synchronization: Delivered and hosted-verified
