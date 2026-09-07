@@ -76,8 +76,12 @@ Copied verbatim from the spec; every slice's requirements implicitly include thi
 
 ## Slice breakdown & dependency order
 
-Strict order: **1 → 2 → 3 → 4 → 5 → 6**. Slices 5 and 6 may start once Slice 3 is merged.
-Each slice has (or gets, just before execution) its own detailed sub-plan file.
+**All six slices are complete on `feat/travel-dna-safety-pivot`** (2026-09-07). Full
+verification green at every checkpoint: `npm run lint`, `npx tsc --noEmit`, `npm test`
+(935 cases), `npm run build`. Remaining follow-ups are tracked in
+`docs/implementation-status.md` (Task 1.6 "Explicit follow-ups").
+
+Strict order was **1 → 2 → 3 → 4 → 5 → 6**. Each slice has its own detailed sub-plan file.
 
 | Slice | Sub-plan file | Covers (prior-plan tasks) | Ships |
 | --- | --- | --- | --- |
@@ -86,7 +90,7 @@ Each slice has (or gets, just before execution) its own detailed sub-plan file.
 | **3. Chat-group home + organizer trip creation** ✅ **DONE** (commits `7c89e36`, `cead8bb`, `3853bb3`, `e6fede2`, `8a5d1c0` on `feat/travel-dna-safety-pivot`) | `2026-09-07-safety-pivot-slice-3-chats-home.md` | Task 6 | `202609060006` `chat_home()` (bounded lateral latest message + 8-avatar cap); `lib/repositories/chat-home.ts`; `app/api/chats/route.ts` (GET list, POST organizer frame → `201`); `components/chat-home-view.tsx`; `app/chats/page.tsx`; minimal `app/trips/[tripId]/chat/page.tsx`; authenticated `/` → `/chats`. Full suite green (909). |
 | **4. Pre-join preview + member entry + alignment summary** ✅ **DONE** (commits `ba7a93f`, `6c489d6`, `26be264`, `d3afc79` on `feat/travel-dna-safety-pivot`) | `2026-09-07-safety-pivot-slice-4-member-entry.md` | New surface in the revised spec (§2.4, §3.3) | `app/actions/member-entry.ts` (`getMyMemberEntryContext` / `submitMyMemberEntry`); `app/api/trips/[tripId]/member-entry/route.ts`; `components/member-entry-panel.tsx` (preview + aggregate non-attributable alignment + form); `app/trips/[tripId]/entry/page.tsx` + chat link. `submit_member_entry` / `trip_alignment_summary` came from Slice 1. Full suite green (926). |
 | **5. Selected-trip navigation consolidation** ✅ **DONE** (commits `6370ad8`, `b27c58f`, `4204012` on `feat/travel-dna-safety-pivot`) | `2026-09-07-safety-pivot-slice-5-nav.md` | Task 7 | `app/trips/[tripId]/layout.tsx` (single auth+membership gate, draft-tolerant) + `components/trip-shell.tsx` (Chat/Plan/Timeline/Your-prefs nav, Plan+Timeline locked until `ready`, "All trip groups" back link); `WorkspaceShell` slimmed to `{mapSlot,chatSlot}` (bar + jigsaw toggle gone); new `/trips/[tripId]` → `/chat`, `/plan`, `/timeline` routes; `/workspace` → `/plan` redirect. Full suite green (929). |
-| **6. Global defaults in planning + verification** | `2026-09-07-safety-pivot-slice-6-planning-verify.md` (write before exec) | Tasks 8–9 | Constraint gate evaluates each member's active **global** confirmed constraints ∪ trip confirmed constraints via a narrow server projection (no raw cross-member data, social role never exposed); current-trip explicit prefs/expiring signals reweight global soft defaults without overwriting; `docs/implementation-status.md` updated per shipped behavior; full lint/typecheck/test/build + hosted acceptance runbook. |
+| **6. Global defaults in planning + verification** ✅ **DONE** (commits `390e804`, `9bf3830`, `275e85f` on `feat/travel-dna-safety-pivot`) | `2026-09-07-safety-pivot-slice-6-planning-verify.md` | Tasks 8–9 | `202609060007` `trip_enforced_constraints(uuid)` — member-gated, non-attributable union of every member's active global confirmed constraints + the trip's; `SupabaseTripRepository.listConfirmedConstraints` reads it, so the Section VII gate (proposal validation, POI choices, schedule validation, trip-proposals) enforces the union. `docs/implementation-status.md` + `docs/testing/safety-first-pivot-acceptance.md` updated. Full sweep green (935 tests, build OK). Soft-default reweighting is left as a contract for the future ε-greedy recommender; social role is no longer global. |
 
 ## Cross-slice self-review checklist (run after each slice)
 
