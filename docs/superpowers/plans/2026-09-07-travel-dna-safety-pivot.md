@@ -125,6 +125,12 @@ Strict order was **1 → 2 → 3 → 4 → 5 → 6**. Each slice has its own det
     PGlite `beforeAll` hooks couple `202609060004` and `202609060005`.
   - `user_travel_profiles` keeps `backfilled_from_trip_member_id` (added by `202609060003`);
     only the four pre-pivot answer columns drop.
+  - **Post-review fix (`c8cc406`)** to `202609060004`: `trip_member_entries` INSERT/UPDATE RLS
+    now also require `is_trip_member(trip_id)` (was `user_id = auth.uid()` only — a non-member
+    could inject entries via direct PostgREST); `trip_alignment_summary` joins entries back to
+    a current `trip_members` row; `submit_member_entry` validates override flags against the
+    typed vocabulary and rejects an inverted availability range (also enforced in
+    `memberEntrySchema`).
 - **Slice 2 deviations from its sub-plan** (all green, no scope change):
   - New `components/user-onboarding-wizard.tsx` rather than mutating the delivered
     five-screen `components/onboarding-wizard.tsx` — the two contracts (safety-only vs the
