@@ -4,7 +4,9 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { verifiedUser } from "@/lib/supabase/auth";
 import { AppError, databaseError } from "@/lib/http/errors";
-import { submitBodySchema, type OnboardingSnapshot } from "@/lib/domain/onboarding";
+// Trip-scoped onboarding is the frozen compat-window flow (spec §4.5); it keeps the
+// pre-pivot answer/snapshot shape. New global onboarding lives in app/actions/user-onboarding.ts.
+import { legacySubmitBodySchema as submitBodySchema, type LegacyOnboardingSnapshot as OnboardingSnapshot } from "@/lib/domain/onboarding-legacy";
 import {
   dietaryFlagSchema, religiousAccessFlagSchema, mobilityFlagSchema,
 } from "@/lib/domain/constraints";

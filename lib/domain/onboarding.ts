@@ -1,17 +1,21 @@
-// Travel DNA is a global, per-user preference baseline collected once at first login
-// (spec 2026-09-06-first-login-travel-dna-chat-groups-design.md). It carries no trip
-// scope: these contracts describe the answers and the CAS-checked submission body only.
-// The five answer groups, the epsilon grid, strict objects, vocabulary caps, and the
-// Quick-mode defaults are load-bearing — keep them locked with tests, not prose.
+// Global Travel DNA is a per-user preference baseline collected once at first login
+// (spec 2026-09-06-first-login-travel-dna-chat-groups-design.md, revised 2026-09-07).
+// After the safety-first pivot the survey asks for only what is safe to reuse across
+// trips: one safety-vault screen of confirmed dietary / religious-access / mobility
+// requirements, plus ONE optional general surprise-tolerance dial. Budget, pace, social
+// role, walking caps, and destination interests are NOT global onboarding answers — they
+// belong to a specific trip and are collected on create/join. The epsilon grid, strict
+// objects, and vocabulary caps are load-bearing — keep them locked with tests, not prose.
 import { z } from "zod";
-import { budgetTierSchema, paceLevelSchema, type BudgetTier, type PaceLevel } from "@/lib/domain/trip";
 import {
   dietaryFlagSchema, religiousAccessFlagSchema, mobilityFlagSchema,
   DIETARY_FLAGS, RELIGIOUS_ACCESS_FLAGS, MOBILITY_FLAGS,
   type DietaryFlag, type ReligiousAccessFlag, type MobilityFlag,
 } from "@/lib/domain/constraints";
 
-/** Step 1 of Task 1.6. Keep in sync with the `traveler_travel_vibe` enum in
+/** Optional general travel baseline. Not asked during first-login onboarding after the
+ * pivot; kept for a later **My Travel Preferences** editor and backfill/compat reads.
+ * Keep in sync with the `traveler_travel_vibe` enum in
  * supabase/migrations/202609060001_onboarding_profile.sql. */
 export const TRAVEL_VIBES = ["heritage", "food", "nature", "urban"] as const;
 export type TravelVibe = (typeof TRAVEL_VIBES)[number];
@@ -23,32 +27,11 @@ export const TRAVEL_VIBE_LABELS: Readonly<Record<TravelVibe, string>> = {
   urban: "Urban & nightlife",
 };
 
-/** Step 4. Keep in sync with the `traveler_social_role` enum (migration 202609050006). */
-export const SOCIAL_ROLES = ["navigator", "chronicler", "gourmand", "go_with_the_flow", "negotiator"] as const;
-export type SocialRole = (typeof SOCIAL_ROLES)[number];
-export const socialRoleSchema = z.enum(SOCIAL_ROLES);
-export const SOCIAL_ROLE_LABELS: Readonly<Record<SocialRole, string>> = {
-  navigator: "Navigator — keeps us on track",
-  chronicler: "Chronicler — photos and notes",
-  gourmand: "Gourmand — food comes first",
-  go_with_the_flow: "Go with the flow",
-  negotiator: "Negotiator — settles group calls",
-};
-
-/** Step 2 walking-distance cap. `null` means "no limit"; a number is metres for
- * `traveler_profiles.mobility_threshold_m`. */
-export const WALKING_CAP_PRESETS: ReadonlyArray<{ value: number | null; label: string }> = [
-  { value: 500, label: "500 m" },
-  { value: 1000, label: "1 km" },
-  { value: 2000, label: "2 km" },
-  { value: null, label: "No limit" },
-];
-
 export const SURPRISE_DIAL_DEFAULT = 3;
 const EPSILON_GRID = [0, 0.075, 0.15, 0.225, 0.3] as const;
 const dialSchema = z.number().int().min(1).max(5);
 
-/** Step 5. Dial 1..5 -> serendipity_epsilon grid, linear across 0.0..0.3. */
+/** Dial 1..5 -> serendipity_epsilon grid, linear across 0.0..0.3. */
 export function surpriseDialToEpsilon(dial: number): number {
   return EPSILON_GRID[dialSchema.parse(dial) - 1];
 }
@@ -65,35 +48,21 @@ export function epsilonToSurpriseDial(epsilon: number): number {
   return index + 1;
 }
 
-const walkingCapSchema = z.number().int().min(0).max(50000).nullable();
-
 function dealbreakerArray<T extends string>(flag: z.ZodType<T>, vocab: readonly T[]) {
   return z.array(flag).max(vocab.length).transform((values) => [...new Set(values)]);
 }
 
-const dealbreakersSchema = z.strictObject({
+export const dealbreakersSchema = z.strictObject({
   dietary: dealbreakerArray(dietaryFlagSchema, DIETARY_FLAGS).default([]),
   religiousAccess: dealbreakerArray(religiousAccessFlagSchema, RELIGIOUS_ACCESS_FLAGS).default([]),
   mobility: dealbreakerArray(mobilityFlagSchema, MOBILITY_FLAGS).default([]),
 });
 
-const sharedFields = {
+export const onboardingAnswersSchema = z.strictObject({
   dealbreakers: dealbreakersSchema,
-  walkingCapM: walkingCapSchema,
-  budgetLean: budgetTierSchema,
-};
-
-export const onboardingAnswersSchema = z.discriminatedUnion("mode", [
-  z.strictObject({ mode: z.literal("quick"), ...sharedFields }),
-  z.strictObject({
-    mode: z.literal("full"),
-    ...sharedFields,
-    vibe: travelVibeSchema,
-    pace: paceLevelSchema,
-    socialRole: socialRoleSchema,
-    surpriseDial: dialSchema,
-  }),
-]);
+  // 1..5, or null to skip the optional exploration dial (spec §2.2).
+  surpriseDial: dialSchema.nullable().default(null),
+});
 export type OnboardingAnswers = z.infer<typeof onboardingAnswersSchema>;
 
 export const submitBodySchema = z.strictObject({
@@ -105,11 +74,7 @@ export type SubmitBody = z.infer<typeof submitBodySchema>;
 export type OnboardingSnapshot = {
   profile: {
     travelVibe: TravelVibe | null;
-    budgetLean: BudgetTier | null;
-    pace: PaceLevel;
-    socialRole: SocialRole | null;
     serendipityEpsilon: number;
-    mobilityThresholdM: number | null;
     onboardingCompletedAt: string | null;
   } | null;
   profileRevision: number;

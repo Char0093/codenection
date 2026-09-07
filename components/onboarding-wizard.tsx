@@ -8,12 +8,18 @@ import {
   MOBILITY_FLAGS, MOBILITY_FLAG_LABELS,
 } from "@/lib/domain/constraints";
 import { budgetTiers, paceLevels } from "@/lib/domain/trip";
-import {
-  TRAVEL_VIBES, TRAVEL_VIBE_LABELS, SOCIAL_ROLES, SOCIAL_ROLE_LABELS,
-  WALKING_CAP_PRESETS, SURPRISE_DIAL_DEFAULT, epsilonToSurpriseDial,
-  type OnboardingSnapshot, type TravelVibe, type SocialRole,
-} from "@/lib/domain/onboarding";
 import type { BudgetTier, PaceLevel } from "@/lib/domain/trip";
+import {
+  TRAVEL_VIBES, TRAVEL_VIBE_LABELS, SURPRISE_DIAL_DEFAULT, epsilonToSurpriseDial,
+  type TravelVibe,
+} from "@/lib/domain/onboarding";
+// TODO(slice-2): replace this whole component with the two-screen safety-first wizard
+// (safety vault + optional dial) + an `endpoint` prop. Until then it is the delivered
+// trip-scoped five-screen flow and reads the frozen legacy contract.
+import {
+  SOCIAL_ROLES, SOCIAL_ROLE_LABELS, WALKING_CAP_PRESETS,
+  type SocialRole, type LegacyOnboardingSnapshot as OnboardingSnapshot,
+} from "@/lib/domain/onboarding-legacy";
 
 type Draft = {
   vibe: TravelVibe | null;

@@ -5,7 +5,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OnboardingWizard } from "@/components/onboarding-wizard";
-import type { OnboardingSnapshot } from "@/lib/domain/onboarding";
+import type { LegacyOnboardingSnapshot as OnboardingSnapshot } from "@/lib/domain/onboarding-legacy";
 
 const replace = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace, push: vi.fn(), refresh: vi.fn() }) }));
