@@ -144,10 +144,12 @@ export class SupabaseTripRepository implements TripRepository {
 
   async listConfirmedConstraints(tripId: string): Promise<ConfirmedConstraintFlag[]> {
     await this.userId();
-    const { data, error } = await this.client
-      .from("confirmed_trip_constraints").select("kind,flag,severity").eq("trip_id", tripId);
+    // The Section VII gate evaluates the union of every member's active GLOBAL confirmed
+    // constraints and the trip's active confirmed constraints (spec §3.2). The RPC is a
+    // member-gated, non-attributable projection -- (kind, flag, severity) only.
+    const { data, error } = await this.client.rpc("trip_enforced_constraints", { p_trip_id: tripId });
     if (error) databaseError(error);
-    return (data ?? []).map((row) => confirmedConstraintRowSchema.parse(row));
+    return ((data ?? []) as unknown[]).map((row) => confirmedConstraintRowSchema.parse(row));
   }
 
   async listTravelerCaps(tripId: string): Promise<TravelerCapRow[]> {
