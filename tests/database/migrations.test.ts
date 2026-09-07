@@ -661,6 +661,60 @@ describe("shared generation reservations", () => {
   });
 });
 
+describe("assistant prompt reservations", () => {
+  const reserveAssistant = (target = trip) => db.query("select public.reserve_assistant_prompt($1)", [target]);
+
+  it("lets an ordinary member and a viewer reserve, unlike reserve_generation's owner/planner gate", async () => {
+    for (const user of [owner, planner, member, viewer]) {
+      await actor(user);
+      await expect(reserveAssistant()).resolves.toBeDefined();
+    }
+  });
+
+  it("rejects a non-member and requires authentication", async () => {
+    await actor(stranger);
+    await expect(reserveAssistant()).rejects.toMatchObject({ code: "42501" });
+    await actor(null);
+    await expect(reserveAssistant()).rejects.toMatchObject({ code: "42501" });
+  });
+
+  it("works on a draft trip -- unlike reserve_generation, it has no ready-status requirement", async () => {
+    await actor(null, "postgres");
+    const draft = (await db.query<{ id: string; status: string }>(
+      `insert into trips(owner_user_id,name,destination_name) values ($1,'Draft trip','Melaka') returning id,status`,
+      [owner],
+    )).rows[0];
+    expect(draft.status).toBe("draft"); // no dates -> trips_promote_when_ready leaves it draft
+    // create_trip_owner_membership already gave `owner` a trip_members row atomically.
+    await actor(owner);
+    await expect(db.query("select public.reserve_assistant_prompt($1)", [draft.id])).resolves.toBeDefined();
+    // Contrast: reserve_generation refuses the same incomplete trip.
+    await expect(db.query("select public.reserve_generation($1)", [draft.id])).rejects.toMatchObject({ code: "22023" });
+  });
+
+  it("rate-limits a trip to five reservations across users within ten minutes, independently of the generation quota", async () => {
+    await reserveAssistant();
+    await actor(planner);
+    await reserveAssistant();
+    await actor(member);
+    await reserveAssistant();
+    await actor(viewer);
+    await reserveAssistant();
+    await actor(owner);
+    await reserveAssistant();
+    await expect(reserveAssistant()).rejects.toMatchObject({ code: "P0003" });
+    // The full-generation quota (a separate table) is untouched by assistant reservations.
+    await expect(db.query("select public.reserve_generation($1)", [trip])).resolves.toBeDefined();
+  });
+
+  it("rejects unauthenticated and anonymous RPC execution", async () => {
+    for (const role of ["anon", "service_role"]) {
+      await actor(owner, role);
+      await expect(reserveAssistant()).rejects.toThrow(/permission denied/);
+    }
+  });
+});
+
 describe("trip chat", () => {
   async function memberIdFor(user: string, target = trip) {
     return (await db.query<{ id: string }>(
@@ -752,6 +806,38 @@ describe("trip chat", () => {
       "select body from chat_messages where trip_id=$1 order by created_at, id", [trip],
     )).rows;
     expect(ordered.map((row) => row.body)).toEqual(["first", "second"]);
+  });
+
+  it("rate-limits one member's rapid inserts, at the table -- not just in application code -- without blocking a different member", async () => {
+    await actor(owner);
+    const ownerMemberId = await memberIdFor(owner);
+    for (let i = 0; i < 15; i += 1) {
+      await db.query(
+        "insert into chat_messages(trip_id,author_member_id,author_kind,body) values ($1,$2,'member',$3)",
+        [trip, ownerMemberId, `msg ${i}`],
+      );
+    }
+    await expect(db.query(
+      "insert into chat_messages(trip_id,author_member_id,author_kind,body) values ($1,$2,'member','one too many')",
+      [trip, ownerMemberId],
+    )).rejects.toMatchObject({ code: "P0004" });
+
+    // A different member on the same trip is unaffected -- the limit is per author, not per trip.
+    await actor(member);
+    const memberMemberId = await memberIdFor(member);
+    await expect(db.query(
+      "insert into chat_messages(trip_id,author_member_id,author_kind,body) values ($1,$2,'member','still fine')",
+      [trip, memberMemberId],
+    )).resolves.toBeDefined();
+
+    // Once the 30-second window rolls off, the same member can post again.
+    await actor(null, "postgres");
+    await db.query("update chat_messages set created_at = now() - interval '31 seconds' where trip_id=$1 and author_member_id=$2", [trip, ownerMemberId]);
+    await actor(owner);
+    await expect(db.query(
+      "insert into chat_messages(trip_id,author_member_id,author_kind,body) values ($1,$2,'member','back again')",
+      [trip, ownerMemberId],
+    )).resolves.toBeDefined();
   });
 });
 

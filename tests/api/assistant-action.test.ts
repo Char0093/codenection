@@ -68,10 +68,10 @@ describe("askTripAssistant", () => {
     mocks.askAssistant.mockRejectedValue(new Error("provider down"));
     await expect(askTripAssistant(tripId, "hi")).rejects.toThrow("provider down");
     expect(mocks.rpc).toHaveBeenCalledTimes(1); // only the rate-limit reservation, never a proposal or message write
-    expect(mocks.rpc).toHaveBeenCalledWith("reserve_generation", { target_trip_id: tripId });
+    expect(mocks.rpc).toHaveBeenCalledWith("reserve_assistant_prompt", { target_trip_id: tripId });
   });
 
-  it("enforces the shared rate limit before ever calling the model", async () => {
+  it("enforces its own rate limit (not the owner/planner-only generation gate) before ever calling the model", async () => {
     mocks.rpc.mockResolvedValueOnce({ data: null, error: { code: "P0003", message: "rate_limit" } });
     await expect(askTripAssistant(tripId, "hi")).rejects.toMatchObject({ status: 429 });
     expect(mocks.askAssistant).not.toHaveBeenCalled();

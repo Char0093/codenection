@@ -28,7 +28,10 @@ export async function askTripAssistant(tripId: string, question: string) {
   if (memberError) databaseError(memberError);
   if (!member) throw new AppError(403, "You are not a member of this trip.", "FORBIDDEN");
 
-  const { error: reservationError } = await client.rpc("reserve_generation", { target_trip_id: tripId });
+  // A separate, membership-gated reservation from reserve_generation (owner/planner-only,
+  // for full itinerary generation) -- see 202609070001. Reusing that RPC here made the
+  // assistant unusable for every ordinary member despite the membership check above.
+  const { error: reservationError } = await client.rpc("reserve_assistant_prompt", { target_trip_id: tripId });
   if (reservationError) databaseError(reservationError);
 
   const repository = await tripRepository();
