@@ -255,21 +255,28 @@ Missing:
 - Conservative lowest-budget reducer and private dislike filtering.
 - Aggregate-only assistant wording and non-reconstruction tests.
 
-### Task 1.6 — Onboarding questionnaire (Travel DNA): Safety-first pivot delivered locally
+### Task 1.6 — Onboarding questionnaire (Travel DNA): Safety-first pivot — merge-ready
 
-**Audit status (2026-09-07, re-audited):** the audit's one P1 and two P2 findings —
-non-member direct writes to `trip_member_entries` influencing the aggregate summary, the
-member-entry RPC not server-whitelisting override flags, and partial availability accepting
-inverted date ranges — are all **resolved** in `202609060004` and
+**Audit status (2026-09-07, re-audited and hosted-verified):** the audit's one P1 and two P2
+findings — non-member direct writes to `trip_member_entries` influencing the aggregate
+summary, the member-entry RPC not server-whitelisting override flags, and partial availability
+accepting inverted date ranges — are all **resolved** in `202609060004` and
 `lib/domain/member-entry.ts`, with direct RLS/RPC regression coverage in
 `tests/database/user-onboarding-rls.test.ts` (non-member insert, cross-trip update, removed
 member, off-vocabulary flag, inverted range). The re-audit also found and fixed a fourth,
 related P2: those fixes were RPC-only while `trip_member_entries` carries direct write grants,
 so any member could bypass them via PostgREST — table CHECK constraints now enforce the
 override vocabulary, date order, and no-duplicates at the storage boundary. Local checks are
-green: lint, typecheck, build, and 941 tests. The pivot is still **not merge-ready**: the hosted two-user acceptance run
-(`docs/testing/safety-first-pivot-acceptance.md`) is the remaining blocker. Findings and the
-in-place-migration deviation are recorded in `docs/testing/safety-first-pivot-audit.md`.
+green: lint, typecheck, build, and 941 tests. **The hosted two-user acceptance run is now
+complete** (2026-09-07): migrations `202609060003`–`202609060007` applied and verified against
+the hosted project, and all four audit findings — including the member-write-bypass fix — were
+re-verified **live** via direct signed PostgREST requests (non-member insert → `42501`, member
+off-vocabulary/inverted-date direct writes → `23514`), not only PGlite. The full acceptance
+checklist (`docs/testing/safety-first-pivot-acceptance.md` §1–§6) passed, including a live
+end-to-end confirmation of the fail-closed severe-allergen gate blocking real food POIs on the
+Plan page. **The pivot is merge-ready** pending human review. One non-blocking UX-copy
+observation and throwaway-test-data cleanup are recorded in
+`docs/testing/safety-first-pivot-audit.md`, which also carries the full hosted-run detail.
 
 **The safety-first pivot shipped locally** on `feat/travel-dna-safety-pivot` (2026-09-07),
 implementing `docs/superpowers/specs/2026-09-06-first-login-travel-dna-chat-groups-design.md`
@@ -301,10 +308,10 @@ its six slice sub-plans. What changed from the trip-scoped compatibility slice b
 
 **Explicit follow-ups (not in the pivot):** retire `components/trip-setup-dashboard.tsx` +
 rewrite its Playwright spec against `/chats` → `/plan`; retire the trip-scoped onboarding
-route/action/five-screen wizard/nudge once hosted backfill counts verify (spec §4.6);
+route/action/five-screen wizard/nudge now that hosted backfill counts are verified (spec §4.6);
 destination-specific POI candidate-card ratings; ε-greedy soft-default reweighting of the
-global exploration dial; hosted two-user acceptance run
-(`docs/testing/safety-first-pivot-acceptance.md`).
+global exploration dial; a copy pass on the per-trip safety-override "Dropped for this trip"
+label (see the hosted-run observation in `docs/testing/safety-first-pivot-audit.md`).
 
 ---
 
