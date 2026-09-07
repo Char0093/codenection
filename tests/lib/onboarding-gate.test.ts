@@ -11,7 +11,7 @@ describe("isGateExempt", () => {
 });
 
 describe("isOnboardingComplete", () => {
-  const client = (result: { data: unknown; error: unknown }) => ({
+  const client = (result: { data: { onboarding_completed_at?: string | null } | null; error: unknown }) => ({
     from: () => ({ select: () => ({ maybeSingle: async () => result }) }),
   });
   it("is true only when a row carries a non-null onboarding_completed_at", async () => {

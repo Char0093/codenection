@@ -7,11 +7,13 @@ export function isGateExempt(path: string): boolean {
     || path.startsWith("/onboarding/");
 }
 
+// Loose on purpose: middleware passes its `@supabase/ssr` server client, a server component
+// passes `createClient()`'s. Both expose `.from(t).select(c).maybeSingle()` returning a
+// thenable `{ data, error }`; RLS scopes the read to `auth.uid()`.
+type ProbeResult = { data: { onboarding_completed_at?: string | null } | null; error: unknown };
 type OnboardingProbeClient = {
   from: (table: string) => {
-    select: (columns: string) => {
-      maybeSingle: () => Promise<{ data: unknown; error: unknown }>;
-    };
+    select: (columns: string) => { maybeSingle: () => PromiseLike<ProbeResult> };
   };
 };
 
@@ -25,6 +27,5 @@ export async function isOnboardingComplete(client: OnboardingProbeClient): Promi
     .select("onboarding_completed_at")
     .maybeSingle();
   if (error) return true;
-  const row = data as { onboarding_completed_at?: string | null } | null;
-  return row?.onboarding_completed_at != null;
+  return data?.onboarding_completed_at != null;
 }
