@@ -81,7 +81,7 @@ Each slice has (or gets, just before execution) its own detailed sub-plan file.
 
 | Slice | Sub-plan file | Covers (prior-plan tasks) | Ships |
 | --- | --- | --- | --- |
-| **1. Contracts + schema + backfill** | `2026-09-07-safety-pivot-slice-1-contracts-schema.md` (written) | Tasks 1–3, redone | Safety-only onboarding contract; `202609060004` drops 4 profile columns + reworks `submit_user_onboarding` + replaces `create_trip_group` with the organizer frame + adds `trip_member_entries`; `202609060005` reworks the backfill. Tests only — no app code. |
+| **1. Contracts + schema + backfill** ✅ **DONE** (commits `9e9330c`, `ba9e4e4`, `c6b3a62` on `feat/travel-dna-safety-pivot`) | `2026-09-07-safety-pivot-slice-1-contracts-schema.md` | Tasks 1–3, redone | Safety-only onboarding contract; `202609060004` drops 4 profile columns + reworks `submit_user_onboarding` + replaces `create_trip_group` with the organizer frame + adds `trip_member_entries` / `submit_member_entry` / `trip_alignment_summary`; `202609060005` reworks the backfill. Tests only — no app code. Full suite green (857), lint/typecheck/build clean. |
 | **2. First-login gate + global onboarding** | `2026-09-07-safety-pivot-slice-2-gate-onboarding.md` (write before exec) | Tasks 4–5 | `lib/onboarding/gate.ts`; `app/actions/user-onboarding.ts`; `app/api/onboarding/route.ts`; `app/onboarding/page.tsx`; `app/preferences/page.tsx`; `middleware.ts` gate; `components/onboarding-wizard.tsx` → two-screen safety-first + `endpoint` prop (trip-scoped callers unchanged). |
 | **3. Chat-group home + organizer trip creation** | `2026-09-07-safety-pivot-slice-3-chats-home.md` (write before exec) | Task 6 | `app/chats/page.tsx` + list/create components; `app/api/chats/route.ts` (GET membership-scoped list, POST organizer frame → `201`); root `/` redirect to `/onboarding` \| `/chats`; ordering by recent chat activity without unbounded message reads. |
 | **4. Pre-join preview + member entry + alignment summary** | `2026-09-07-safety-pivot-slice-4-member-entry.md` (write before exec) | New surface in the revised spec (§2.4, §3.3) | Trip-preview + member-entry components; `submit_member_entry` RPC; `trip_alignment_summary` `security definer` aggregate fn; destination-specific candidate-card ratings. Invitation **send/accept UI stays deferred** — the boundary is fixed and the current member (organizer) can fill their own entry. |
@@ -109,6 +109,18 @@ Each slice has (or gets, just before execution) its own detailed sub-plan file.
 - **`trip_mode` vocabulary is invented.** The spec says "a broad trip mode" without values.
   Slice 1 defines `TRIP_MODES = ["relaxed", "balanced", "adventurous", "mixed"]` as a
   Postgres enum `public.trip_mode`. Easy to change; isolated to one enum + one Zod schema.
+- **Slice 1 deviations from its sub-plan** (all green, no scope change):
+  - Added `lib/domain/onboarding-legacy.ts` — `submitBodySchema` / `OnboardingSnapshot` were
+    shared with the still-live trip-scoped compat flow, so the pre-pivot contract was frozen
+    in its own module (cleaner than casting). `app/actions/onboarding.ts` and the five-screen
+    `components/onboarding-wizard.tsx` repoint to it, no behavior change. Slice 2 replaces the
+    wizard outright.
+  - `tests/domain/trip-frame.test.ts` folded into the existing `tests/domain/trip.test.ts`
+    (repo keeps trip-domain tests in one file).
+  - Plan Tasks 3+4+5 landed as one DB commit — the migration-presence assertions in the
+    PGlite `beforeAll` hooks couple `202609060004` and `202609060005`.
+  - `user_travel_profiles` keeps `backfilled_from_trip_member_id` (added by `202609060003`);
+    only the four pre-pivot answer columns drop.
 - **"dates or duration".** Slice 1 accepts either an explicit `startDate`+`endDate` pair
   (≤14 days, the path that can reach `status = 'ready'`) **or** a `plannedDurationDays`
   integer (1–14). Duration-only frames enable chat but stay `draft` until real dates are
