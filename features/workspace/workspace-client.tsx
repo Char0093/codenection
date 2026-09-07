@@ -7,9 +7,8 @@ import { TravelDnaNudge } from "@/components/travel-dna-nudge";
 import type { JigsawMember } from "@/features/timeline/jigsaw-panel";
 import type { ProposalRecord } from "@/lib/repositories/planning-repository";
 
-export function WorkspaceClient({ tripId, tripName, members, selfMemberId, canDecideProposals, initialActiveProposalId, mapSlot, needsOnboarding }: {
+export function WorkspaceClient({ tripId, members, selfMemberId, canDecideProposals, initialActiveProposalId, mapSlot, needsOnboarding }: {
   tripId: string;
-  tripName: string;
   members: readonly JigsawMember[];
   selfMemberId: string | null;
   canDecideProposals: boolean;
@@ -59,7 +58,7 @@ export function WorkspaceClient({ tripId, tripName, members, selfMemberId, canDe
   return (
     <>
       {needsOnboarding && <TravelDnaNudge tripId={tripId} />}
-      <WorkspaceShell tripName={tripName} members={members} blocks={[]}
+      <WorkspaceShell
         mapSlot={mapSlot}
         chatSlot={<ChatPane tripId={tripId} selfMemberId={selfMemberId} members={members}
           proposalsById={proposalsById} canDecideProposals={canDecideProposals}

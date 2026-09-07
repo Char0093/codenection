@@ -1,44 +1,10 @@
-import { notFound, redirect } from "next/navigation";
-import { WorkspaceClient } from "@/features/workspace/workspace-client";
-import { TimelinePane } from "@/features/timeline/timeline-pane";
-import { getOnboardingNeeded } from "@/app/actions/onboarding";
-import { tripRepository } from "@/lib/repositories/server";
-import { colorForMemberIndex, listTripMembers } from "@/lib/repositories/members";
-import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
 
+// The selected-trip workspace is now a section of the shared shell (Slice 5). Keep this
+// legacy path working by redirecting compatible links into the shell's Plan surface.
 export const dynamic = "force-dynamic";
 
-export default async function WorkspacePage({ params }: { params: Promise<{ tripId: string }> }) {
-  if (!isSupabaseConfigured()) redirect("/login");
+export default async function LegacyWorkspacePage({ params }: { params: Promise<{ tripId: string }> }) {
   const { tripId } = await params;
-
-  const client = await createClient();
-  const { data: { user } } = await client.auth.getUser();
-  if (!user) redirect("/login");
-
-  let trip;
-  try {
-    trip = await (await tripRepository()).getTrip(tripId);
-  } catch {
-    notFound();
-  }
-
-  const memberRows = await listTripMembers(client, tripId);
-  const members = memberRows.map((row, index) => ({ id: row.id, displayName: row.displayName, color: colorForMemberIndex(index) }));
-  const selfMemberId = memberRows.find((row) => row.userId === user.id)?.id ?? null;
-  const needsOnboarding = await getOnboardingNeeded(trip.id);
-
-  return (
-    <WorkspaceClient
-      tripId={trip.id}
-      tripName={trip.destinationName}
-      members={members}
-      selfMemberId={selfMemberId}
-      canDecideProposals={trip.role === "owner"}
-      initialActiveProposalId={trip.activeProposalId}
-      mapSlot={<TimelinePane tripId={trip.id} startDate={trip.startDate} endDate={trip.endDate} revision={trip.revision} />}
-      needsOnboarding={needsOnboarding}
-    />
-  );
+  redirect(`/trips/${tripId}/plan`);
 }
