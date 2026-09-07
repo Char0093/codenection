@@ -20,9 +20,9 @@
 | Area | Status | Summary |
 | --- | --- | --- |
 | Delivered foundation | Delivered locally | Auth, trip CRUD, Gemini itinerary proposals, deterministic schedule validation, proposal confirmation, RLS, revisions, and rate reservations. |
-| Phase 1: preferences and safety | Partial | The typed constraint schema, trip-scoped onboarding slice, `poi_catalog`, deterministic hard-constraint gate, and constraint-aware POI grounding exist. Product direction now requires migrating onboarding to a global first-login Travel DNA profile with self-only constraints and deterministic backfill; that rework is designed but not implemented. Context extraction, hybrid preference signals, and pre-generation daily planning windows remain. Gate `warn`s are computed but not yet surfaced in the UI. |
+| Phase 1: preferences and safety | Partial, advanced | The safety-first pivot shipped locally on `feat/travel-dna-safety-pivot`: a ~10-second global first-login Travel DNA (safety-vault screen + optional exploration dial), a first-login redirect gate, `/preferences`, self-only `user_travel_profiles` / `user_travel_constraints` with deterministic backfill, and a hard-constraint gate that now evaluates each member's active global confirmed constraints unioned with the trip's (`trip_enforced_constraints`). Remaining: context extraction, hybrid expiring-signal reweighting of the global exploration default (needs the ε-greedy recommender), pre-generation daily planning windows, and surfacing gate `warn`s in the UI. |
 | Phase 2: optimizer and ledger | Not started, except math helper | No Python service, optimizer client, Knapsack solver, Redis integration, or receipt ledger persistence. |
-| Phase 3: collaborative workspace | Partial, substantial | Jigsaw engine, trip chat, assistant proposals, responsive workspace, and the day builder exist. The new `/chats` authenticated home, name-only draft group creation, `/trips/[tripId]/chat` entry route, and consolidated Chat/Plan/Timeline navigation are designed but not implemented. Invite delivery remains explicitly deferred. |
+| Phase 3: collaborative workspace | Partial, substantial | Jigsaw engine, trip chat, assistant proposals, responsive workspace, and the day builder exist. The safety-first pivot added the `/chats` authenticated home, organizer-framed group creation (`create_trip_group`: destination + trip mode + dates-or-duration), the `/trips/[tripId]/chat` default surface, a shared Chat/Plan/Timeline/prefs shell, and the per-trip member-entry flow (`submit_member_entry` + the aggregate `trip_alignment_summary`). Invite delivery and POI candidate-card ratings remain explicitly deferred. |
 | Phases 4–9 | Not started | Routing, split/merge execution, serendipity, on-site tools, self-healing, VQA, deployment, and full demo path remain. |
 | Phase 10: Android companion | Conditional, not started | Post-web Kotlin/Compose companion. It starts only after Phase 9, one stable API release, and demonstrated user demand. |
 
@@ -255,15 +255,48 @@ Missing:
 - Conservative lowest-budget reducer and private dislike filtering.
 - Aggregate-only assistant wording and non-reconstruction tests.
 
-### Task 1.6 — Onboarding questionnaire (Travel DNA): Partial (slice 1 delivered)
+### Task 1.6 — Onboarding questionnaire (Travel DNA): Safety-first pivot delivered locally
 
-**Direction changed after delivery.** The implementation below is a trip-scoped compatibility slice,
-not the final entry flow. The approved design now requires one account-level first-login survey,
-followed by redirect to `/chats`; see
-`docs/superpowers/specs/2026-09-06-first-login-travel-dna-chat-groups-design.md` and
-`docs/superpowers/plans/2026-09-06-first-login-travel-dna-chat-groups.md`.
+**The safety-first pivot shipped locally** on `feat/travel-dna-safety-pivot` (2026-09-07),
+implementing `docs/superpowers/specs/2026-09-06-first-login-travel-dna-chat-groups-design.md`
+(revised 2026-09-07) via `docs/superpowers/plans/2026-09-07-travel-dna-safety-pivot.md` and
+its six slice sub-plans. What changed from the trip-scoped compatibility slice below:
 
-Implemented 2026-09-06 (`docs/superpowers/specs/2026-09-06-onboarding-survey-slice-design.md`):
+- **Contract (`lib/domain/onboarding.ts`):** onboarding answers are now
+  `{ dealbreakers, surpriseDial: number | null }` — one safety-vault screen plus one
+  optional exploration dial. `budget_lean` / `pace` / `social_role` / walking cap / the
+  `quick`|`full` modes are gone from the global contract; the pre-pivot shape is frozen in
+  `lib/domain/onboarding-legacy.ts` for the trip-scoped compat flow.
+- **Schema (`202609060004`):** drops `user_travel_profiles.{budget_lean,pace,social_role,
+  mobility_threshold_m}`; reworks `submit_user_onboarding`; replaces `create_trip_group(text)`
+  with the 8-arg organizer frame; adds `trips.{trip_mode,proposed_budget_tier,split_allowed,
+  planned_duration_days}`, `trip_member_entries`, `submit_member_entry`,
+  `trip_alignment_summary`. `202609060005` reworks the backfill for the reduced columns.
+  `202609060006` adds `chat_home()`. `202609060007` adds `trip_enforced_constraints(uuid)` —
+  the gate now evaluates the union of each member's active global confirmed constraints and
+  the trip's, non-attributable and member-gated.
+- **App:** `lib/onboarding/gate.ts` + a `middleware.ts` first-login redirect gate;
+  `app/actions/user-onboarding.ts`; `app/api/onboarding` (GET/POST);
+  `app/onboarding/page.tsx`; `app/preferences/page.tsx`;
+  `components/user-onboarding-wizard.tsx` (two screens); `app/chats/page.tsx` +
+  `components/chat-home-view.tsx` + `app/api/chats`; `app/trips/[tripId]/layout.tsx` +
+  `components/trip-shell.tsx` (shared Chat/Plan/Timeline/prefs shell); `/trips/[tripId]/{,plan,
+  timeline}` routes; `/trips/[tripId]/entry` + `components/member-entry-panel.tsx` +
+  `app/actions/member-entry.ts` + its route; authenticated `/` → `/chats`;
+  `/trips/[tripId]/workspace` → `/plan`.
+
+**Explicit follow-ups (not in the pivot):** retire `components/trip-setup-dashboard.tsx` +
+rewrite its Playwright spec against `/chats` → `/plan`; retire the trip-scoped onboarding
+route/action/five-screen wizard/nudge once hosted backfill counts verify (spec §4.6);
+destination-specific POI candidate-card ratings; ε-greedy soft-default reweighting of the
+global exploration dial; hosted two-user acceptance run
+(`docs/testing/safety-first-pivot-acceptance.md`).
+
+---
+
+The trip-scoped compatibility slice, implemented 2026-09-06
+(`docs/superpowers/specs/2026-09-06-onboarding-survey-slice-design.md`), remains as the
+read-only compat path during the migration window:
 
 - `202609060001_onboarding_profile.sql`: `traveler_profiles` gains `travel_vibe`,
   `budget_lean`, `onboarding_completed_at`, and a server-managed `profile_revision`
@@ -314,15 +347,16 @@ confirmed dealbreaker** — this slice's Step 2 is add-only, and the wizard poin
 removals at the dashboard dietary picker (dietary) or a future constraint-review flow
 (religious-access, mobility).
 
-Required migration work (not started):
+Required migration work — **done in the safety-first pivot** (`feat/travel-dna-safety-pivot`):
 
-- Add self-only `user_travel_profiles` and audit-preserving `user_travel_constraints`.
-- Backfill each user deterministically from their most recently completed trip profile; preserve
-  `traveler_profiles` as compatibility/read-migration input during the transition.
-- Move the wizard/API to `/onboarding` and `/api/onboarding`, remove trip framing, enforce the
-  first-login gate, and redirect completion to `/chats`.
-- Update planning to combine global defaults with trip-specific overrides through narrow server
-  projections; never return another user's raw global profile.
+- ✅ Self-only `user_travel_profiles` + audit-preserving `user_travel_constraints`
+  (`202609060002`); reduced to the safety-only shape in `202609060004`.
+- ✅ Deterministic backfill from the most recently completed trip profile, `traveler_profiles`
+  preserved as compat input (`202609060003`, reworked in `202609060005`).
+- ✅ Global `/onboarding` + `/api/onboarding`, no trip framing, first-login gate, completion
+  → `/chats`.
+- ✅ Planning combines global + trip-specific confirmed constraints through the narrow
+  `trip_enforced_constraints(uuid)` projection; no raw cross-member profile is ever returned.
 
 ### Task 1.7 — Daily planning windows before generation: Not started
 
