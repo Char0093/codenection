@@ -1,13 +1,14 @@
-import { TripSetupDashboard } from "@/components/trip-setup-dashboard";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { redirect } from "next/navigation";
 
+// Authenticated root goes to the chat-group home (spec §5). Incomplete Travel DNA is caught
+// upstream by the middleware gate before this runs.
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   if (!isSupabaseConfigured()) redirect("/login");
   const { data: { user } } = await (await createClient()).auth.getUser();
   if (!user) redirect("/login");
-  return <TripSetupDashboard email={user.email ?? "Signed in"} />;
+  redirect("/chats");
 }

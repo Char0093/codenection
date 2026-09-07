@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { calendarDateSchema, tripStatusSchema } from "@/lib/domain/trip";
+import { calendarDateSchema, tripStatusSchema, tripModeSchema, budgetTierSchema } from "@/lib/domain/trip";
 
 /**
  * Contract for the chat-group home (`GET /api/chats`, spec §2.3 / §5). Each row is one
@@ -35,6 +35,11 @@ export const chatHomeTripSchema = z.strictObject({
   destinationName: z.string().nullable(),
   startDate: calendarDateSchema.nullable(),
   endDate: calendarDateSchema.nullable(),
+  // Organizer frame (spec §2.3 / §2.4) — shown in the list row and the future invite preview.
+  tripMode: tripModeSchema.nullable(),
+  plannedDurationDays: z.number().int().min(1).max(14).nullable(),
+  proposedBudgetTier: budgetTierSchema.nullable(),
+  memberCount: z.number().int().min(1),
   latestMessage: z
     .strictObject({
       preview: z.string().min(1).max(LATEST_MESSAGE_PREVIEW_MAX),

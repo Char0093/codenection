@@ -9,12 +9,11 @@
 **Files:** modify `lib/domain/onboarding.ts`; create/modify domain and route-contract tests.
 
 - Remove `tripId` from global onboarding input contracts.
-- Preserve the five answer groups, exact epsilon grid, strict objects, vocabulary caps,
-  and Quick-mode defaults.
-- Add schemas for draft trip-group creation and chat-home summaries.
+- Preserve typed safety constraints, the optional epsilon grid, strict objects, and vocabulary caps.
+- Add schemas for organizer-framed trip creation, pre-join member inputs, and chat-home summaries.
 - Test copy-independent behavior, invalid values, dedupe, and boundary values.
 
-## Task 2 — Add global profile, global constraints, and draft trips
+## Task 2 — Add global profile, global constraints, and organizer trip frames
 
 **Files:** create `supabase/migrations/202609060002_user_travel_profile_chat_groups.sql`;
 extend PGlite migration/RLS tests.
@@ -22,9 +21,9 @@ extend PGlite migration/RLS tests.
 - Create `user_travel_profiles` and `user_travel_constraints` with self-only RLS,
   column-scoped grants, completed-shape checks, and server-managed revisions.
 - Add a transactional `submit_user_onboarding(expected_revision, answers)` RPC.
-- Add draft-trip state and conditional setup checks so a name-only group is valid while
-  generation still requires destination and dates.
-- Add `create_trip_group(name)` RPC that creates the trip and owner membership atomically.
+- Add trip-frame and member-entry fields without weakening generation-time validation.
+- Add `create_trip_group(...)` RPC that validates destination, dates/duration, and broad trip mode,
+  then creates the trip and organizer membership atomically.
 - Test anonymous, self, cross-user, malformed input, CAS races, rollback, and constraint
   severity parity.
 
@@ -50,13 +49,13 @@ verification runbook.
   open redirect.
 - Test new, incomplete, complete, signed-out, callback, and redirect-loop cases.
 
-## Task 5 — Convert onboarding to global Travel DNA
+## Task 5 — Convert onboarding to a global safety baseline
 
 **Files:** onboarding page, wizard, actions, `/api/onboarding`, component/API tests.
 
-- Use general-traveler copy and remove the trip name/`tripId` dependency.
-- Add a clear full-versus-Quick opening choice, accessible progress, focused headings,
-  meaningful slider feedback, and a final Travel DNA summary.
+- Use safety-first copy and remove the trip name/`tripId` dependency.
+- Keep the flow to a safety-vault screen plus optional exploration dial, with accessible progress,
+  focused headings, meaningful slider feedback, and a final safety summary.
 - Submit through the global RPC and `router.replace('/chats')` on success.
 - Add an always-available `/preferences` editor backed by the same revision token.
 - Test full, Quick, Back, stale reload, retry, reduced motion, and mobile text fit.
@@ -67,9 +66,10 @@ verification runbook.
 component/API/database tests.
 
 - Render the empty state and membership-scoped trip-group list.
-- Create a name-only draft trip group atomically and open `/trips/[tripId]/chat`.
+- Create an organizer-framed trip atomically and open `/trips/[tripId]/chat`.
 - Order groups by recent chat activity without unbounded message reads.
-- Gate itinerary generation until setup is ready.
+- Validate destination, dates/duration, and broad trip mode at creation; collect budget, pace,
+  availability, and destination-specific POI preferences per trip rather than globally.
 - Do not ship a working-looking invite action; show the deferred state honestly if the
   control is present.
 

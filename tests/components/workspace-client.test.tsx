@@ -16,7 +16,7 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const base = {
-  tripId: "trip-1", tripName: "KL", members: [], selfMemberId: null,
+  tripId: "trip-1", members: [], selfMemberId: null,
   canDecideProposals: false, initialActiveProposalId: null, mapSlot: <div />,
 };
 

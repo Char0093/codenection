@@ -7,14 +7,18 @@ recommendations viable for all travelers.
 
 ## MVP Behavior
 
-- On first authenticated entry, require the user to complete global Travel DNA before any trip UI.
-  The survey asks about general travel habits, then redirects to `/chats`.
+- On first authenticated entry, require a 10-second global safety check before any trip UI: dietary,
+  religious-access, allergy, and mobility dealbreakers, with an optional exploration dial. It then
+  redirects to `/chats`.
 - Returning users skip onboarding and can edit **My Travel Preferences** without repeating the wizard.
-- Store broad vibe, budget lean, pace, walking cap, surprise tolerance, and private social role in a
-  self-only `user_travel_profiles` row with optimistic concurrency.
+- Store only an optional exploration tolerance and other truly stable, user-editable defaults in a
+  self-only `user_travel_profiles` row with optimistic concurrency. Do not store budget, pace, or
+  destination interests as mandatory global answers.
 - Store confirmed global dietary, religious-access, and mobility requirements as typed
   `user_travel_constraints` rows with an audit-preserving supersession path.
 - Keep trip membership consent and explicit trip overrides separate from the global baseline.
+- Collect budget, pace, arrival/departure availability, and destination-specific POI preferences
+  when the person creates or joins a particular trip.
 - Capture any chronic health notes, sensory sensitivities, emergency contact, or home currency only
   in the existing sensitive trip-member profile path when actually needed and consented.
 - Distinguish hard blockers from preferences.

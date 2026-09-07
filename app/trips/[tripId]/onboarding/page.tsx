@@ -24,15 +24,17 @@ export default async function OnboardingPage({ params }: { params: Promise<{ tri
 
   const snapshot = await getMyOnboarding(trip.id);
 
+  // Compat-window trip-scoped onboarding (retired in Slice 6/7). Renders inside the shared
+  // selected-trip layout now, so it is a plain section rather than its own <main>.
   return (
-    <main className="app-shell">
+    <div>
       <div className="section-heading">
         <div>
           <h1>Your Travel DNA</h1>
           <p className="field-hint">Tell us how you generally like to travel. We’ll use it to tune suggestions for {trip.destinationName}.</p>
         </div>
       </div>
-      <OnboardingWizard tripId={trip.id} initial={snapshot} successHref={`/trips/${trip.id}/workspace`} />
-    </main>
+      <OnboardingWizard tripId={trip.id} initial={snapshot} successHref={`/trips/${trip.id}/plan`} />
+    </div>
   );
 }

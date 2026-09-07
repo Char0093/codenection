@@ -173,6 +173,51 @@ describe("middleware with Supabase SSR", () => {
       expect(incoming.cookies.get(cookieName + suffix)).toBeUndefined();
     }
   });
+
+  // --- first-login onboarding gate (Slice 2) ---
+  const profileFetch = (row: unknown) => async (url: RequestInfo | URL) => {
+    const u = String(url);
+    if (u === `${supabaseUrl}/auth/v1/user`) return Response.json(user);
+    if (u.includes("/rest/v1/user_travel_profiles")) return Response.json(row);
+    throw new Error(`Unexpected request: ${u}`);
+  };
+
+  it("redirects an authenticated user with no profile row to /onboarding, preserving the target as ?next", async () => {
+    mocks.fetch.mockImplementation(profileFetch(null));
+    const response = await middleware(request("/trips/abc/workspace"));
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("https://trip.test/onboarding?next=%2Ftrips%2Fabc%2Fworkspace");
+  });
+
+  it("redirects an authenticated user with a null completion timestamp, and omits ?next for /", async () => {
+    mocks.fetch.mockImplementation(profileFetch({ onboarding_completed_at: null }));
+    const response = await middleware(request("/"));
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("https://trip.test/onboarding");
+  });
+
+  it("lets a completed user through", async () => {
+    mocks.fetch.mockImplementation(profileFetch({ onboarding_completed_at: "2026-09-07T00:00:00Z" }));
+    const response = await middleware(request("/trips/abc/workspace"));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+  });
+
+  it("never gates /onboarding itself or /api/* (no loop, no JSON gate on the API)", async () => {
+    mocks.fetch.mockImplementation(async (url: RequestInfo | URL) => {
+      if (String(url) === `${supabaseUrl}/auth/v1/user`) return Response.json(user);
+      throw new Error(`gate must not query the DB for an exempt path: ${String(url)}`);
+    });
+    expect((await middleware(request("/onboarding"))).status).toBe(200);
+    expect((await middleware(request("/api/onboarding"))).status).toBe(200);
+  });
+
+  it("does not consult the gate for an unauthenticated request", async () => {
+    const response = await middleware(new NextRequest("https://trip.test/trips/abc/workspace"));
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("https://trip.test/login");
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
 });
 
 describe("server repository authentication", () => {

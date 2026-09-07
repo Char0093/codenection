@@ -11,13 +11,16 @@ native web chat and planning workspace.
 - `/chats` is the authenticated home after first-login Travel DNA.
 - List only trips in which the current user has a `trip_members` row, ordered by recent message or
   trip activity. Provide a useful empty state and **Create chat group** action.
-- A new group creates a name-only draft trip and its owner membership transactionally. Destination,
-  dates, budget, and pace can be completed later; itinerary generation remains disabled until the
-  required setup is valid.
+- A new group is created by one organizer, who establishes destination, dates or duration, and a
+  broad trip mode before others join. Proposed budget and split-and-regroup permission are optional.
+  This creates an informative invitation preview rather than an empty group.
 - Do not create a separate `chat_groups` table. The `trips` row is the group and
   `chat_messages.trip_id` scopes its history.
-- Invitation UI and delivery are deferred. A future invite is trip-scoped and accepting it creates
-  one membership row; token design must be single-use, expiring, and stored hashed.
+- Invitation UI and delivery are deferred. A future invite is trip-scoped and shows the organizer,
+  destination, dates, proposed budget, pace, and current member count before acceptance. Joining
+  collects only per-trip availability, budget tier, pace, and confirmation/override of saved safety
+  requirements; accepting it creates one membership row. Token design must be single-use, expiring,
+  and stored hashed.
 
 ## Layout
 
