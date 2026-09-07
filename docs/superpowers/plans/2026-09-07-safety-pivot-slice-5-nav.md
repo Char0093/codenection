@@ -444,24 +444,18 @@ export default async function LegacyWorkspace({ params }: { params: Promise<{ tr
 
 ---
 
-## Task 4 — retire the dead-end dashboard
+## Task 4 — retire the dead-end dashboard — **DEFERRED to a follow-up**
 
-**Files:** Delete `components/trip-setup-dashboard.tsx`,
-`tests/components/trip-setup-dashboard.test.tsx`; edit `tests/browser/main.tsx`.
+`components/trip-setup-dashboard.tsx` is unreachable after Slice 3 (`app/page.tsx` → `/chats`),
+but its Playwright spec `tests/browser/trip-planning.spec.ts` drives it end-to-end through a
+standalone vite harness (`tests/browser/main.tsx`). Deleting the component means rewriting
+that whole spec against the new `/chats` → create → `/plan` flow — a coherent standalone
+task, out of scope here. Left as dead-but-green code; flagged in the umbrella plan.
 
-`components/trip-setup-dashboard.tsx` is unreferenced after Slice 3 (`app/page.tsx` →
-`/chats`). Its only importers are its own test and the Playwright harness `tests/browser/main.tsx`.
-
-- [ ] **Step 1: Delete the component + its test.**
-- [ ] **Step 2: Edit `tests/browser/main.tsx`** — replace the `TripSetupDashboard` branch with
-  `<ChatHomeView trips={[]} />` (import from `@/components/chat-home-view`), or render
-  `<LoginForm configured={false} />` unconditionally. Keep it compiling.
-- [ ] **Step 3: Full sweep** — `npx tsc --noEmit`, `npm run lint`, `npm test` (count drops by
-  ~26), `npm run build`.
-- [ ] **Step 4: Commit** — `chore(trip): retire the orphaned trip-setup dashboard`.
-- [ ] **Step 5: Update the umbrella plan** — tick Slice 5; note the deviations (dashboard
-  deleted; `getOnboardingNeeded` / trip-scoped nudge still referenced by `WorkspaceClient`
-  pending Slice 6/7; `entry` added as a 4th nav item beyond the spec's Chat/Plan/Timeline).
+- [ ] **Step 5 (still do): Update the umbrella plan** — tick Slice 5; note the deviations
+  (dashboard retirement + its Playwright spec rewrite deferred; `getOnboardingNeeded` /
+  trip-scoped onboarding + nudge still referenced by `WorkspaceClient` pending Slice 6/7;
+  `entry` added as a 4th nav item beyond the spec's Chat/Plan/Timeline).
 
 ---
 

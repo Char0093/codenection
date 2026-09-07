@@ -85,7 +85,7 @@ Each slice has (or gets, just before execution) its own detailed sub-plan file.
 | **2. First-login gate + global onboarding** ✅ **DONE** (commits `33f08ac`, `2be3e85`, `fc34728`, `a1dafd1`, `2a0cdc8` on `feat/travel-dna-safety-pivot`) | `2026-09-07-safety-pivot-slice-2-gate-onboarding.md` | Tasks 4–5 | `lib/onboarding/gate.ts`; `app/actions/user-onboarding.ts`; `app/api/onboarding/route.ts`; `app/onboarding/page.tsx`; `app/preferences/page.tsx`; `middleware.ts` gate; **new** `components/user-onboarding-wizard.tsx` (two-screen safety-first) — the frozen five-screen `components/onboarding-wizard.tsx` is untouched. Full suite green (891), lint/typecheck/build clean. |
 | **3. Chat-group home + organizer trip creation** ✅ **DONE** (commits `7c89e36`, `cead8bb`, `3853bb3`, `e6fede2`, `8a5d1c0` on `feat/travel-dna-safety-pivot`) | `2026-09-07-safety-pivot-slice-3-chats-home.md` | Task 6 | `202609060006` `chat_home()` (bounded lateral latest message + 8-avatar cap); `lib/repositories/chat-home.ts`; `app/api/chats/route.ts` (GET list, POST organizer frame → `201`); `components/chat-home-view.tsx`; `app/chats/page.tsx`; minimal `app/trips/[tripId]/chat/page.tsx`; authenticated `/` → `/chats`. Full suite green (909). |
 | **4. Pre-join preview + member entry + alignment summary** ✅ **DONE** (commits `ba7a93f`, `6c489d6`, `26be264`, `d3afc79` on `feat/travel-dna-safety-pivot`) | `2026-09-07-safety-pivot-slice-4-member-entry.md` | New surface in the revised spec (§2.4, §3.3) | `app/actions/member-entry.ts` (`getMyMemberEntryContext` / `submitMyMemberEntry`); `app/api/trips/[tripId]/member-entry/route.ts`; `components/member-entry-panel.tsx` (preview + aggregate non-attributable alignment + form); `app/trips/[tripId]/entry/page.tsx` + chat link. `submit_member_entry` / `trip_alignment_summary` came from Slice 1. Full suite green (926). |
-| **5. Selected-trip navigation consolidation** | `2026-09-07-safety-pivot-slice-5-nav.md` (write before exec) | Task 7 | Shared Chat/Plan/Timeline shell, Chat default; remove duplicate top-level Timeline/Jigsaw links; redirect legacy `/trips/[tripId]/workspace` into the shell; every screen has a visible route back to the group list. |
+| **5. Selected-trip navigation consolidation** ✅ **DONE** (commits `6370ad8`, `b27c58f`, `4204012` on `feat/travel-dna-safety-pivot`) | `2026-09-07-safety-pivot-slice-5-nav.md` | Task 7 | `app/trips/[tripId]/layout.tsx` (single auth+membership gate, draft-tolerant) + `components/trip-shell.tsx` (Chat/Plan/Timeline/Your-prefs nav, Plan+Timeline locked until `ready`, "All trip groups" back link); `WorkspaceShell` slimmed to `{mapSlot,chatSlot}` (bar + jigsaw toggle gone); new `/trips/[tripId]` → `/chat`, `/plan`, `/timeline` routes; `/workspace` → `/plan` redirect. Full suite green (929). |
 | **6. Global defaults in planning + verification** | `2026-09-07-safety-pivot-slice-6-planning-verify.md` (write before exec) | Tasks 8–9 | Constraint gate evaluates each member's active **global** confirmed constraints ∪ trip confirmed constraints via a narrow server projection (no raw cross-member data, social role never exposed); current-trip explicit prefs/expiring signals reweight global soft defaults without overwriting; `docs/implementation-status.md` updated per shipped behavior; full lint/typecheck/test/build + hosted acceptance runbook. |
 
 ## Cross-slice self-review checklist (run after each slice)
@@ -149,6 +149,18 @@ Each slice has (or gets, just before execution) its own detailed sub-plan file.
     to a `ready` trip.
   - Invitation send/accept stays deferred (spec §8): the entry is filled by members who have
     already joined (the organizer first). The future join RPC will require an entry row.
+- **Slice 5 deviations from its sub-plan** (all green, no scope change):
+  - `entry` ("Your prefs") is a **4th** nav item alongside the spec's Chat/Plan/Timeline —
+    it is clearly part of the selected-trip surface and had nowhere else to live.
+  - **Retiring `components/trip-setup-dashboard.tsx` is deferred** to a follow-up: it is
+    unreachable, but its Playwright spec `tests/browser/trip-planning.spec.ts` drives it
+    end-to-end and would need a full rewrite against the `/chats` → `/plan` flow. Left as
+    dead-but-green code (26 vitest tests still pass; the Playwright harness is self-contained).
+  - `WorkspaceClient` still renders `TravelDnaNudge` and `/plan` still imports the trip-scoped
+    onboarding compat path; `needsOnboarding` is hard-wired `false` (the global gate covers
+    it). Full retirement of trip-scoped onboarding is Slice 6/7.
+  - The trip-scoped `/trips/[tripId]/onboarding` page now renders inside the shared layout as
+    a plain `<div>` (was its own `<main>`); its success href points at `/plan`.
 - **"dates or duration".** Slice 1 accepts either an explicit `startDate`+`endDate` pair
   (≤14 days, the path that can reach `status = 'ready'`) **or** a `plannedDurationDays`
   integer (1–14). Duration-only frames enable chat but stay `draft` until real dates are
