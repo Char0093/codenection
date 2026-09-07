@@ -479,3 +479,10 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
 .member-entry-dates { display: flex; gap: 12px; }
 .member-entry-dates label { flex: 1; display: flex; flex-direction: column; gap: 4px; font-weight: 600; }
 .section-heading-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Shared selected-trip shell (spec 2026-09-06-first-login-travel-dna-chat-groups §2.3). */
+.trip-shell { max-width: 900px; margin: 0 auto; }
+.trip-nav { display: flex; gap: 4px; margin: 0 0 18px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.trip-nav-item { display: inline-flex; align-items: center; min-height: 40px; padding: 8px 14px; border-bottom: 2px solid transparent; color: var(--muted); font-size: 13px; font-weight: 600; text-decoration: none; }
+.trip-nav-item[aria-current="page"] { color: var(--teal-dark); border-bottom-color: var(--teal); }
+.trip-nav-item[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
