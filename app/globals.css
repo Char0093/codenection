@@ -443,3 +443,22 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
 .onboarding-nav { display: flex; justify-content: space-between; gap: 12px; margin-top: 8px; }
 .travel-dna-nudge { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .travel-dna-nudge > span { flex: 1; min-width: 0; }
+
+/* Chat-group home (spec 2026-09-06-first-login-travel-dna-chat-groups §2.3). */
+.chat-home-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.chat-home-row { border: 1px solid var(--line-strong); border-radius: 8px; }
+.chat-home-link { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "name avatars" "meta avatars" "preview preview"; gap: 4px 12px; padding: 12px 14px; text-decoration: none; color: inherit; }
+.chat-home-link:hover { background: var(--teal-soft); }
+.chat-home-name { grid-area: name; font-weight: 600; }
+.chat-home-link .field-hint { grid-area: meta; margin: 0; }
+.chat-home-preview { grid-area: preview; font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-home-avatars { grid-area: avatars; display: flex; align-items: center; }
+.chat-home-avatar { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; margin-left: -6px; border-radius: 999px; border: 2px solid var(--surface); color: #fff; font-size: 11px; font-weight: 700; }
+.chat-home-row > .field-hint { margin: 0; padding: 0 14px 10px; }
+.chat-home-form { max-width: 520px; margin: 0 auto 20px; display: flex; flex-direction: column; gap: 12px; }
+.chat-home-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 600; }
+.chat-home-form input:not([type="checkbox"]):not([type="radio"]), .chat-home-form select { min-height: 40px; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: 5px; font-size: 13px; }
+.chat-home-form fieldset { border: 1px solid var(--line-strong); border-radius: 6px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.chat-home-form fieldset label { flex-direction: row; align-items: center; gap: 8px; font-weight: 500; }
+.chat-home-dates { display: flex; gap: 12px; }
+.chat-home-dates label { flex: 1; }
