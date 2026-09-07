@@ -386,11 +386,26 @@ describe("trip_member_entries + submit_member_entry + trip_alignment_summary", (
 
   it("rejects a malformed entry (22023) and writes nothing", async () => {
     const id = (await createFrame()).rows[0].id;
-    await expect(submitEntry(id, entry({ budgetTier: "cheap" }))).rejects.toMatchObject({ code: "22023" });
-    await expect(submitEntry(id, entry({ availability: { coverage: "partial", arrivalDate: null, departureDate: null } })))
-      .rejects.toMatchObject({ code: "22023" });
-    await expect(submitEntry(id, entry({ safetyOverrides: [{ kind: "bogus", flag: "halal" }] })))
-      .rejects.toMatchObject({ code: "22023" });
+    for (const bad of [
+      entry({ budgetTier: "cheap" }),
+      entry({ availability: { coverage: "partial", arrivalDate: null, departureDate: null } }),
+      entry({ availability: { coverage: "partial", arrivalDate: "2026-12-15", departureDate: "2026-12-13" } }), // inverted
+      entry({ safetyOverrides: [{ kind: "bogus", flag: "halal" }] }),
+      entry({ safetyOverrides: [{ kind: "dietary", flag: "not_a_real_flag" }] }),                               // off-vocabulary
+    ]) {
+      await expect(submitEntry(id, bad)).rejects.toMatchObject({ code: "22023" });
+    }
+    await actor(null, "postgres");
+    expect((await db.query<{ n: string }>("select count(*)::int n from trip_member_entries where trip_id=$1", [id])).rows[0].n).toBe(0);
+  });
+
+  it("denies a direct (non-RPC) entry insert for a trip the caller is not a member of", async () => {
+    const id = (await createFrame()).rows[0].id;                 // userA owns it
+    await actor(userDev);                                        // userDev is not a member
+    await expect(db.query(
+      `insert into trip_member_entries(trip_id,user_id,availability_coverage,budget_tier,pace)
+       values ($1,$2,'full','standard','balanced')`, [id, userDev]))
+      .rejects.toMatchObject({ code: "42501" });
     await actor(null, "postgres");
     expect((await db.query<{ n: string }>("select count(*)::int n from trip_member_entries where trip_id=$1", [id])).rows[0].n).toBe(0);
   });

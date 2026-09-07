@@ -265,12 +265,19 @@ create index trip_member_entries_trip_idx on public.trip_member_entries (trip_id
 alter table public.trip_member_entries enable row level security;
 revoke all on public.trip_member_entries from public, anon, authenticated, service_role;
 grant select, insert, update on public.trip_member_entries to authenticated;
+-- Read is self-only. Writes must ALSO be for a trip the caller is currently a member of --
+-- otherwise any authenticated user could inject their own entry into any known trip UUID and
+-- skew (or force disclosure of) the aggregate summary. submit_member_entry re-checks the same
+-- rule; these policies close the direct-PostgREST path.
 create policy "self read" on public.trip_member_entries
   for select to authenticated using (user_id = auth.uid());
-create policy "self insert" on public.trip_member_entries
-  for insert to authenticated with check (user_id = auth.uid());
-create policy "self update" on public.trip_member_entries
-  for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
+create policy "member self insert" on public.trip_member_entries
+  for insert to authenticated
+  with check (user_id = auth.uid() and public.is_trip_member(trip_id));
+create policy "member self update" on public.trip_member_entries
+  for update to authenticated
+  using (user_id = auth.uid() and public.is_trip_member(trip_id))
+  with check (user_id = auth.uid() and public.is_trip_member(trip_id));
 
 create trigger trip_member_entries_set_updated_at before update on public.trip_member_entries
   for each row execute function public.set_updated_at();
@@ -296,6 +303,11 @@ declare
   v_pace text := p_entry->>'pace';
   v_over jsonb := coalesce(p_entry->'safetyOverrides', '[]'::jsonb);
   v_o jsonb;
+  v_o_kind text;
+  v_o_flag text;
+  v_dietary text[] := array['halal','vegetarian','vegan','no_seafood','no_shellfish','no_pork','no_beef','no_dairy','no_gluten','no_peanut','other'];
+  v_religious text[] := array['modest_dress_required','prayer_space_needed','no_alcohol_venues','other'];
+  v_mobility text[] := array['wheelchair_accessible_required','limited_walking_distance','no_stairs','other'];
 begin
   if v_user is null then
     raise exception 'authentication required' using errcode = '42501';
@@ -315,6 +327,9 @@ begin
   if v_cov = 'partial' and v_arr is null and v_dep is null then
     raise exception 'partial availability needs a date' using errcode = '22023';
   end if;
+  if v_arr is not null and v_dep is not null and v_dep < v_arr then
+    raise exception 'departure is before arrival' using errcode = '22023';
+  end if;
   if v_budget is null or v_budget not in ('budget','standard','premium','luxury') then
     raise exception 'invalid budget tier' using errcode = '22023';
   end if;
@@ -324,9 +339,19 @@ begin
   if jsonb_typeof(v_over) <> 'array' then
     raise exception 'safetyOverrides must be an array' using errcode = '22023';
   end if;
+  -- Every override must name a real (kind, flag) from the typed vocabulary -- the RPC is
+  -- directly callable, so the client-side whitelist is not enough. Arbitrary text must never
+  -- reach the row or the aggregate summary.
   for v_o in select * from jsonb_array_elements(v_over) loop
-    if (v_o->>'kind') not in ('dietary','religious_access','mobility') or (v_o->>'flag') is null then
+    v_o_kind := v_o->>'kind';
+    v_o_flag := v_o->>'flag';
+    if v_o_kind not in ('dietary','religious_access','mobility') or v_o_flag is null then
       raise exception 'invalid safety override' using errcode = '22023';
+    end if;
+    if (v_o_kind = 'dietary' and not (v_o_flag = any(v_dietary)))
+       or (v_o_kind = 'religious_access' and not (v_o_flag = any(v_religious)))
+       or (v_o_kind = 'mobility' and not (v_o_flag = any(v_mobility))) then
+      raise exception 'unknown safety override flag' using errcode = '22023';
     end if;
   end loop;
 
@@ -349,6 +374,8 @@ grant execute on function public.submit_member_entry(uuid, jsonb) to authenticat
 
 -- Aggregate, non-attributable (spec §2.4 / §6). SECURITY DEFINER so a member sees the shape
 -- without RLS-reading peers' rows; returns null below the 2-entry de-anonymization floor.
+-- Every entry counted is defensively joined back to a CURRENT trip_members row, so a stale
+-- entry from a since-removed member (or one that predates the membership RLS fix) is ignored.
 create function public.trip_alignment_summary(p_trip_id uuid)
 returns jsonb
 language plpgsql
@@ -357,7 +384,6 @@ set search_path = ''
 as $$
 declare
   v_caller uuid := auth.uid();
-  v_n int;
   v_result jsonb;
 begin
   if v_caller is null
@@ -365,32 +391,33 @@ begin
     raise exception 'not a member of this trip' using errcode = '42501';
   end if;
 
-  select count(*) into v_n from public.trip_member_entries e where e.trip_id = p_trip_id;
-  if v_n < 2 then
-    return null;
-  end if;
-
-  select jsonb_build_object(
-    'memberCount', v_n,
+  with entries as (
+    select e.availability_coverage, e.budget_tier, e.pace, e.safety_overrides
+    from public.trip_member_entries e
+    join public.trip_members m on m.trip_id = e.trip_id and m.user_id = e.user_id
+    where e.trip_id = p_trip_id
+  ),
+  overrides as (
+    select o->>'kind' as k, o->>'flag' as f
+    from entries, jsonb_array_elements(entries.safety_overrides) o
+  )
+  select case when (select count(*) from entries) < 2 then null else jsonb_build_object(
+    'memberCount', (select count(*)::int from entries),
     'budget', jsonb_build_object(
-      'min', (select e.budget_tier from public.trip_member_entries e where e.trip_id = p_trip_id
-              order by array_position(array['budget','standard','premium','luxury']::text[], e.budget_tier::text) asc limit 1),
-      'max', (select e.budget_tier from public.trip_member_entries e where e.trip_id = p_trip_id
-              order by array_position(array['budget','standard','premium','luxury']::text[], e.budget_tier::text) desc limit 1)),
+      'min', (select min(budget_tier)::text from entries),
+      'max', (select max(budget_tier)::text from entries)),
     'pace', (select jsonb_object_agg(q.p, q.c) from (
       select x.p as p, count(e.*)::int as c
       from unnest(array['relaxed','balanced','active','intense']) as x(p)
-      left join public.trip_member_entries e on e.trip_id = p_trip_id and e.pace::text = x.p
+      left join entries e on e.pace::text = x.p
       group by x.p) q),
     'availability', jsonb_build_object(
-      'full', (select count(*)::int from public.trip_member_entries e where e.trip_id = p_trip_id and e.availability_coverage = 'full'),
-      'partial', (select count(*)::int from public.trip_member_entries e where e.trip_id = p_trip_id and e.availability_coverage = 'partial')),
+      'full', (select count(*)::int from entries where availability_coverage = 'full'),
+      'partial', (select count(*)::int from entries where availability_coverage = 'partial')),
     'safetyOverrides', coalesce((select jsonb_agg(jsonb_build_object('kind', s.k, 'flag', s.f, 'count', s.c) order by s.k, s.f) from (
-      select o->>'kind' as k, o->>'flag' as f, count(*)::int as c
-      from public.trip_member_entries e, jsonb_array_elements(e.safety_overrides) o
-      where e.trip_id = p_trip_id
-      group by o->>'kind', o->>'flag') s), '[]'::jsonb)
-  ) into v_result;
+      select k, f, count(*)::int as c from overrides group by k, f) s), '[]'::jsonb)
+  ) end
+  into v_result;
 
   return v_result;
 end;

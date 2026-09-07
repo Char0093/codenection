@@ -30,6 +30,14 @@ describe("memberEntrySchema", () => {
       availability: { coverage: "partial", arrivalDate: "2026-12-13", departureDate: null },
     })).availability.arrivalDate).toBe("2026-12-13");
   });
+  it("rejects an inverted arrival/departure range", () => {
+    expect(memberEntrySchema.safeParse(entry({
+      availability: { coverage: "partial", arrivalDate: "2026-12-15", departureDate: "2026-12-13" },
+    })).success).toBe(false);
+    expect(memberEntrySchema.parse(entry({
+      availability: { coverage: "partial", arrivalDate: "2026-12-13", departureDate: "2026-12-13" },
+    })).availability.departureDate).toBe("2026-12-13");
+  });
   it("accepts typed safety overrides and rejects an unknown flag or kind", () => {
     expect(memberEntrySchema.parse(entry({ safetyOverrides: [{ kind: "dietary", flag: "halal" }] })).safetyOverrides).toHaveLength(1);
     expect(memberEntrySchema.safeParse(entry({ safetyOverrides: [{ kind: "dietary", flag: "mystery" }] })).success).toBe(false);

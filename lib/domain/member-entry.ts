@@ -31,6 +31,10 @@ export const memberEntrySchema = z.strictObject({
     if (availability.coverage === "partial" && availability.arrivalDate == null && availability.departureDate == null) {
       ctx.addIssue({ code: "custom", path: ["arrivalDate"], message: "Partial availability needs an arrival or departure date." });
     }
+    if (availability.arrivalDate != null && availability.departureDate != null
+        && availability.departureDate < availability.arrivalDate) {
+      ctx.addIssue({ code: "custom", path: ["departureDate"], message: "Departure must be on or after arrival." });
+    }
   }),
   budgetTier: budgetTierSchema,
   pace: paceLevelSchema,
