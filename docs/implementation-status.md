@@ -257,6 +257,20 @@ Missing:
 
 ### Task 1.6 — Onboarding questionnaire (Travel DNA): Safety-first pivot delivered locally
 
+**Audit status (2026-09-07, re-audited):** the audit's one P1 and two P2 findings —
+non-member direct writes to `trip_member_entries` influencing the aggregate summary, the
+member-entry RPC not server-whitelisting override flags, and partial availability accepting
+inverted date ranges — are all **resolved** in `202609060004` and
+`lib/domain/member-entry.ts`, with direct RLS/RPC regression coverage in
+`tests/database/user-onboarding-rls.test.ts` (non-member insert, cross-trip update, removed
+member, off-vocabulary flag, inverted range). The re-audit also found and fixed a fourth,
+related P2: those fixes were RPC-only while `trip_member_entries` carries direct write grants,
+so any member could bypass them via PostgREST — table CHECK constraints now enforce the
+override vocabulary, date order, and no-duplicates at the storage boundary. Local checks are
+green: lint, typecheck, build, and 941 tests. The pivot is still **not merge-ready**: the hosted two-user acceptance run
+(`docs/testing/safety-first-pivot-acceptance.md`) is the remaining blocker. Findings and the
+in-place-migration deviation are recorded in `docs/testing/safety-first-pivot-audit.md`.
+
 **The safety-first pivot shipped locally** on `feat/travel-dna-safety-pivot` (2026-09-07),
 implementing `docs/superpowers/specs/2026-09-06-first-login-travel-dna-chat-groups-design.md`
 (revised 2026-09-07) via `docs/superpowers/plans/2026-09-07-travel-dna-safety-pivot.md` and

@@ -38,7 +38,11 @@ export const memberEntrySchema = z.strictObject({
   }),
   budgetTier: budgetTierSchema,
   pace: paceLevelSchema,
-  safetyOverrides: z.array(flagRefSchema).max(24).default([]),
+  safetyOverrides: z.array(flagRefSchema).max(24).default([])
+    .refine(
+      (overrides) => new Set(overrides.map((o) => `${o.kind}:${o.flag}`)).size === overrides.length,
+      "Each safety override may only be listed once.",
+    ),
 });
 export type MemberEntry = z.infer<typeof memberEntrySchema>;
 

@@ -410,6 +410,62 @@ describe("trip_member_entries + submit_member_entry + trip_alignment_summary", (
     expect((await db.query<{ n: string }>("select count(*)::int n from trip_member_entries where trip_id=$1", [id])).rows[0].n).toBe(0);
   });
 
+  it("denies moving an entry into a trip the caller is not a member of (42501)", async () => {
+    const mine = (await createFrame()).rows[0].id;               // userA owns it
+    const theirs = (await createFrame(frameArgs({ name: "Their crew" }), userB)).rows[0].id;
+    await submitEntry(mine);
+    await actor(userA);
+    await expect(db.query("update trip_member_entries set trip_id=$1 where trip_id=$2", [theirs, mine]))
+      .rejects.toMatchObject({ code: "42501" });
+    await actor(null, "postgres");
+    expect((await db.query<{ n: string }>("select count(*)::int n from trip_member_entries where trip_id=$1", [theirs])).rows[0].n).toBe(0);
+  });
+
+  it("stops a removed member from updating their residual entry and drops it from the summary", async () => {
+    const id = (await createFrame()).rows[0].id;                 // userA is owner
+    await actor(null, "postgres");
+    await db.query("insert into trip_members(trip_id,user_id,display_name,role) values ($1,$2,'Member B','member')", [id, userB]);
+    await submitEntry(id, entry({ budgetTier: "budget" }), userA);
+    await submitEntry(id, entry({ budgetTier: "premium" }), userB);
+    await actor(userA);
+    expect((await db.query<{ s: Record<string, unknown> }>("select public.trip_alignment_summary($1::uuid) as s", [id])).rows[0].s)
+      .toMatchObject({ memberCount: 2 });
+
+    await actor(null, "postgres");
+    await db.query("delete from trip_members where trip_id=$1 and user_id=$2", [id, userB]);
+    await actor(userB);
+    // The residual row is still self-readable, but no longer writable, and the RPC ignores it.
+    expect((await db.query("select 1 from trip_member_entries where trip_id=$1", [id])).rows).toHaveLength(1);
+    expect((await db.query("update trip_member_entries set pace='intense' where trip_id=$1", [id])).affectedRows).toBe(0);
+    await expect(submitEntry(id, entry(), userB)).rejects.toMatchObject({ code: "42501" });
+    await actor(null, "postgres");
+    expect((await db.query<{ pace: string }>("select pace from trip_member_entries where trip_id=$1 and user_id=$2", [id, userB])).rows[0].pace).toBe("balanced");
+    await actor(userA);
+    expect((await db.query<{ s: unknown }>("select public.trip_alignment_summary($1::uuid) as s", [id])).rows[0].s).toBeNull();
+  });
+
+  it("stops a member smuggling an off-vocabulary override or inverted range past the RPC", async () => {
+    const id = (await createFrame()).rows[0].id;                 // userA is a member (owner)
+    await actor(userA);
+    await expect(db.query(
+      `insert into trip_member_entries(trip_id,user_id,availability_coverage,budget_tier,pace,safety_overrides)
+       values ($1,$2,'full','standard','balanced','[{"kind":"dietary","flag":"pwned <b>text</b>"}]'::jsonb)`,
+      [id, userA])).rejects.toMatchObject({ code: "23514" });
+    await expect(db.query(
+      `insert into trip_member_entries(trip_id,user_id,availability_coverage,arrival_date,departure_date,budget_tier,pace)
+       values ($1,$2,'partial','2026-12-15','2026-12-13','standard','balanced')`,
+      [id, userA])).rejects.toMatchObject({ code: "23514" });
+    await expect(db.query(
+      `insert into trip_member_entries(trip_id,user_id,availability_coverage,budget_tier,pace,safety_overrides)
+       values ($1,$2,'full','standard','balanced','[{"kind":"dietary","flag":"halal"},{"kind":"dietary","flag":"halal"}]'::jsonb)`,
+      [id, userA])).rejects.toMatchObject({ code: "23514" });
+    await expect(submitEntry(id, entry({
+      safetyOverrides: [{ kind: "dietary", flag: "halal" }, { kind: "dietary", flag: "halal" }],
+    }))).rejects.toMatchObject({ code: "22023" });
+    await actor(null, "postgres");
+    expect((await db.query<{ n: string }>("select count(*)::int n from trip_member_entries where trip_id=$1", [id])).rows[0].n).toBe(0);
+  });
+
   it("trip_alignment_summary returns aggregate-only jsonb with no user ids, and null below the floor", async () => {
     const id = (await createFrame()).rows[0].id;                 // userA is owner
     await actor(null, "postgres");

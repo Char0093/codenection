@@ -243,6 +243,37 @@ grant execute on function public.create_trip_group(text, text, date, date, int, 
 -- 4. trip_member_entries -- per-trip availability / budget / pace / safety overrides. Self-only
 --    RLS; the aggregate summary is exposed only through a SECURITY DEFINER function (spec §6).
 -- ===========================================================================================
+-- Vocabulary/shape guard for safety_overrides, used as a table CHECK. The table carries direct
+-- insert/update grants, so a MEMBER can write to it without going through submit_member_entry --
+-- validating only in the RPC would leave arbitrary text reachable from the aggregate summary.
+-- Mirrors the flag CHECKs on trip_constraints / user_travel_constraints.
+create function public._member_entry_overrides_valid(p_overrides jsonb)
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $$
+  select jsonb_typeof(p_overrides) = 'array'
+    and jsonb_array_length(p_overrides) <= 24
+    -- No duplicate (kind, flag) within one entry: a repeated flag would inflate its count in
+    -- trip_alignment_summary without another member actually holding it.
+    and jsonb_array_length(p_overrides) = (
+      select count(distinct o) from jsonb_array_elements(p_overrides) o)
+    and not exists (
+      select 1 from jsonb_array_elements(p_overrides) o
+      where jsonb_typeof(o) <> 'object'
+         or (o->>'kind') is null or (o->>'flag') is null
+         or not (
+           ((o->>'kind') = 'dietary' and (o->>'flag') in (
+             'halal','vegetarian','vegan','no_seafood','no_shellfish',
+             'no_pork','no_beef','no_dairy','no_gluten','no_peanut','other'))
+           or ((o->>'kind') = 'religious_access' and (o->>'flag') in (
+             'modest_dress_required','prayer_space_needed','no_alcohol_venues','other'))
+           or ((o->>'kind') = 'mobility' and (o->>'flag') in (
+             'wheelchair_accessible_required','limited_walking_distance','no_stairs','other'))
+         ));
+$$;
+
 create table public.trip_member_entries (
   id uuid primary key default gen_random_uuid(),
   trip_id uuid not null references public.trips(id) on delete cascade,
@@ -258,7 +289,10 @@ create table public.trip_member_entries (
   unique (trip_id, user_id),
   constraint trip_member_entries_partial_needs_a_date check (
     availability_coverage <> 'partial' or arrival_date is not null or departure_date is not null),
-  constraint trip_member_entries_overrides_is_array check (jsonb_typeof(safety_overrides) = 'array')
+  constraint trip_member_entries_date_order check (
+    arrival_date is null or departure_date is null or arrival_date <= departure_date),
+  constraint trip_member_entries_overrides_valid check (
+    public._member_entry_overrides_valid(safety_overrides))
 );
 create index trip_member_entries_trip_idx on public.trip_member_entries (trip_id);
 
@@ -354,6 +388,9 @@ begin
       raise exception 'unknown safety override flag' using errcode = '22023';
     end if;
   end loop;
+  if (select count(distinct o) from jsonb_array_elements(v_over) o) <> jsonb_array_length(v_over) then
+    raise exception 'duplicate safety override' using errcode = '22023';
+  end if;
 
   insert into public.trip_member_entries
     (trip_id, user_id, availability_coverage, arrival_date, departure_date, budget_tier, pace, safety_overrides)

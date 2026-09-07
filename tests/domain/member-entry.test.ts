@@ -43,6 +43,15 @@ describe("memberEntrySchema", () => {
     expect(memberEntrySchema.safeParse(entry({ safetyOverrides: [{ kind: "dietary", flag: "mystery" }] })).success).toBe(false);
     expect(memberEntrySchema.safeParse(entry({ safetyOverrides: [{ kind: "bogus", flag: "halal" }] })).success).toBe(false);
   });
+  it("rejects the same safety override listed twice", () => {
+    expect(() => memberEntrySchema.parse(entry({
+      safetyOverrides: [{ kind: "dietary", flag: "halal" }, { kind: "dietary", flag: "halal" }],
+    }))).toThrow();
+    expect(memberEntrySchema.parse(entry({
+      safetyOverrides: [{ kind: "dietary", flag: "halal" }, { kind: "mobility", flag: "no_stairs" }],
+    })).safetyOverrides).toHaveLength(2);
+  });
+
   it("rejects an unknown budget tier / pace and extra keys", () => {
     expect(memberEntrySchema.safeParse(entry({ budgetTier: "cheap" })).success).toBe(false);
     expect(memberEntrySchema.safeParse(entry({ pace: "sprint" })).success).toBe(false);
