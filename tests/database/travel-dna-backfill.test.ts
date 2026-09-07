@@ -154,8 +154,8 @@ describe("_run_travel_dna_backfill", () => {
   it("never overwrites a profile the user already created natively", async () => {
     await db.exec("truncate public.user_travel_profiles");
     await db.query(
-      `insert into user_travel_profiles(user_id,travel_vibe,budget_lean,serendipity_epsilon,onboarding_completed_at)
-       values ($1,'heritage','luxury',0.0,now())`, [userA]);
+      `insert into user_travel_profiles(user_id,travel_vibe,serendipity_epsilon,onboarding_completed_at)
+       values ($1,'heritage',0.0,now())`, [userA]);
     await runBackfill();
     const [a] = await q<{ travel_vibe: string; backfilled_from_trip_member_id: string | null }>(
       "select travel_vibe, backfilled_from_trip_member_id from user_travel_profiles where user_id=$1", [userA]);

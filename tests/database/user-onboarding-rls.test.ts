@@ -48,37 +48,39 @@ async function actor(user: string | null, role = "authenticated", email = "") {
   await db.exec(`set role ${role}`);
 }
 
-const quick = (over: Record<string, unknown> = {}) => ({
-  mode: "quick",
+const answers = (over: Record<string, unknown> = {}) => ({
   dealbreakers: { dietary: [], religiousAccess: [], mobility: [] },
-  walkingCapM: null,
-  budgetLean: "standard",
-  ...over,
-});
-const full = (over: Record<string, unknown> = {}) => ({
-  mode: "full",
-  dealbreakers: { dietary: [], religiousAccess: [], mobility: [] },
-  walkingCapM: 2000,
-  budgetLean: "standard",
-  vibe: "food",
-  pace: "active",
-  socialRole: "gourmand",
-  surpriseDial: 3,
+  surpriseDial: null,
   ...over,
 });
 
-async function submit(answers: Record<string, unknown>, expectedRevision = 0, user = userA) {
+async function submit(a: Record<string, unknown> = answers(), expectedRevision = 0, user = userA) {
   await actor(user);
   return db.query<{ submit_user_onboarding: number }>(
     "select public.submit_user_onboarding($1, $2::jsonb) as submit_user_onboarding",
-    [expectedRevision, JSON.stringify(answers)],
+    [expectedRevision, JSON.stringify(a)],
+  );
+}
+
+const frameArgs = (over: Record<string, unknown> = {}) => ({
+  name: "Melaka crew", destination: "Melaka",
+  start: "2026-12-12" as string | null, end: "2026-12-14" as string | null,
+  duration: null as number | null, mode: "balanced", budget: null as string | null, split: false,
+  ...over,
+});
+async function createFrame(o = frameArgs(), user: string | null = userA) {
+  await actor(user);
+  return db.query<{ id: string }>(
+    "select public.create_trip_group($1,$2,$3::date,$4::date,$5::int,$6,$7,$8) as id",
+    [o.name, o.destination, o.start, o.end, o.duration, o.mode, o.budget, o.split],
   );
 }
 
 beforeAll(async () => {
   db = new PGlite({ extensions: { postgis, vector } });
   await db.exec(AUTH_SETUP);
-  expect(migrationFiles).toContain("202609060002_user_travel_profile_chat_groups.sql");
+  expect(migrationFiles).toContain("202609060004_travel_dna_safety_baseline.sql");
+  expect(migrationFiles).toContain("202609060005_travel_dna_backfill_v2.sql");
   for (const name of migrationFiles) await loadMigration(db, name);
 }, 60_000);
 
@@ -99,8 +101,8 @@ afterAll(async () => { await db?.close(); });
 describe("user_travel_profiles RLS", () => {
   it("lets a user write and read only their own profile", async () => {
     await actor(userA);
-    await db.query(`insert into user_travel_profiles(user_id,pace) values ($1,'relaxed')`, [userA]);
-    expect((await db.query<{ pace: string }>("select pace from user_travel_profiles")).rows[0].pace).toBe("relaxed");
+    await db.query(`insert into user_travel_profiles(user_id,travel_vibe) values ($1,'food')`, [userA]);
+    expect((await db.query<{ travel_vibe: string }>("select travel_vibe from user_travel_profiles")).rows[0].travel_vibe).toBe("food");
     await actor(userB);
     expect((await db.query("select * from user_travel_profiles where user_id=$1", [userA])).rows).toHaveLength(0);
   });
@@ -116,27 +118,35 @@ describe("user_travel_profiles RLS", () => {
     await expect(db.query(`insert into user_travel_profiles(user_id,profile_revision) values ($1,9)`, [userA]))
       .rejects.toMatchObject({ code: "42501" });
     await db.query(`insert into user_travel_profiles(user_id) values ($1)`, [userA]);
-    await db.query(`update user_travel_profiles set pace='active' where user_id=$1`, [userA]);
+    await db.query(`update user_travel_profiles set travel_vibe='urban' where user_id=$1`, [userA]);
     expect((await db.query<{ profile_revision: number }>(
       "select profile_revision from user_travel_profiles where user_id=$1", [userA])).rows[0].profile_revision).toBe(2);
     await expect(db.query(`update user_travel_profiles set user_id=$1 where user_id=$2`, [userB, userA]))
       .rejects.toMatchObject({ code: "42501" });
   });
 
-  it("enforces range and completed-shape checks", async () => {
+  it("has no budget_lean / pace / social_role / mobility_threshold_m column after the pivot", async () => {
+    await actor(null, "postgres");
+    const cols = (await db.query<{ column_name: string }>(
+      `select column_name from information_schema.columns
+       where table_schema='public' and table_name='user_travel_profiles'`)).rows.map((r) => r.column_name).sort();
+    expect(cols).toEqual([
+      "backfilled_from_trip_member_id", "created_at", "onboarding_completed_at",
+      "profile_revision", "serendipity_epsilon", "travel_vibe", "updated_at", "user_id",
+    ]);
+  });
+
+  it("enforces range and the reshaped completed-shape check", async () => {
     await actor(userA);
     await expect(db.query(`insert into user_travel_profiles(user_id,serendipity_epsilon) values ($1,0.9)`, [userA]))
       .rejects.toMatchObject({ code: "23514" });
-    await expect(db.query(`insert into user_travel_profiles(user_id,mobility_threshold_m) values ($1,50001)`, [userA]))
-      .rejects.toMatchObject({ code: "23514" });
     await db.query(`insert into user_travel_profiles(user_id) values ($1)`, [userA]);
-    await expect(db.query(`update user_travel_profiles set onboarding_completed_at=now() where user_id=$1`, [userA]))
-      .rejects.toMatchObject({ code: "23514" });
+    // A completed row now only needs an on-grid epsilon — no budget_lean requirement.
     await expect(db.query(
-      `update user_travel_profiles set onboarding_completed_at=now(), budget_lean='standard', serendipity_epsilon=0.2 where user_id=$1`, [userA],
+      `update user_travel_profiles set onboarding_completed_at=now(), serendipity_epsilon=0.2 where user_id=$1`, [userA],
     )).rejects.toMatchObject({ code: "23514" });
     await expect(db.query(
-      `update user_travel_profiles set onboarding_completed_at=now(), budget_lean='standard', serendipity_epsilon=0.15 where user_id=$1`, [userA],
+      `update user_travel_profiles set onboarding_completed_at=now(), serendipity_epsilon=0.15 where user_id=$1`, [userA],
     )).resolves.toBeDefined();
   });
 });
@@ -149,9 +159,6 @@ describe("user_travel_constraints RLS + supersession", () => {
     expect((await db.query("select flag from user_travel_constraints")).rows).toHaveLength(1);
     await actor(userB);
     expect((await db.query("select flag from user_travel_constraints where user_id=$1", [userA])).rows).toHaveLength(0);
-    await expect(db.query("select flag from active_user_travel_constraints")).rejects.toBeDefined();
-    await actor(userA);
-    await expect(db.query("select flag from active_user_travel_constraints")).rejects.toBeDefined();
   });
 
   it("rejects an unlisted flag and a second active (user,kind,flag)", async () => {
@@ -177,13 +184,15 @@ describe("user_travel_constraints RLS + supersession", () => {
 });
 
 describe("submit_user_onboarding", () => {
-  it("creates a global profile + confirmed constraints (full)", async () => {
-    const res = await submit(full({ dealbreakers: { dietary: ["halal", "no_peanut"], religiousAccess: ["prayer_space_needed"], mobility: [] } }));
+  it("creates a global profile with a default dial and confirmed constraints", async () => {
+    const res = await submit(answers({
+      dealbreakers: { dietary: ["halal", "no_peanut"], religiousAccess: ["prayer_space_needed"], mobility: [] },
+    }));
     expect(res.rows[0].submit_user_onboarding).toBe(1);
     await actor(null, "postgres");
-    const p = (await db.query<{ travel_vibe: string; pace: string; social_role: string; serendipity_epsilon: string; onboarding_completed_at: string }>(
-      "select * from user_travel_profiles where user_id=$1", [userA])).rows[0];
-    expect(p).toMatchObject({ travel_vibe: "food", pace: "active", social_role: "gourmand" });
+    const p = (await db.query<{ travel_vibe: string | null; serendipity_epsilon: string; onboarding_completed_at: string }>(
+      "select travel_vibe, serendipity_epsilon, onboarding_completed_at from user_travel_profiles where user_id=$1", [userA])).rows[0];
+    expect(p.travel_vibe).toBeNull();
     expect(p.serendipity_epsilon).toBe("0.150");
     expect(p.onboarding_completed_at).not.toBeNull();
     const flags = (await db.query<{ kind: string; flag: string; severity: string }>(
@@ -195,34 +204,44 @@ describe("submit_user_onboarding", () => {
     ]);
   });
 
-  it("writes 0.150 for a first quick submit and preserves it on a redo", async () => {
-    expect((await submit(quick({ budgetLean: "budget" }))).rows[0].submit_user_onboarding).toBe(1);
+  it("maps the optional dial onto the epsilon grid and preserves it when a redo skips it", async () => {
+    expect((await submit(answers({ surpriseDial: 5 }))).rows[0].submit_user_onboarding).toBe(1);
     await actor(null, "postgres");
-    let p = (await db.query<{ serendipity_epsilon: string; pace: string; travel_vibe: string | null }>(
-      "select * from user_travel_profiles where user_id=$1", [userA])).rows[0];
-    expect(p.serendipity_epsilon).toBe("0.150");
-    expect(p.pace).toBe("balanced");
-    expect(p.travel_vibe).toBeNull();
+    let e = (await db.query<{ serendipity_epsilon: string }>(
+      "select serendipity_epsilon from user_travel_profiles where user_id=$1", [userA])).rows[0].serendipity_epsilon;
+    expect(e).toBe("0.300");
 
-    await submit(full({ surpriseDial: 5 }), 1);            // -> "0.300", rev 2
-    await submit(quick({ budgetLean: "luxury" }), 2);      // quick redo -> preserved
+    await submit(answers({ surpriseDial: null }), 1);   // redo, dial skipped -> preserved
     await actor(null, "postgres");
-    p = (await db.query<{ serendipity_epsilon: string; pace: string; travel_vibe: string | null }>(
-      "select * from user_travel_profiles where user_id=$1", [userA])).rows[0];
-    expect(p.serendipity_epsilon).toBe("0.300");
-    expect(p.travel_vibe).toBe("food");
+    e = (await db.query<{ serendipity_epsilon: string }>(
+      "select serendipity_epsilon from user_travel_profiles where user_id=$1", [userA])).rows[0].serendipity_epsilon;
+    expect(e).toBe("0.300");
+
+    await submit(answers({ surpriseDial: 1 }), 2);      // redo, dial set -> replaced
+    await actor(null, "postgres");
+    e = (await db.query<{ serendipity_epsilon: string }>(
+      "select serendipity_epsilon from user_travel_profiles where user_id=$1", [userA])).rows[0].serendipity_epsilon;
+    expect(e).toBe("0.000");
+  });
+
+  it("is add-only for dealbreakers on a redo", async () => {
+    await submit(answers({ dealbreakers: { dietary: ["halal"], religiousAccess: [], mobility: [] } }));
+    await submit(answers({ dealbreakers: { dietary: ["halal", "vegan"], religiousAccess: [], mobility: [] } }), 1);
+    await actor(null, "postgres");
+    expect((await db.query("select flag from user_travel_constraints where user_id=$1 order by flag", [userA])).rows)
+      .toEqual([{ flag: "halal" }, { flag: "vegan" }]);
   });
 
   it("raises 42501 for anonymous, 40001 on a stale revision with atomic rollback", async () => {
     await actor(null, "anon");
-    await expect(db.query("select public.submit_user_onboarding(0, $1::jsonb)", [JSON.stringify(quick())]))
+    await expect(db.query("select public.submit_user_onboarding(0, $1::jsonb)", [JSON.stringify(answers())]))
       .rejects.toMatchObject({ code: "42501" });
 
-    await submit(full());                                  // rev 1
+    await submit();                                       // rev 1
     await actor(null, "postgres");
     await db.query(
       `insert into user_travel_constraints(user_id,kind,flag,created_by) values ($1,'dietary','no_pork',$1)`, [userA]);
-    await expect(submit(quick({ dealbreakers: { dietary: ["halal", "no_pork"], religiousAccess: [], mobility: [] } }), 0))
+    await expect(submit(answers({ dealbreakers: { dietary: ["halal", "no_pork"], religiousAccess: [], mobility: [] } }), 0))
       .rejects.toMatchObject({ code: "40001" });
     await actor(null, "postgres");
     expect((await db.query("select 1 from user_travel_constraints where user_id=$1 and flag='halal'", [userA])).rows)
@@ -231,11 +250,10 @@ describe("submit_user_onboarding", () => {
 
   it("raises 22023 for malformed input and writes nothing", async () => {
     for (const bad of [
-      { ...quick(), mode: "bogus" },
-      { ...quick(), dealbreakers: { dietary: ["mystery"], religiousAccess: [], mobility: [] } },
-      { ...quick(), walkingCapM: 1.5 },
-      { ...quick(), budgetLean: "cheap" },
-      { ...full(), surpriseDial: 9 },
+      { dealbreakers: [], surpriseDial: null },
+      { dealbreakers: { dietary: ["mystery"], religiousAccess: [], mobility: [] }, surpriseDial: null },
+      { dealbreakers: { dietary: [], religiousAccess: [], mobility: [] }, surpriseDial: 9 },
+      { dealbreakers: { dietary: [], religiousAccess: [], mobility: [] }, surpriseDial: 2.5 },
     ]) {
       await expect(submit(bad)).rejects.toMatchObject({ code: "22023" });
     }
@@ -257,7 +275,7 @@ describe("submit_user_onboarding", () => {
         await actor(null, "postgres");
         await db.query("delete from user_travel_constraints where user_id=$1", [userA]);
         await db.query("delete from user_travel_profiles where user_id=$1", [userA]);
-        await submit(full({ dealbreakers: { dietary: [], religiousAccess: [], mobility: [], [key]: [flag] } }));
+        await submit(answers({ dealbreakers: { dietary: [], religiousAccess: [], mobility: [], [key]: [flag] } }));
         await actor(null, "postgres");
         const row = (await db.query<{ severity: string }>(
           "select severity from user_travel_constraints where user_id=$1 and kind=$2 and flag=$3",
@@ -268,51 +286,66 @@ describe("submit_user_onboarding", () => {
   });
 });
 
-describe("create_trip_group + draft trips", () => {
-  it("creates a name-only draft group with an owner membership", async () => {
-    await actor(userA);
-    const id = (await db.query<{ id: string }>("select public.create_trip_group($1) as id", ["  Melaka crew  "])).rows[0].id;
+describe("create_trip_group (organizer frame)", () => {
+  it("creates a ready trip with a destination + valid date pair + owner membership", async () => {
+    const id = (await createFrame()).rows[0].id;
     await actor(null, "postgres");
-    const t = (await db.query<{ name: string; status: string; destination_name: string | null }>(
-      "select name, status, destination_name from trips where id=$1", [id])).rows[0];
-    expect(t).toEqual({ name: "Melaka crew", status: "draft", destination_name: null });
+    const t = (await db.query<Record<string, unknown>>(
+      "select name,status,destination_name,trip_mode,split_allowed,planned_duration_days from trips where id=$1", [id])).rows[0];
+    expect(t).toMatchObject({
+      name: "Melaka crew", status: "ready", destination_name: "Melaka",
+      trip_mode: "balanced", split_allowed: false, planned_duration_days: null,
+    });
     expect((await db.query("select 1 from trip_members where trip_id=$1 and user_id=$2 and role='owner'", [id, userA])).rows)
       .toHaveLength(1);
   });
 
-  it("rejects an unauthenticated caller and a blank name", async () => {
+  it("creates a duration-only draft trip that still has destination + mode", async () => {
+    const id = (await createFrame(frameArgs({ start: null, end: null, duration: 5 }))).rows[0].id;
+    await actor(null, "postgres");
+    const t = (await db.query<Record<string, unknown>>(
+      "select status,destination_name,trip_mode,planned_duration_days from trips where id=$1", [id])).rows[0];
+    expect(t).toMatchObject({ status: "draft", destination_name: "Melaka", trip_mode: "balanced", planned_duration_days: 5 });
+  });
+
+  it("trims the name + destination and stores an optional proposed budget tier", async () => {
+    const id = (await createFrame(frameArgs({ name: "  Melaka crew  ", destination: "  Melaka  ", budget: "premium", split: true }))).rows[0].id;
+    await actor(null, "postgres");
+    expect((await db.query<Record<string, unknown>>(
+      "select name,destination_name,proposed_budget_tier,split_allowed from trips where id=$1", [id])).rows[0])
+      .toEqual({ name: "Melaka crew", destination_name: "Melaka", proposed_budget_tier: "premium", split_allowed: true });
+  });
+
+  it("rejects anon (42501) and every malformed frame (22023)", async () => {
     await actor(null, "anon");
-    await expect(db.query("select public.create_trip_group($1)", ["x"])).rejects.toMatchObject({ code: "42501" });
-    await actor(userA);
-    await expect(db.query("select public.create_trip_group($1)", ["   "])).rejects.toMatchObject({ code: "22023" });
+    await expect(db.query(
+      "select public.create_trip_group('n','d','2026-12-12'::date,'2026-12-14'::date,null,'balanced',null,false)"))
+      .rejects.toMatchObject({ code: "42501" });
+    for (const bad of [
+      frameArgs({ name: "   " }),
+      frameArgs({ destination: "  " }),
+      frameArgs({ mode: "party" }),
+      frameArgs({ start: null, end: null, duration: null }),
+      frameArgs({ start: "2026-12-14", end: "2026-12-12" }),
+      frameArgs({ start: "2026-12-01", end: "2026-12-30" }),
+      frameArgs({ start: "2026-12-12", end: null }),
+      frameArgs({ start: null, end: null, duration: 15 }),
+      frameArgs({ budget: "cheap" }),
+    ]) {
+      await expect(createFrame(bad)).rejects.toMatchObject({ code: "22023" });
+    }
   });
 
-  it("auto-promotes to ready only with a destination and a valid complete date range", async () => {
-    await actor(userA);
-    // A whitespace-only destination cannot even be stored: 202609030004's
-    // trips_destination_bounds check rejects it before the promote trigger runs.
-    await expect(db.query(`update trips set destination_name='   ' where id=$1`, [draftA]))
-      .rejects.toMatchObject({ code: "23514" });
-    await db.query(`update trips set destination_name='Melaka', start_date='2026-12-14' where id=$1`, [draftA]);
-    expect((await pgStatus(draftA))).toBe("draft"); // no end_date yet
-    await actor(userA);
-    // An inverted range on a draft is still rejected by trips_calendar_bounds (end - start >= 0).
-    await expect(db.query(`update trips set end_date='2026-12-12' where id=$1`, [draftA]))
-      .rejects.toMatchObject({ code: "23514" });
-    await db.query(`update trips set end_date='2026-12-16' where id=$1`, [draftA]);
-    expect((await pgStatus(draftA))).toBe("ready");
-  });
-
-  it("blocks generation on a draft trip without a reservation or a proposal", async () => {
+  it("blocks generation on a duration-only draft without a reservation or a proposal", async () => {
+    const id = (await createFrame(frameArgs({ start: null, end: null, duration: 4 }))).rows[0].id;
     await actor(null, "postgres");
     const before = (await db.query<{ n: string }>("select count(*)::int as n from generation_reservations")).rows[0].n;
     await actor(userA);
-    await expect(db.query("select public.reserve_generation($1)", [draftA])).rejects.toMatchObject({ code: "22023" });
-    await expect(db.query("select public.save_trip_proposal($1, 1, '{}'::jsonb, 'test-model')", [draftA]))
+    await expect(db.query("select public.reserve_generation($1)", [id])).rejects.toMatchObject({ code: "22023" });
+    await expect(db.query("select public.save_trip_proposal($1, 1, '{}'::jsonb, 'test-model')", [id]))
       .rejects.toMatchObject({ code: "22023" });
     await actor(null, "postgres");
     expect((await db.query<{ n: string }>("select count(*)::int as n from generation_reservations")).rows[0].n).toBe(before);
-    expect((await db.query("select 1 from agent_proposals where trip_id=$1", [draftA])).rows).toHaveLength(0);
   });
 
   it("preserves the dev_test@gmail.com rate-limit exemption on a ready trip", async () => {
@@ -328,6 +361,55 @@ describe("create_trip_group + draft trips", () => {
       await expect(db.query("select public.reserve_generation($1)", [tripA])).resolves.toBeDefined();
     }
     await expect(db.query("select public.reserve_generation($1)", [tripA])).rejects.toMatchObject({ code: "P0003" });
+  });
+});
+
+describe("trip_member_entries + submit_member_entry + trip_alignment_summary", () => {
+  const entry = (over: Record<string, unknown> = {}) => ({
+    availability: { coverage: "full", arrivalDate: null, departureDate: null },
+    budgetTier: "standard", pace: "balanced", safetyOverrides: [] as unknown[], ...over,
+  });
+  async function submitEntry(tripId: string, e: Record<string, unknown> = entry(), user: string | null = userA) {
+    await actor(user);
+    return db.query("select public.submit_member_entry($1::uuid, $2::jsonb)", [tripId, JSON.stringify(e)]);
+  }
+
+  it("lets a member upsert their own entry and denies a non-member (42501)", async () => {
+    const id = (await createFrame()).rows[0].id;                 // userA is owner
+    await expect(submitEntry(id)).resolves.toBeDefined();
+    await expect(submitEntry(id, entry({ pace: "active" }))).resolves.toBeDefined();
+    await actor(null, "postgres");
+    expect((await db.query<{ n: string }>("select count(*)::int n from trip_member_entries where trip_id=$1", [id])).rows[0].n).toBe(1);
+    expect((await db.query<{ pace: string }>("select pace from trip_member_entries where trip_id=$1 and user_id=$2", [id, userA])).rows[0].pace).toBe("active");
+    await expect(submitEntry(id, entry(), userB)).rejects.toMatchObject({ code: "42501" });
+  });
+
+  it("rejects a malformed entry (22023) and writes nothing", async () => {
+    const id = (await createFrame()).rows[0].id;
+    await expect(submitEntry(id, entry({ budgetTier: "cheap" }))).rejects.toMatchObject({ code: "22023" });
+    await expect(submitEntry(id, entry({ availability: { coverage: "partial", arrivalDate: null, departureDate: null } })))
+      .rejects.toMatchObject({ code: "22023" });
+    await expect(submitEntry(id, entry({ safetyOverrides: [{ kind: "bogus", flag: "halal" }] })))
+      .rejects.toMatchObject({ code: "22023" });
+    await actor(null, "postgres");
+    expect((await db.query<{ n: string }>("select count(*)::int n from trip_member_entries where trip_id=$1", [id])).rows[0].n).toBe(0);
+  });
+
+  it("trip_alignment_summary returns aggregate-only jsonb with no user ids, and null below the floor", async () => {
+    const id = (await createFrame()).rows[0].id;                 // userA is owner
+    await actor(null, "postgres");
+    await db.query("insert into trip_members(trip_id,user_id,display_name,role) values ($1,$2,'Member B','member')", [id, userB]);
+    await submitEntry(id, entry({ budgetTier: "budget", pace: "relaxed" }), userA);
+    await actor(userA);
+    expect((await db.query<{ s: unknown }>("select public.trip_alignment_summary($1::uuid) as s", [id])).rows[0].s).toBeNull();
+    await submitEntry(id, entry({ budgetTier: "premium", safetyOverrides: [{ kind: "dietary", flag: "halal" }] }), userB);
+    await actor(userA);
+    const s = (await db.query<{ s: Record<string, unknown> }>("select public.trip_alignment_summary($1::uuid) as s", [id])).rows[0].s;
+    expect(s).toMatchObject({ memberCount: 2, budget: { min: "budget", max: "premium" }, availability: { full: 2, partial: 0 } });
+    expect(JSON.stringify(s)).not.toMatch(new RegExp(`${userA}|${userB}`));
+    expect(JSON.stringify(s)).not.toMatch(/user_id|"id"/);
+    await actor(userDev);
+    await expect(db.query("select public.trip_alignment_summary($1::uuid)", [id])).rejects.toMatchObject({ code: "42501" });
   });
 });
 
@@ -357,4 +439,15 @@ describe("202609060002 initializes existing trips to ready", () => {
       await staged.close();
     }
   }, 60_000);
+});
+
+describe("draft trip auto-promotion still works", () => {
+  it("auto-promotes a plain draft to ready once it has a destination and a valid range", async () => {
+    await actor(userA);
+    await db.query(`update trips set destination_name='Melaka', start_date='2026-12-14' where id=$1`, [draftA]);
+    expect(await pgStatus(draftA)).toBe("draft");
+    await actor(userA);
+    await db.query(`update trips set end_date='2026-12-16' where id=$1`, [draftA]);
+    expect(await pgStatus(draftA)).toBe("ready");
+  });
 });
