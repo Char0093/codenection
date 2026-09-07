@@ -36,14 +36,31 @@ describe("UserOnboardingWizard", () => {
     expect(screen.getByRole("button", { name: "Next" })).toBeEnabled();
   });
 
+  it("shows a completion summary of the picked answers before redirecting", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(json({ profileRevision: 1, needsOnboarding: false }));
+    render(<UserOnboardingWizard initial={emptySnapshot} successHref="/chats" />);
+    await user.click(screen.getByRole("button", { name: "Halal" }));
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await user.click(screen.getByRole("button", { name: "Finish" }));
+    expect(await screen.findByRole("heading", { name: /you.re all set/i })).toBeInTheDocument();
+    expect(screen.getByText("Halal")).toBeInTheDocument();
+    expect(screen.getByText("Balanced default")).toBeInTheDocument();
+    // The footer/step chrome is gone in the completion view, not just visually covered.
+    expect(screen.queryByRole("button", { name: "Finish" })).not.toBeInTheDocument();
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/chats"), { timeout: 2000 });
+  });
+
   it("submits an empty safety vault and a skipped dial, then redirects", async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValueOnce(json({ profileRevision: 1, needsOnboarding: false }));
     render(<UserOnboardingWizard initial={emptySnapshot} successHref="/chats" />);
     await user.click(screen.getByRole("button", { name: "Next" }));
-    expect(screen.getByRole("checkbox", { name: /skip/i })).toBeChecked();
+    expect(screen.getByRole("button", { name: /balanced default/i })).toHaveAttribute("aria-pressed", "true");
     await user.click(screen.getByRole("button", { name: "Finish" }));
-    await waitFor(() => expect(replace).toHaveBeenCalledWith("/chats"));
+    // The "you're all set" summary holds briefly before the redirect (see the component's
+    // finished-state effect) -- give waitFor room for that transition, not just a network tick.
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/chats"), { timeout: 2000 });
     expect(fetchMock.mock.calls[0][0]).toBe("/api/onboarding");
     expect(lastPostBody()).toEqual({
       expectedRevision: 0,
@@ -57,10 +74,10 @@ describe("UserOnboardingWizard", () => {
     render(<UserOnboardingWizard initial={emptySnapshot} successHref="/" endpoint="/api/onboarding" />);
     await user.click(screen.getByRole("button", { name: "Halal" }));
     await user.click(screen.getByRole("button", { name: "Next" }));
-    await user.click(screen.getByRole("checkbox", { name: /skip/i })); // un-skip
+    await user.click(screen.getByRole("button", { name: /customize/i })); // un-skip
     fireEvent.change(screen.getByRole("slider"), { target: { value: "1" } });
     await user.click(screen.getByRole("button", { name: "Finish" }));
-    await waitFor(() => expect(replace).toHaveBeenCalled());
+    await waitFor(() => expect(replace).toHaveBeenCalled(), { timeout: 2000 });
     expect(lastPostBody().answers).toEqual({
       dealbreakers: { dietary: ["halal"], religiousAccess: [], mobility: [] },
       surpriseDial: 1,
@@ -86,10 +103,10 @@ describe("UserOnboardingWizard", () => {
       profile: { travelVibe: null, serendipityEpsilon: 0.3, onboardingCompletedAt: "2026-09-07T00:00:00Z" },
     }} />);
     await user.click(screen.getByRole("button", { name: "Next" }));
-    expect(screen.getByRole("checkbox", { name: /skip/i })).not.toBeChecked();
+    expect(screen.getByRole("button", { name: /customize/i })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("slider")).toHaveValue("5");
     await user.click(screen.getByRole("button", { name: "Finish" }));
-    await waitFor(() => expect(replace).toHaveBeenCalledWith("/preferences"));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/preferences"), { timeout: 2000 });
     expect(lastPostBody()).toEqual({
       expectedRevision: 7,
       answers: { dealbreakers: { dietary: [], religiousAccess: [], mobility: [] }, surpriseDial: 5 },
@@ -109,7 +126,7 @@ describe("UserOnboardingWizard", () => {
     await waitFor(() => expect(screen.getByText("Step 1 of 2")).toBeInTheDocument());
     await user.click(screen.getByRole("button", { name: "Next" }));
     await user.click(screen.getByRole("button", { name: "Finish" }));
-    await waitFor(() => expect(replace).toHaveBeenCalledWith("/chats"));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/chats"), { timeout: 2000 });
     expect(lastPostBody().expectedRevision).toBe(4);
   });
 });
