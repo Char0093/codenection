@@ -32,7 +32,10 @@ export default async function TripChatPage({ params }: { params: Promise<{ tripI
     <main className="app-shell">
       <div className="section-heading">
         <div><h1>Trip chat</h1></div>
-        <Link className="secondary-button" href="/chats">All trip groups</Link>
+        <div className="section-heading-actions">
+          <Link className="secondary-button" href={`/trips/${tripId}/entry`}>Your trip preferences</Link>
+          <Link className="secondary-button" href="/chats">All trip groups</Link>
+        </div>
       </div>
       <ChatPane tripId={tripId} selfMemberId={selfMemberId} members={members} />
     </main>
