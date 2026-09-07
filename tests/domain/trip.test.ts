@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { tripInputSchema, validateTripDates, createTripGroupSchema, isTripReady } from "@/lib/domain/trip";
+import {
+  tripInputSchema, validateTripDates, isTripReady,
+  createTripFrameSchema, frameEnablesChat, TRIP_MODES,
+} from "@/lib/domain/trip";
 
 const input = {
   destinationName: " George Town ", startDate: "2026-10-03", endDate: "2026-10-05",
@@ -56,18 +59,64 @@ describe("validateTripDates", () => {
   });
 });
 
-describe("createTripGroupSchema", () => {
-  it("trims a group name and rejects blank, too long, or extra keys", () => {
-    expect(createTripGroupSchema.parse({ name: "  Melaka crew  " })).toEqual({ name: "Melaka crew" });
-    expect(createTripGroupSchema.safeParse({ name: "   " }).success).toBe(false);
-    expect(createTripGroupSchema.safeParse({ name: "x".repeat(121) }).success).toBe(false);
-    expect(createTripGroupSchema.safeParse({ name: "ok", destinationName: "Melaka" }).success).toBe(false);
+describe("createTripFrameSchema (organizer trip frame)", () => {
+  const base = {
+    name: "Melaka crew", destinationName: "Melaka", tripMode: "balanced" as const,
+    proposedBudgetTier: null, splitAllowed: false,
+  };
+
+  it("accepts an explicit date pair within 14 days", () => {
+    const p = createTripFrameSchema.parse({ ...base, startDate: "2026-12-12", endDate: "2026-12-14" });
+    expect(p).toMatchObject({ name: "Melaka crew", destinationName: "Melaka", tripMode: "balanced" });
   });
-  it("applies the sensitive-data guard to the group name", () => {
-    const result = createTripGroupSchema.safeParse({ name: "Trip for people with diabetes" });
-    expect(result.success).toBe(false);
-    if (!result.success) expect(result.error.message).toContain("sensitive personal");
+  it("trims the name + destination and defaults the optional fields", () => {
+    const p = createTripFrameSchema.parse({
+      name: "  Melaka crew  ", destinationName: "  Melaka  ", tripMode: "relaxed", plannedDurationDays: 4,
+    });
+    expect(p).toMatchObject({ name: "Melaka crew", destinationName: "Melaka", proposedBudgetTier: null, splitAllowed: false });
   });
+  it("accepts a duration-only frame (1..14 days) with no dates", () => {
+    expect(createTripFrameSchema.parse({ ...base, plannedDurationDays: 5 }).plannedDurationDays).toBe(5);
+  });
+  it("accepts an optional proposed budget tier and split flag", () => {
+    const p = createTripFrameSchema.parse({ ...base, plannedDurationDays: 4, proposedBudgetTier: "premium", splitAllowed: true });
+    expect(p).toMatchObject({ proposedBudgetTier: "premium", splitAllowed: true });
+  });
+  it.each([
+    ["neither dates nor duration", { ...base }],
+    ["an inverted date range", { ...base, startDate: "2026-12-14", endDate: "2026-12-12" }],
+    ["a >14-day range", { ...base, startDate: "2026-12-01", endDate: "2026-12-30" }],
+    ["only a start date", { ...base, startDate: "2026-12-12" }],
+    ["duration 0", { ...base, plannedDurationDays: 0 }],
+    ["duration 15", { ...base, plannedDurationDays: 15 }],
+    ["an unknown mode", { ...base, tripMode: "party", plannedDurationDays: 3 }],
+    ["a blank destination", { ...base, destinationName: "  ", plannedDurationDays: 3 }],
+    ["an extra key", { ...base, plannedDurationDays: 3, foo: 1 }],
+  ])("rejects %s", (_label, value) => {
+    expect(createTripFrameSchema.safeParse(value).success).toBe(false);
+  });
+  it("applies the sensitive-data guard to the name and destination", () => {
+    expect(createTripFrameSchema.safeParse({ ...base, plannedDurationDays: 3, name: "Trip for people with diabetes" }).success).toBe(false);
+    expect(createTripFrameSchema.safeParse({ ...base, plannedDurationDays: 3, destinationName: "Melaka, I have asthma" }).success).toBe(false);
+  });
+});
+
+describe("frameEnablesChat", () => {
+  it("is true once destination + mode + (dates or duration) exist", () => {
+    expect(frameEnablesChat({ destinationName: "Melaka", tripMode: "balanced", startDate: null, endDate: null, plannedDurationDays: 3 })).toBe(true);
+    expect(frameEnablesChat({ destinationName: "Melaka", tripMode: "balanced", startDate: "2026-12-12", endDate: "2026-12-14", plannedDurationDays: null })).toBe(true);
+  });
+  it.each([
+    { destinationName: null, tripMode: "balanced", startDate: "2026-12-12", endDate: "2026-12-14", plannedDurationDays: null },
+    { destinationName: "Melaka", tripMode: null, startDate: "2026-12-12", endDate: "2026-12-14", plannedDurationDays: null },
+    { destinationName: "Melaka", tripMode: "balanced", startDate: null, endDate: null, plannedDurationDays: null },
+  ])("is false with a missing destination, mode, or time frame %j", (fields) => {
+    expect(frameEnablesChat(fields)).toBe(false);
+  });
+});
+
+it("exposes exactly the four trip modes", () => {
+  expect([...TRIP_MODES]).toEqual(["relaxed", "balanced", "adventurous", "mixed"]);
 });
 
 describe("isTripReady", () => {
