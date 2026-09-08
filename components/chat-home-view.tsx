@@ -20,7 +20,7 @@ function timeframeSummary(trip: ChatHomeTrip): string {
 export function ChatHomeView({ trips }: { trips: ChatHomeTrip[] }) {
   const [showForm, setShowForm] = useState(false);
   return (
-    <main className="app-shell">
+    <>
       <div className="section-heading">
         <div>
           <h1>Your trip groups</h1>
@@ -67,7 +67,7 @@ export function ChatHomeView({ trips }: { trips: ChatHomeTrip[] }) {
           ))}
         </ul>
       )}
-    </main>
+    </>
   );
 }
 

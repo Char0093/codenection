@@ -47,7 +47,15 @@ a { color: var(--teal-dark); }
 [hidden] { display: none !important; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
-.app-shell { min-height: 100vh; padding: 0 20px; }
+.app-shell { min-height: 100vh; padding: 0 20px; flex: 1 1 auto; min-width: 0; }
+/* A page whose own top-level content is .workspace-main (every /trips/[tripId]/* page, via
+   AppShell) needs to fill the row beside the sidebar and hand that height down so the chat
+   pane can scroll internally. Every other .app-shell page (the trip-groups list, settings,
+   ...) keeps the plain block layout above, scrolling the page. Scoped to .workspace-main as a
+   *direct* child so trip-setup-dashboard, which nests its own .workspace-main two levels down
+   inside .app-body, is untouched -- see .workspace-main below. */
+.app-shell:has(> .workspace-main) { display: flex; flex-direction: column; min-height: 0; }
+.app-shell:has(> .workspace-main) > .workspace-main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .topbar { min-height: 72px; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 16px max(24px, calc((100% - 1200px) / 2)); background: var(--navy); color: #fff; }
 .brand-block { display: inline-flex; align-items: center; gap: 10px; min-width: 0; color: inherit; text-decoration: none; }
 .brand-block strong { font-family: var(--font-display); font-size: 24px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
@@ -620,26 +628,51 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
 .member-entry-dates label { flex: 1; display: flex; flex-direction: column; gap: 4px; font-weight: 600; }
 .section-heading-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
-/* Shared selected-trip shell (spec 2026-09-06-first-login-travel-dna-chat-groups §2.3).
-   Flex column with a real viewport height so the chat page can fill it and scroll
-   internally like a real messaging app, instead of growing the whole page -- scoped to
-   .trip-shell specifically (not the shared .app-shell/.workspace-main classes) so the
-   unrelated trip-setup-dashboard, which reuses .workspace-main for its own two-column
-   layout, is untouched. Plan/Timeline/entry, the other .workspace-main children here, are
-   unaffected too: without their own flex-grow they simply keep their natural content
-   height and page scroll, exactly as before. */
-.trip-shell { max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; min-height: 100dvh; }
-.trip-shell .workspace-main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
-.trip-nav { display: flex; gap: 4px; margin: 0 0 18px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-.trip-nav-item { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 8px 14px; border-bottom: 2px solid transparent; color: var(--muted); font-size: 13px; font-weight: 600; text-decoration: none; }
-.trip-nav-item[aria-current="page"] { color: var(--teal-dark); border-bottom-color: var(--teal); }
-.trip-nav-item[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
-.trip-nav-icon { width: 15px; height: 15px; }
+/* ---------- App shell: a persistent sidebar (components/app-shell.tsx) alongside the page's
+   own content. The account-level items (All trip groups / Settings / Log out) are always
+   there; a trip's Chat/Plan/Timeline/Your prefs section only appears while that trip is open.
+   Desktop keeps the sidebar always visible; under 900px it collapses into an off-canvas drawer
+   opened from the mobile top bar instead of a permanent rail. ---------- */
+.shell { display: flex; flex-direction: column; min-height: 100dvh; }
+.mobile-topbar { display: none; }
+.shell-body { display: flex; flex: 1 1 auto; min-height: 0; }
+.app-sidebar-backdrop { display: none; }
 
-/* ---------- Mobile app sizing pass: phone-width touch targets, page gutters, and turning the
-   per-trip tab row above into a fixed bottom tab bar (icon over label), the way a native app's
-   primary navigation reads on a phone. Nothing here changes above the breakpoint, so desktop/
-   tablet keeps the underline-tab layout and spacing it already had. ---------- */
+.app-sidebar {
+  flex: 0 0 232px; display: flex; flex-direction: column; gap: 4px;
+  padding: 20px 14px; border-right: 1px solid var(--line); background: var(--surface);
+  overflow-y: auto;
+}
+.app-sidebar-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 18px; }
+.app-sidebar-head .brand-block { color: var(--ink); }
+.app-sidebar-head .brand-block > svg { color: var(--teal); }
+.app-sidebar-close { display: none; }
+.app-sidebar-nav { display: flex; flex-direction: column; gap: 2px; }
+.app-sidebar-heading {
+  margin: 18px 0 4px; padding: 0 10px; font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.app-sidebar-link {
+  display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 8px 10px; margin: 0; width: 100%;
+  border: 0; border-radius: 8px; background: none; color: var(--muted); font-size: 13.5px; font-weight: 600;
+  text-decoration: none; text-align: left; cursor: pointer;
+}
+.app-sidebar-link svg { width: 17px; height: 17px; flex: none; }
+.app-sidebar-link:hover:not([aria-disabled="true"]) { background: var(--canvas); color: var(--ink); }
+.app-sidebar-link[aria-current="page"] { background: var(--teal-soft); color: var(--teal-dark); }
+.app-sidebar-link[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
+.app-sidebar-spacer { flex: 1 1 auto; }
+.app-sidebar-email { margin: 4px 10px; font-size: 11.5px; color: var(--muted); overflow-wrap: anywhere; }
+.app-sidebar-logout:hover { background: var(--error-soft); color: var(--error-dark); }
+
+.settings-signout { max-width: 440px; margin: 24px 0 0; padding: 20px; border: 1px solid var(--line-strong); border-radius: 16px; background: var(--surface); }
+.settings-signout h2 { margin: 0 0 4px; font-size: 15px; }
+.settings-signout .field-hint { margin: 0; }
+.settings-signout form { margin-top: 14px; }
+
+/* ---------- Mobile app sizing pass: phone-width touch targets, page gutters, and the sidebar's
+   collapse into an off-canvas drawer. Nothing here changes above the breakpoint, so desktop/
+   tablet keeps the persistent sidebar and spacing it already had. ---------- */
 @media (max-width: 640px) {
   .primary-button, .secondary-button, .icon-button { min-height: 46px; }
   input, select, textarea { min-height: 46px; }
@@ -652,19 +685,23 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
   h1 { font-size: 21px; }
   .section-heading { margin-bottom: 16px; gap: 8px; flex-wrap: wrap; }
   .chat-pane-member-count { display: none; }
+}
 
-  .trip-shell { padding-bottom: calc(58px + env(safe-area-inset-bottom, 0px)); }
-  .trip-nav {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; margin: 0; flex-wrap: nowrap;
-    border-bottom: 0; border-top: 1px solid var(--line); background: var(--surface);
-    padding: 4px 4px calc(4px + env(safe-area-inset-bottom, 0px)); gap: 2px;
-    box-shadow: 0 -2px 8px rgba(30, 36, 48, 0.06);
+@media (max-width: 900px) {
+  .mobile-topbar {
+    display: flex; align-items: center; gap: 10px; flex: none; padding: 10px 16px;
+    border-bottom: 1px solid var(--line); background: var(--surface);
   }
-  .trip-nav-item {
-    flex: 1 1 0; min-width: 0; flex-direction: column; justify-content: center; gap: 3px;
-    min-height: 50px; padding: 4px; border-bottom: 0; border-radius: 10px;
-    font-size: 10.5px; text-align: center; white-space: nowrap;
+  .mobile-topbar-title { font-family: var(--font-display); font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .app-sidebar-backdrop {
+    display: block; position: fixed; inset: 0; z-index: 29; margin: 0; padding: 0; border: 0;
+    background: rgba(16, 18, 24, 0.4); cursor: default;
   }
-  .trip-nav-item[aria-current="page"] { background: var(--teal-soft); border-bottom: 0; }
-  .trip-nav-icon { width: 20px; height: 20px; }
+  .app-sidebar {
+    position: fixed; inset: 0 auto 0 0; z-index: 30; width: min(280px, 82vw); flex: none;
+    transform: translateX(-100%); transition: transform 0.2s ease; box-shadow: 2px 0 16px rgba(0, 0, 0, 0.12);
+    padding-top: calc(20px + env(safe-area-inset-top, 0px)); padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  }
+  .app-sidebar[data-open="true"] { transform: translateX(0); }
+  .app-sidebar-close { display: inline-grid; }
 }

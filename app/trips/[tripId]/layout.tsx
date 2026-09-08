@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { z } from "zod";
-import { TripShell } from "@/components/trip-shell";
+import { AppShell } from "@/components/app-shell";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
@@ -29,8 +29,8 @@ export default async function TripLayout({ children, params }: {
 
   const row = trip as { name: string; status: string };
   return (
-    <TripShell tripId={tripId} tripName={row.name} ready={row.status === "ready"}>
-      {children}
-    </TripShell>
+    <AppShell trip={{ id: tripId, name: row.name, ready: row.status === "ready" }} accountEmail={user.email}>
+      <div className="workspace-main">{children}</div>
+    </AppShell>
   );
 }
