@@ -32,7 +32,7 @@ function usePanesCollapsed(): boolean {
  * The dual-layer contextual surface: a 3D spatial map on top, the collaborative chatroom and
  * action sheet below. Below the tablet breakpoint the two panes collapse into tabs (Task 3.5)
  * rather than squeezing both into half-height strips. The pre-trip Timeline jigsaw is now its
- * own selected-trip nav destination (`components/trip-shell.tsx`), not a toggle in here.
+ * own selected-trip nav destination (`components/app-shell.tsx`), not a toggle in here.
  */
 export function WorkspaceShell({ mapSlot, chatSlot }: WorkspaceShellProps) {
   const [activeTab, setActiveTab] = useState<"map" | "chat">("map");
