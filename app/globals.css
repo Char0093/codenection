@@ -47,7 +47,7 @@ a { color: var(--teal-dark); }
 [hidden] { display: none !important; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
-.app-shell { min-height: 100vh; }
+.app-shell { min-height: 100vh; padding: 0 20px; }
 .topbar { min-height: 72px; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 16px max(24px, calc((100% - 1200px) / 2)); background: var(--navy); color: #fff; }
 .brand-block { display: inline-flex; align-items: center; gap: 10px; min-width: 0; color: inherit; text-decoration: none; }
 .brand-block strong { font-family: var(--font-display); font-size: 24px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
@@ -191,40 +191,101 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
 .workspace-placeholder { height: 100%; display: grid; place-content: center; justify-items: center; gap: 8px; color: var(--muted); }
 .workspace-placeholder p { margin: 0; }
 
-/* ---------- Chat pane ---------- */
+/* ---------- Chat pane (messaging-app layout: fixed header + scrolling history + pinned
+   composer, never a page that just grows -- see .trip-shell/.workspace-main below for how
+   this pane gets a real height to fill). Bubble/header/composer treatment borrows WhatsApp's
+   layout conventions (solid-accent self bubbles, tailed grouped bubbles, per-message inline
+   timestamps, date dividers, a pill composer) on the app's own tokens, not a literal copy of
+   its palette. ---------- */
 
-.chat-pane { display: flex; flex-direction: column; height: 100%; min-height: 0; }
-.chat-pane-top { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--line); min-height: 40px; }
-.chat-status-note { font-size: 11.5px; color: var(--muted); margin-left: auto; }
+.chat-pane { display: flex; flex-direction: column; flex: 1 1 auto; height: 100%; min-height: 0; background: var(--canvas); }
+.chat-pane-top {
+  display: flex; align-items: center; gap: 10px; padding: 10px 16px; flex: none;
+  border-bottom: 1px solid var(--line); background: var(--surface);
+  box-shadow: 0 1px 0 rgba(30, 36, 48, 0.03);
+}
+.chat-pane-members { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.chat-pane-member-count { font-size: 12px; font-weight: 600; color: var(--ink); white-space: nowrap; }
+.chat-connection { display: flex; align-items: center; gap: 6px; margin-left: auto; font-size: 11.5px; color: var(--muted); flex: none; }
+.chat-connection-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex: none; }
+.chat-connection[data-state="connected"] .chat-connection-dot { background: var(--consensus); }
+.chat-connection[data-state="connecting"] .chat-connection-dot, .chat-connection[data-state="polling"] .chat-connection-dot { background: var(--flexible); }
+.chat-connection[data-state="disconnected"] .chat-connection-dot { background: var(--error); }
 
 .presence-bar { display: flex; }
-.presence-avatar { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 10.5px; font-weight: 700; border: 2px solid var(--surface); margin-left: -6px; }
-.presence-bar .presence-avatar:first-child { margin-left: 0; }
+.presence-avatar-wrap { position: relative; margin-left: -8px; }
+.presence-bar .presence-avatar-wrap:first-child { margin-left: 0; }
+.presence-avatar { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 11px; font-weight: 700; border: 2px solid var(--surface); }
+.presence-online-dot { position: absolute; right: -1px; bottom: -1px; width: 9px; height: 9px; border-radius: 50%; background: var(--consensus); border: 2px solid var(--surface); }
 
-.chat-message-list { flex: 1; min-height: 0; overflow-y: auto; list-style: none; margin: 0; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
-.chat-message { max-width: 88%; }
-.chat-message[data-self="true"] { align-self: flex-end; text-align: right; }
-.chat-message-header { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+.chat-message-list {
+  flex: 1; min-height: 0; overflow-y: auto; list-style: none; margin: 0; padding: 14px 14px 6px;
+  display: flex; flex-direction: column; gap: 3px; scroll-behavior: smooth;
+}
+.chat-message-list > .chat-date-sep { margin: 14px 0 8px; }
+.chat-message-list > .chat-message + .chat-message { margin-top: 3px; }
+.chat-message-list > .chat-message[data-group-start="true"] { margin-top: 12px; }
+
+.chat-date-sep { display: flex; justify-content: center; }
+.chat-date-sep span {
+  padding: 4px 12px; border-radius: 999px; background: var(--surface); color: var(--muted);
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  box-shadow: 0 1px 2px rgba(30, 36, 48, 0.06);
+}
+
+.chat-message { max-width: 74%; display: flex; flex-direction: column; animation: chat-message-in 0.15s ease-out; }
+@keyframes chat-message-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.chat-message[data-self="true"] { align-self: flex-end; align-items: flex-end; }
+.chat-message[data-self="false"] { align-self: flex-start; align-items: flex-start; }
+.chat-message-header { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; padding: 0 2px; }
 .chat-message[data-self="true"] .chat-message-header { flex-direction: row-reverse; }
-.chat-message-avatar { flex: none; width: 20px; height: 20px; border-radius: 50%; background: var(--muted); color: #fff; display: grid; place-items: center; font-size: 10px; font-weight: 700; }
-.chat-message[data-author-kind="assistant"] .chat-message-avatar { background: var(--blue); }
+.chat-message-avatar { flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--muted); color: #fff; display: grid; place-items: center; font-size: 10.5px; font-weight: 700; }
+.chat-message[data-author-kind="assistant"] .chat-message-avatar { background: var(--wishlist); }
 .chat-message[data-author-kind="system"] .chat-message-avatar { background: var(--muted); }
-.chat-message-name { font-size: 12px; font-weight: 600; }
-.chat-message-time { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.chat-message-body { margin: 0; padding: 8px 12px; border-radius: 12px; background: var(--canvas); font-size: 13px; overflow-wrap: anywhere; display: inline-block; text-align: left; }
-.chat-message[data-self="true"] .chat-message-body { background: var(--teal-soft); }
-.chat-message[data-author-kind="assistant"] .chat-message-body { background: var(--wishlist-soft); }
-.chat-message[data-author-kind="system"] .chat-message-body { background: transparent; border: 1px dashed var(--line-strong); color: var(--muted); font-style: italic; }
-.chat-message-status { display: block; margin-top: 3px; font-size: 11px; color: var(--muted); }
+.chat-message-name { font-size: 12px; font-weight: 700; }
+
+.chat-message-body {
+  margin: 0; padding: 8px 12px; border-radius: 16px; background: var(--surface);
+  border: 1px solid var(--line-strong); box-shadow: 0 1px 2px rgba(30, 36, 48, 0.05);
+  font-size: 13.5px; line-height: 1.42; overflow-wrap: anywhere; text-align: left; max-width: 100%;
+}
+/* Grouped consecutive bubbles get a "tail" on the first message of the group -- a tighter
+   corner on the side nearest the avatar -- and stay softly rounded through the rest, the same
+   asymmetric shape a real messaging app uses instead of one uniform pill per line. */
+.chat-message[data-self="false"][data-group-start="true"] .chat-message-body { border-top-left-radius: 5px; }
+.chat-message[data-self="true"][data-group-start="true"] .chat-message-body { border-top-right-radius: 5px; }
+.chat-message[data-self="true"] .chat-message-body {
+  background: var(--teal); border-color: var(--teal); color: #fff;
+}
+.chat-message[data-author-kind="assistant"] .chat-message-body { background: var(--wishlist-soft); border-color: var(--wishlist); }
+.chat-message[data-author-kind="system"] .chat-message-body {
+  background: transparent; border: 1px dashed var(--line-strong); box-shadow: none; color: var(--muted); font-style: italic;
+}
+/* Trailing inline timestamp -- part of the paragraph's own text flow (not a hover reveal, so
+   it works on touch too), the same way a real messaging bubble hugs its send time at the end
+   of the last line rather than hiding it in a header shared by a whole grouped run. */
+.chat-message-time-inline { margin-left: 6px; font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.chat-message[data-self="true"] .chat-message-time-inline { color: rgba(255, 255, 255, 0.72); }
+.chat-message[data-author-kind="system"] .chat-message-time-inline { display: none; }
+
+.chat-message-status { display: block; margin-top: 3px; padding: 0 2px; font-size: 11px; color: var(--muted); }
 .chat-message-failed { color: var(--error-dark); display: flex; align-items: center; gap: 6px; }
 .chat-message[data-self="true"] .chat-message-failed { justify-content: flex-end; }
 .chat-message-failed button { display: inline-flex; align-items: center; gap: 3px; border: 0; background: none; color: inherit; font-size: 11px; font-weight: 600; text-decoration: underline; padding: 0; }
 
-.chat-composer { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); }
-.chat-composer input { flex: 1; }
-.chat-composer .icon-button { flex: none; width: 40px; height: 40px; border-color: var(--line-strong); color: var(--ink); }
-.chat-composer .icon-button:hover:not(:disabled) { background: var(--canvas); }
-.chat-assistant-note { margin: 0; border-radius: 0; }
+.chat-composer { display: flex; align-items: center; gap: 10px; padding: 12px 14px; flex: none; border-top: 1px solid var(--line); background: var(--surface); }
+.chat-composer input {
+  flex: 1; min-height: 42px; padding: 10px 16px; border-radius: 999px; border: 1px solid var(--line-strong);
+  background: var(--canvas); transition: border-color 0.15s, background 0.15s;
+}
+.chat-composer input:focus { border-color: var(--teal); background: var(--surface); }
+.chat-composer .icon-button {
+  flex: none; width: 42px; height: 42px; border-radius: 50%; border-color: transparent;
+  background: var(--line); color: var(--muted); transition: background 0.15s, color 0.15s, transform 0.1s;
+}
+.chat-composer .icon-button:not(:disabled) { background: var(--teal); color: #fff; }
+.chat-composer .icon-button:hover:not(:disabled) { background: var(--teal-dark); transform: scale(1.05); }
+.chat-assistant-note { margin: 0; border-radius: 0; flex: none; }
 
 .assistant-proposal-card { margin-top: 8px; padding: 12px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface); text-align: left; }
 .assistant-proposal-missing { margin: 8px 0 0; font-size: 12px; font-style: italic; color: var(--muted); }
@@ -559,9 +620,51 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
 .member-entry-dates label { flex: 1; display: flex; flex-direction: column; gap: 4px; font-weight: 600; }
 .section-heading-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
-/* Shared selected-trip shell (spec 2026-09-06-first-login-travel-dna-chat-groups §2.3). */
-.trip-shell { max-width: 900px; margin: 0 auto; }
+/* Shared selected-trip shell (spec 2026-09-06-first-login-travel-dna-chat-groups §2.3).
+   Flex column with a real viewport height so the chat page can fill it and scroll
+   internally like a real messaging app, instead of growing the whole page -- scoped to
+   .trip-shell specifically (not the shared .app-shell/.workspace-main classes) so the
+   unrelated trip-setup-dashboard, which reuses .workspace-main for its own two-column
+   layout, is untouched. Plan/Timeline/entry, the other .workspace-main children here, are
+   unaffected too: without their own flex-grow they simply keep their natural content
+   height and page scroll, exactly as before. */
+.trip-shell { max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; min-height: 100dvh; }
+.trip-shell .workspace-main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .trip-nav { display: flex; gap: 4px; margin: 0 0 18px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-.trip-nav-item { display: inline-flex; align-items: center; min-height: 40px; padding: 8px 14px; border-bottom: 2px solid transparent; color: var(--muted); font-size: 13px; font-weight: 600; text-decoration: none; }
+.trip-nav-item { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 8px 14px; border-bottom: 2px solid transparent; color: var(--muted); font-size: 13px; font-weight: 600; text-decoration: none; }
 .trip-nav-item[aria-current="page"] { color: var(--teal-dark); border-bottom-color: var(--teal); }
 .trip-nav-item[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
+.trip-nav-icon { width: 15px; height: 15px; }
+
+/* ---------- Mobile app sizing pass: phone-width touch targets, page gutters, and turning the
+   per-trip tab row above into a fixed bottom tab bar (icon over label), the way a native app's
+   primary navigation reads on a phone. Nothing here changes above the breakpoint, so desktop/
+   tablet keeps the underline-tab layout and spacing it already had. ---------- */
+@media (max-width: 640px) {
+  .primary-button, .secondary-button, .icon-button { min-height: 46px; }
+  input, select, textarea { min-height: 46px; }
+  .flag-chip { min-height: 40px; padding: 8px 14px; }
+  .chat-composer input { min-height: 46px; }
+  .chat-composer .icon-button { width: 46px; height: 46px; }
+  .poi-card-add, .cal-unschedule-button, .cal-unlock-button, .poi-pool-tabs button { min-height: 34px; padding: 6px 10px; }
+
+  .app-shell { padding: 0 16px; }
+  h1 { font-size: 21px; }
+  .section-heading { margin-bottom: 16px; gap: 8px; flex-wrap: wrap; }
+  .chat-pane-member-count { display: none; }
+
+  .trip-shell { padding-bottom: calc(58px + env(safe-area-inset-bottom, 0px)); }
+  .trip-nav {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; margin: 0; flex-wrap: nowrap;
+    border-bottom: 0; border-top: 1px solid var(--line); background: var(--surface);
+    padding: 4px 4px calc(4px + env(safe-area-inset-bottom, 0px)); gap: 2px;
+    box-shadow: 0 -2px 8px rgba(30, 36, 48, 0.06);
+  }
+  .trip-nav-item {
+    flex: 1 1 0; min-width: 0; flex-direction: column; justify-content: center; gap: 3px;
+    min-height: 50px; padding: 4px; border-bottom: 0; border-radius: 10px;
+    font-size: 10.5px; text-align: center; white-space: nowrap;
+  }
+  .trip-nav-item[aria-current="page"] { background: var(--teal-soft); border-bottom: 0; }
+  .trip-nav-icon { width: 20px; height: 20px; }
+}

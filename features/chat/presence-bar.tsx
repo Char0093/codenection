@@ -9,8 +9,12 @@ export function PresenceBar({ members, presentMemberIds }: {
   if (present.length === 0) return null;
   return <div className="presence-bar" aria-label="Viewing now">
     {present.map((member) => (
-      <span key={member.id} className="presence-avatar" style={{ background: member.color }} title={member.displayName}>
-        {member.displayName.slice(0, 1).toUpperCase()}
+      <span key={member.id} className="presence-avatar-wrap" title={member.displayName}>
+        <span className="presence-avatar" style={{ background: member.color }} aria-hidden="true">
+          {member.displayName.slice(0, 1).toUpperCase()}
+        </span>
+        <span className="presence-online-dot" aria-hidden="true" />
+        <span className="sr-only">{member.displayName} online</span>
       </span>
     ))}
   </div>;
