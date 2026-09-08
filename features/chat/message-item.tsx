@@ -11,10 +11,11 @@ function formatTime(iso: string): string {
   return parsed.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 }
 
-export function MessageItem({ message, author, showHeader, isSelf, onRetry, proposal, canDecideProposals, activeProposalId, decidingProposalId, onDecision }: {
+export function MessageItem({ message, author, showHeader, groupStart, isSelf, onRetry, proposal, canDecideProposals, activeProposalId, decidingProposalId, onDecision }: {
   message: ChatEntry;
   author?: JigsawMember;
   showHeader: boolean;
+  groupStart: boolean;
   isSelf: boolean;
   onRetry?: () => void;
   proposal?: ProposalRecord;
@@ -25,15 +26,17 @@ export function MessageItem({ message, author, showHeader, isSelf, onRetry, prop
 }) {
   const displayName = message.authorKind === "assistant" ? "Assistant" : message.authorKind === "system" ? "System" : author?.displayName ?? "Member";
 
-  return <li className="chat-message" data-author-kind={message.authorKind} data-self={isSelf ? "true" : undefined}>
+  return <li className="chat-message" data-author-kind={message.authorKind} data-self={isSelf ? "true" : "false"} data-group-start={groupStart ? "true" : "false"}>
     {showHeader && <div className="chat-message-header">
       <span className="chat-message-avatar" style={{ background: message.authorKind === "member" ? author?.color : undefined }}>
         {message.authorKind === "assistant" ? <Sparkles size={12} aria-hidden /> : displayName.slice(0, 1).toUpperCase()}
       </span>
       <span className="chat-message-name">{displayName}</span>
-      <span className="chat-message-time">{formatTime(message.createdAt)}</span>
     </div>}
-    <p className="chat-message-body">{message.body}</p>
+    <p className="chat-message-body">
+      <span>{message.body}</span>
+      <span className="chat-message-time-inline">{formatTime(message.createdAt)}</span>
+    </p>
     {message.proposalId && <AssistantProposalCard proposal={proposal}
       active={proposal !== undefined && proposal.id === activeProposalId}
       canDecide={canDecideProposals} busy={decidingProposalId === message.proposalId}

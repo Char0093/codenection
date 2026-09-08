@@ -6,6 +6,24 @@ import type { ChatEntry } from "@/features/chat/use-trip-channel";
 import type { JigsawMember } from "@/features/timeline/jigsaw-panel";
 import type { ProposalRecord } from "@/lib/repositories/planning-repository";
 
+function dayKey(iso: string): string {
+  const parsed = new Date(iso);
+  return Number.isNaN(parsed.getTime()) ? "" : parsed.toDateString();
+}
+
+/** "Today" / "Yesterday" / a full weekday date -- the divider between message groups from
+ * different calendar days, the one piece of orientation info no single message carries. */
+function dayLabel(iso: string): string {
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return "";
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  if (parsed.toDateString() === today.toDateString()) return "Today";
+  if (parsed.toDateString() === yesterday.toDateString()) return "Yesterday";
+  return parsed.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+}
+
 export function MessageList({ messages, members, selfMemberId, onRetry, proposalsById, canDecideProposals, activeProposalId, decidingProposalId, onDecision }: {
   messages: readonly ChatEntry[];
   members: readonly JigsawMember[];
@@ -42,12 +60,16 @@ export function MessageList({ messages, members, selfMemberId, onRetry, proposal
         const previous = messages[index - 1];
         const showHeader = !previous || previous.authorMemberId !== message.authorMemberId || previous.authorKind !== message.authorKind;
         const author = members.find((member) => member.id === message.authorMemberId);
-        return <MessageItem key={message.id} message={message} author={author}
-          showHeader={showHeader} isSelf={message.authorMemberId === selfMemberId}
-          onRetry={() => onRetry(message.id)}
-          proposal={message.proposalId ? proposalsById?.[message.proposalId] : undefined}
-          canDecideProposals={canDecideProposals} activeProposalId={activeProposalId}
-          decidingProposalId={decidingProposalId} onDecision={onDecision} />;
+        const newDay = !previous || dayKey(previous.createdAt) !== dayKey(message.createdAt);
+        return <React.Fragment key={message.id}>
+          {newDay && <li className="chat-date-sep"><span>{dayLabel(message.createdAt)}</span></li>}
+          <MessageItem message={message} author={author}
+            showHeader={showHeader || newDay} groupStart={showHeader || newDay} isSelf={message.authorMemberId === selfMemberId}
+            onRetry={() => onRetry(message.id)}
+            proposal={message.proposalId ? proposalsById?.[message.proposalId] : undefined}
+            canDecideProposals={canDecideProposals} activeProposalId={activeProposalId}
+            decidingProposalId={decidingProposalId} onDecision={onDecision} />
+        </React.Fragment>;
       })}
     </ul>
     <p className="sr-only" role="status" aria-live="polite">{announcement}</p>

@@ -44,10 +44,18 @@ export function ChatPane({ tripId, selfMemberId, members, proposalsById, canDeci
     }
   }
 
+  const connectionLabel = status === "connected" ? "Live" : status === "polling" ? "Reconnecting…" : status === "disconnected" ? "Offline" : "Connecting…";
+
   return <div className="chat-pane">
     <div className="chat-pane-top">
-      <PresenceBar members={members} presentMemberIds={presentMemberIds} />
-      {status === "polling" && <span className="chat-status-note">Reconnecting...</span>}
+      <div className="chat-pane-members">
+        <PresenceBar members={members} presentMemberIds={presentMemberIds} />
+        <span className="chat-pane-member-count">{members.length} member{members.length === 1 ? "" : "s"}</span>
+      </div>
+      <span className="chat-connection" data-state={status}>
+        <span className="chat-connection-dot" aria-hidden="true" />
+        {connectionLabel}
+      </span>
     </div>
     {loading ? (
       <p className="inline-notice" role="status"><LoaderCircle className="spin" aria-hidden="true" />Loading chat...</p>
