@@ -96,6 +96,7 @@ export const DEMO_EXPENSES: DemoExpense[] = [
 
 // --- Weather disruption -----------------------------------------------------------------
 
+// (weather scenario below is unrelated to the leg figures corrected in fixtures.ts)
 export const DEMO_WEATHER = {
   date: "2026-10-04",
   headline: "Heavy rain expected 14:00–18:00",

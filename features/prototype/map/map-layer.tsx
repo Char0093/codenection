@@ -74,13 +74,15 @@ function pinIcon(order: number): string {
  * 2D; in 3D it swaps to tilted satellite/aerial imagery (45° where Google has it) headed along
  * the route, Waze-style, with rotate + reset-north controls.
  */
-export function MapLayer({ stops, activeResult, view, dimmed, rendezvous }: {
+export function MapLayer({ stops, activeResult, view, dimmed, rendezvous, focus }: {
   stops: DemoMapStop[];
   activeResult: unknown;
   view: "2d" | "3d";
   dimmed: boolean;
   /** Where split branches rejoin, drawn as a gold star. Null on days without a split. */
   rendezvous?: { lat: number; lng: number; name: string; time: string } | null;
+  /** While navigating, the manoeuvre to centre on instead of framing the whole day. */
+  focus?: { lat: number; lng: number } | null;
 }) {
   const elRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<GMap | null>(null);
@@ -164,8 +166,22 @@ export function MapLayer({ stops, activeResult, view, dimmed, rendezvous }: {
     }
 
     if (activeResult && rendererRef.current) rendererRef.current.setDirections(activeResult);
-    frameRoute();
+    // While navigating, the focus effect owns the camera — don't yank it back to the whole day.
+    if (!focus) frameRoute();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stops, activeResult, built, frameRoute, rendezvous]);
+
+  // Navigation mode: follow the current manoeuvre.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!built || !map) return;
+    if (focus) {
+      map.panTo(focus);
+      if ((map.getZoom() ?? 0) < 18) map.setZoom(18);
+    } else {
+      frameRoute();
+    }
+  }, [focus, built, frameRoute]);
 
   // 2D <-> 3D: flat styled roadmap vs. tilted aerial imagery headed along the route.
   useEffect(() => {

@@ -256,18 +256,25 @@ export const DEMO_MAP_STOPS: Record<string, DemoMapStop[]> = {
   ],
 };
 
+/**
+ * Measured against the Google Walking Directions API for the stop coordinates above, rather
+ * than invented — the earlier hand-written figures disagreed with the live route by as much as
+ * 2.5x, which showed up as the map list and Street View quoting different distances for the
+ * same leg. The funicular leg keeps its real 6-minute ride time; its distance is the walking
+ * route Google returns for that pair.
+ */
 export const DEMO_ROUTE_LEGS: Record<string, DemoRouteLeg[]> = {
   "2026-10-03": [
-    { fromId: "s1", toId: "s2", mode: "walk", minutes: 9, distanceKm: 0.7 },
-    { fromId: "s2", toId: "s3", mode: "walk", minutes: 12, distanceKm: 0.9 },
-    { fromId: "s3", toId: "s4", mode: "walk", minutes: 7, distanceKm: 0.5 },
+    { fromId: "s1", toId: "s2", mode: "walk", minutes: 4, distanceKm: 0.27 },
+    { fromId: "s2", toId: "s3", mode: "walk", minutes: 20, distanceKm: 1.38 },
+    { fromId: "s3", toId: "s4", mode: "walk", minutes: 8, distanceKm: 0.54 },
   ],
   "2026-10-04": [
-    { fromId: "s5", toId: "s6", mode: "walk", minutes: 5, distanceKm: 0.35 },
-    { fromId: "s6", toId: "s7", mode: "walk", minutes: 6, distanceKm: 0.4 },
+    { fromId: "s5", toId: "s6", mode: "walk", minutes: 7, distanceKm: 0.49 },
+    { fromId: "s6", toId: "s7", mode: "walk", minutes: 6, distanceKm: 0.41 },
   ],
   "2026-10-05": [
-    { fromId: "s8", toId: "s9", mode: "funicular", minutes: 6, distanceKm: 1.9 },
+    { fromId: "s8", toId: "s9", mode: "funicular", minutes: 6, distanceKm: 7.86 },
   ],
 };
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { loadGoogleMaps } from "@/lib/prototype/google-maps-loader";
+import { initialHeading } from "./geo";
 import { TRAVEL_MODES, type DemoMapStop, type ModeRoute, type RouteStep, type TravelMode } from "./types";
 
 type Routes = Record<TravelMode, ModeRoute>;
@@ -30,30 +31,75 @@ function stripHtml(html: string): string {
   return (el.textContent ?? "").replace(/\s*·\s*$/,"").replace(/\s+/g, " ").trim();
 }
 
+/** Google hands back a `LatLng` (methods) here, but plain objects appear in fixtures/tests. */
+type LatLngish = { lat?: number | (() => number); lng?: number | (() => number) };
+
+function readLatLng(value: LatLngish | undefined): { lat: number; lng: number } | null {
+  if (!value) return null;
+  const lat = typeof value.lat === "function" ? value.lat() : value.lat;
+  const lng = typeof value.lng === "function" ? value.lng() : value.lng;
+  return typeof lat === "number" && typeof lng === "number" ? { lat, lng } : null;
+}
+
 /* Google's DirectionsResult is not typed here; treat it structurally. */
-function summarise(result: unknown): Pick<ModeRoute, "durationText" | "durationMin" | "distanceText" | "steps"> {
+function summarise(result: unknown): Pick<ModeRoute, "durationText" | "durationMin" | "distanceText" | "steps" | "legHeadings" | "legPaths"> {
   const legs = (result as { routes?: { legs?: unknown[] }[] })?.routes?.[0]?.legs ?? [];
   let seconds = 0;
   let metres = 0;
   const steps: RouteStep[] = [];
+  const legHeadings: number[] = [];
+  const legPaths: { lat: number; lng: number }[][] = [];
   for (const legRaw of legs) {
     const leg = legRaw as {
       duration?: { value?: number };
       distance?: { value?: number };
-      steps?: { instructions?: string; distance?: { text?: string }; maneuver?: string }[];
+      steps?: {
+        instructions?: string;
+        distance?: { text?: string };
+        maneuver?: string;
+        start_location?: LatLngish;
+        end_location?: LatLngish;
+        path?: LatLngish[];
+      }[];
     };
     seconds += leg?.duration?.value ?? 0;
     metres += leg?.distance?.value ?? 0;
+
+    // The whole walked line for this leg, so Street View can recompute heading and remaining
+    // distance from wherever the panorama stands. Falls back to step endpoints if `path` is absent.
+    const legPath: { lat: number; lng: number }[] = [];
     for (const step of leg?.steps ?? []) {
+      const stepPath = (step?.path ?? [])
+        .map(readLatLng)
+        .filter((p): p is { lat: number; lng: number } => p !== null);
+      if (stepPath.length >= 2) {
+        legPath.push(...stepPath);
+      } else {
+        for (const end of [readLatLng(step?.start_location), readLatLng(step?.end_location)]) {
+          if (end) legPath.push(end);
+        }
+      }
+    }
+    legPaths.push(legPath);
+    // Which way you actually set off from this stop: the polyline, not the straight line to the
+    // next stop (those differ by tens of degrees on real streets).
+    legHeadings.push(initialHeading(legPath) ?? 0);
+
+    for (const step of leg?.steps ?? []) {
+      const at = readLatLng(step?.start_location);
       steps.push({
         instruction: stripHtml(String(step?.instructions ?? "")),
         distanceText: step?.distance?.text ?? "",
         maneuver: step?.maneuver,
+        lat: at?.lat,
+        lng: at?.lng,
       });
     }
   }
   const min = Math.round(seconds / 60);
   return {
+    legHeadings,
+    legPaths,
     durationMin: min,
     durationText: min >= 60 ? `${Math.floor(min / 60)} hr ${min % 60} min` : `${min} min`,
     distanceText: metres >= 1000 ? `${(metres / 1000).toFixed(1)} km` : `${metres} m`,

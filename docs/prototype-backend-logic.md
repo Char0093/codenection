@@ -197,11 +197,22 @@ With `NEXT_PUBLIC_GOOGLE_MAPS_KEY` set (enable **Maps JavaScript API** +
   (`setTilt(45)`) satellite/aerial imagery (`hybrid`) headed along the route
   (`setHeading` = first→last bearing), Waze-style, with rotate-left / face-north /
   rotate-right controls. Returning to 2D restores the style and re-frames.
-- **Street View** (`street-view.tsx`): a `StreetViewPanorama` overlay opened from
-  the pegman FAB, the corner preview card, or the per-stop button in the sheet.
-  `StreetViewService.getPanorama({ radius: 60 })` finds the nearest panorama;
-  the POV faces the next stop (`povHeading`), and a chip row hops between the
-  day's stops. Stops Google has not driven (e.g. Clan Jetties, a pier) show a
+- **Street View as wayfinding** (`street-view.tsx`): a `StreetViewPanorama` overlay
+  opened from the pegman FAB, the corner preview card, or the per-stop button in
+  the sheet. `StreetViewService.getPanorama({ radius: 60 })` finds the nearest
+  panorama. The POV opens along the **route's actual set-off bearing**
+  (`legHeadings`, derived by `initialHeading()` from the first step's polyline),
+  *not* the straight line to the next stop — measured at Street of Harmony those
+  differ by **28.7°** (crow-flies 266.5° W vs. walkable street 295.2° WNW, where
+  Google itself says "Head northwest on Pesara Claimant"), which is the
+  difference between the right alley and a wall. Crucially it is also not a
+  static photo: a `pov_changed` listener feeds `relativeBearing(target, heading)`
+  so an arrow **stays locked on the route while you look around**,
+  with a plain-language cue from `facingCue` — *Straight ahead* (green) /
+  *To your left|right* (amber) / *It's behind you — turn around* (red) — plus the
+  next stop's name, walk time and distance. That is the difference between "a
+  picture of the street" and "which way do I actually walk". A chip row hops
+  between the day's stops. Stops Google has not driven (e.g. Clan Jetties, a pier) show a
   clear "no imagery within 60 m" state instead of a blank box. Closing restores
   the map exactly as it was, 3D included. Panoramas ship with the Maps
   JavaScript API — no extra API needed.
@@ -209,6 +220,14 @@ With `NEXT_PUBLIC_GOOGLE_MAPS_KEY` set (enable **Maps JavaScript API** +
   Static API** (the one extra API to enable). `return_error_code=true` makes
   Google 404 rather than serve its grey "no imagery" tile, so a missing panorama
   or a disabled API simply hides the card.
+- **Navigation mode** (`nav-mode.tsx`, from the sheet's **Start**): a step-through
+  turn-by-turn over the live map. Deliberately not GPS-driven — the demo asks for
+  no location permission — so the traveller advances each step (buttons or
+  ←/→ keys) and `MapLayer`'s `focus` prop pans and zooms the map to that
+  manoeuvre. The route card, sheet, thumbnail and FABs slide away; the last step
+  turns green with an arrival readout and a Finish button; Escape or Finish
+  restores the route screen exactly as it was. Start is disabled when there is no
+  live Google route to follow.
 - **Turn-by-turn** steps carry a directional glyph per Google `maneuver`
   (`turn-left`/`-right`/`-slight-*`/`-sharp-*`, `roundabout-*`, `uturn-*`,
   `merge`, `fork-*`, …; text fallback when Google gives none), last step = the

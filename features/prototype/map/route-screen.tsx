@@ -4,7 +4,8 @@ import React, { useMemo, useState } from "react";
 import {
   Bookmark, Box, Crosshair, Layers, Map as MapIcon, Navigation, PersonStanding, Plus, Share2,
 } from "lucide-react";
-import { DEMO_MAP_STOPS, DEMO_ROUTE_LEGS, DEMO_TRIP_DATES } from "@/lib/prototype/fixtures";
+import Link from "next/link";
+import { DEMO_MAP_STOPS, DEMO_ROUTE_LEGS, DEMO_TRIP_DATES, DEMO_TRIP_ID } from "@/lib/prototype/fixtures";
 import { DEMO_SPLIT } from "@/lib/prototype/demo-features";
 import { MAPS_KEY } from "@/lib/prototype/google-maps-loader";
 import { MapLayer } from "./map-layer";
@@ -15,6 +16,7 @@ import { ModeTabs } from "./mode-tabs";
 import { StopList } from "./stop-list";
 import { StreetView } from "./street-view";
 import { StreetThumb } from "./street-thumb";
+import { NavMode } from "./nav-mode";
 import { useDirections } from "./use-directions";
 import { MODE_META, TRAVEL_MODES, type ModeRoute, type SheetSnap, type TravelMode } from "./types";
 
@@ -44,6 +46,8 @@ export function RouteScreen() {
   const [view, setView] = useState<"2d" | "3d">("2d");
   // Index of the stop whose Street View is open; null = the map is showing.
   const [streetStop, setStreetStop] = useState<number | null>(null);
+  // Index of the turn-by-turn step being navigated; null = not navigating.
+  const [navStep, setNavStep] = useState<number | null>(null);
 
   const stops = DEMO_MAP_STOPS[selectedDate] ?? [];
   const legs = DEMO_ROUTE_LEGS[selectedDate] ?? [];
@@ -55,18 +59,29 @@ export function RouteScreen() {
     [routes, mapStatus, selectedDate],
   );
   const active = displayRoutes[mode];
+  const steps = active?.steps ?? [];
+  const canNavigate = liveMap && steps.length > 0;
+  const navigating = navStep !== null;
+  const focus = navigating ? steps[navStep] : undefined;
 
   function recentre() {
     // MapLayer re-fits bounds whenever `stops` identity changes; nudge it by re-selecting.
     setSelectedDate((d) => d);
   }
 
+  function startNavigation() {
+    if (!canNavigate) return;
+    setSnap("peek");   // get the sheet out of the way of the map
+    setNavStep(0);
+  }
+
   return (
-    <div className="map-screen" data-snap={snap}>
+    <div className="map-screen" data-snap={snap} data-navigating={navigating ? "true" : undefined}>
       <div className="map-screen-map">
         {liveMap
           ? <MapLayer stops={stops} activeResult={active?.result} view={view} dimmed={snap === "full"}
-              rendezvous={selectedDate === DEMO_SPLIT.date ? DEMO_SPLIT.rendezvous : null} />
+              rendezvous={selectedDate === DEMO_SPLIT.date ? DEMO_SPLIT.rendezvous : null}
+              focus={focus?.lat != null && focus?.lng != null ? { lat: focus.lat, lng: focus.lng } : null} />
           : <FallbackMap stops={stops} />}
         {!liveMap && mapError && (
           <p className="map-screen-note" role="status">{mapError} — showing the stylised map instead.</p>
@@ -105,7 +120,19 @@ export function RouteScreen() {
       </div>
 
       {streetStop !== null && (
-        <StreetView stops={stops} initialIndex={streetStop} onClose={() => setStreetStop(null)} />
+        <StreetView stops={stops} legs={legs} legHeadings={active?.legHeadings}
+          legPaths={active?.legPaths}
+          initialIndex={streetStop} onClose={() => setStreetStop(null)} />
+      )}
+
+      {navigating && (
+        <NavMode
+          steps={steps}
+          index={navStep}
+          destination={stops[stops.length - 1]?.name ?? "your destination"}
+          onIndex={setNavStep}
+          onExit={() => { setNavStep(null); setSnap("half"); }}
+        />
       )}
 
       <RouteSheet snap={snap} onSnapChange={setSnap}>
@@ -130,16 +157,23 @@ export function RouteScreen() {
           onLookAround={liveMap ? setStreetStop : undefined} />
 
         <div className="map-cta">
-          <button type="button" className="primary-button" tabIndex={-1}>
+          <button
+            type="button"
+            className="primary-button"
+            disabled={!canNavigate}
+            title={canNavigate ? undefined : "Turn-by-turn needs the live Google route"}
+            onClick={startNavigation}
+          >
             <Navigation aria-hidden="true" />Start
           </button>
-          <button type="button" className="secondary-button" tabIndex={-1}>
+          {/* The choice pool lives on the Timeline, so send them there rather than faking it. */}
+          <Link href={`/trips/${DEMO_TRIP_ID}/timeline`} className="secondary-button">
             <Plus aria-hidden="true" />Add stop
-          </button>
-          <button type="button" className="icon-button" aria-label="Share (demo)" tabIndex={-1}>
+          </Link>
+          <button type="button" className="icon-button" aria-label="Share (demo only)" tabIndex={-1}>
             <Share2 aria-hidden="true" />
           </button>
-          <button type="button" className="icon-button" aria-label="Save (demo)" tabIndex={-1}>
+          <button type="button" className="icon-button" aria-label="Save (demo only)" tabIndex={-1}>
             <Bookmark aria-hidden="true" />
           </button>
         </div>

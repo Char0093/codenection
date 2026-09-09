@@ -1194,6 +1194,71 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
 }
 .map-streetview-title strong { font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .map-streetview-title span { font-size: 11.5px; color: var(--muted); }
+/* Turn-by-turn navigation. The map stays visible between the manoeuvre card and the bar,
+   and the route card / sheet / thumbnail get out of the way. */
+.map-screen[data-navigating="true"] .map-topcard,
+.map-screen[data-navigating="true"] .map-streetthumb,
+.map-screen[data-navigating="true"] .map-screen-controls { opacity: 0; pointer-events: none; }
+.map-screen[data-navigating="true"] .map-sheet { transform: translateY(100%) !important; }
+
+.nav-mode { position: absolute; inset: 0; z-index: 8; pointer-events: none; }
+.nav-mode > * { pointer-events: auto; }
+.nav-card {
+  position: absolute; top: 12px; left: 12px; right: 12px;
+  display: flex; align-items: center; gap: 12px; padding: 13px 14px; border-radius: 14px;
+  background: var(--teal); color: #fff; box-shadow: 0 8px 26px rgba(0,0,0,0.3);
+  animation: cardDrop 0.32s ease backwards;
+}
+.nav-card[data-last="true"] { background: var(--consensus); }
+.nav-card .maneuver-icon { width: 42px; height: 42px; border-radius: 11px; background: rgba(255,255,255,0.16); }
+.nav-card-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.nav-card-text strong { font-size: 14.5px; line-height: 1.35; }
+.nav-card-text span { font-size: 12px; opacity: 0.82; font-variant-numeric: tabular-nums; }
+.nav-card .map-fab { flex: none; width: 34px; height: 34px; background: rgba(255,255,255,0.16); }
+.nav-card .map-fab svg { width: 17px; height: 17px; color: #fff; }
+
+.nav-bar {
+  position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 14px calc(16px + env(safe-area-inset-bottom, 0px));
+  background: var(--surface); border-radius: 16px 16px 0 0; box-shadow: 0 -8px 26px rgba(16,18,24,0.18);
+  animation: chipRise 0.32s ease backwards;
+}
+.nav-progress { height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; margin-bottom: 12px; }
+.nav-progress i { display: block; height: 100%; background: var(--teal); transition: width 0.35s cubic-bezier(0.22,1,0.36,1); }
+.nav-bar-row { display: flex; align-items: center; gap: 10px; }
+.nav-bar-row .primary-button, .nav-bar-row .secondary-button { flex: none; min-width: 96px; }
+.nav-bar-row .secondary-button:disabled { opacity: 0.4; }
+.nav-count { flex: 1; text-align: center; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-card, .nav-bar { animation: none; }
+  .nav-progress i { transition: none; }
+}
+
+/* Direction guidance: the arrow counter-rotates so it stays locked on the next stop. */
+.sv-guide {
+  position: absolute; left: 12px; right: 12px; bottom: calc(66px + env(safe-area-inset-bottom, 0px));
+  z-index: 3; display: flex; align-items: center; gap: 12px; padding: 11px 14px;
+  border-radius: 14px; background: rgba(24, 37, 68, 0.92); color: #fff;
+  box-shadow: 0 8px 26px rgba(0,0,0,0.34); animation: chipRise 0.3s ease backwards;
+}
+.sv-arrow {
+  width: 44px; height: 44px; flex: none; display: grid; place-items: center; border-radius: 50%;
+  background: rgba(255,255,255,0.14); transition: transform 0.25s ease, background 0.25s ease;
+}
+.sv-arrow svg { width: 24px; height: 24px; stroke-width: 2.4; }
+.sv-guide[data-mode="ahead"] .sv-arrow { background: var(--consensus); }
+.sv-guide[data-mode="turn"] .sv-arrow { background: var(--flexible); }
+.sv-guide[data-mode="behind"] .sv-arrow { background: var(--error); }
+.sv-guide[data-mode="arrived"] .sv-arrow { background: var(--blue); }
+.sv-guide-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sv-guide-text strong { font-size: 14.5px; }
+.sv-guide-text span { font-size: 12px; opacity: 0.82; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sv-guide { animation: none; }
+  .sv-arrow { transition: none; }
+}
+
 .map-streetview-stops {
   position: absolute; left: 0; right: 0; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 2;
   display: flex; justify-content: center; gap: 8px;
