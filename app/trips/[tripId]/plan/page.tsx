@@ -1,15 +1,18 @@
 import { notFound, redirect } from "next/navigation";
-import { WorkspaceClient } from "@/features/workspace/workspace-client";
-import { TimelinePane } from "@/features/timeline/timeline-pane";
+import { PlanView } from "@/features/planning/plan-view";
+import { DemoPlan } from "@/features/prototype/demo-plan";
+import { ClientOnly } from "@/features/prototype/client-only";
+import { isPrototype } from "@/lib/prototype/config";
 import { tripRepository } from "@/lib/repositories/server";
-import { colorForMemberIndex, listTripMembers } from "@/lib/repositories/members";
 import { createClient } from "@/lib/supabase/server";
 
-// The map + chat planning workspace. Only a `ready` trip (valid destination + date range)
+// The written itinerary (see PlanView). Only a `ready` trip (valid destination + date range)
 // reaches getTrip; a draft shows the locked state. Auth + membership are gated by the layout.
 export const dynamic = "force-dynamic";
 
 export default async function TripPlanPage({ params }: { params: Promise<{ tripId: string }> }) {
+  if (isPrototype()) return <ClientOnly><DemoPlan /></ClientOnly>;
+
   const { tripId } = await params;
   const client = await createClient();
   const { data: { user } } = await client.auth.getUser();
@@ -27,19 +30,5 @@ export default async function TripPlanPage({ params }: { params: Promise<{ tripI
   }
 
   const record = await (await tripRepository()).getTrip(tripId);
-  const memberRows = await listTripMembers(client, tripId);
-  const members = memberRows.map((row, index) => ({ id: row.id, displayName: row.displayName, color: colorForMemberIndex(index) }));
-  const selfMemberId = memberRows.find((row) => row.userId === user.id)?.id ?? null;
-
-  return (
-    <WorkspaceClient
-      tripId={record.id}
-      members={members}
-      selfMemberId={selfMemberId}
-      canDecideProposals={record.role === "owner"}
-      initialActiveProposalId={record.activeProposalId}
-      mapSlot={<TimelinePane tripId={record.id} startDate={record.startDate} endDate={record.endDate} revision={record.revision} />}
-      needsOnboarding={false}
-    />
-  );
+  return <PlanView tripId={record.id} canDecideProposals={record.role === "owner"} />;
 }

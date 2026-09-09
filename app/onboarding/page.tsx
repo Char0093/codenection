@@ -2,12 +2,15 @@ import { redirect } from "next/navigation";
 import { UserOnboardingWizard } from "@/components/user-onboarding-wizard";
 import { getMyUserOnboarding } from "@/app/actions/user-onboarding";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { isPrototype } from "@/lib/prototype/config";
 import { createClient } from "@/lib/supabase/server";
 import { safeRedirectPath } from "@/lib/supabase/redirect";
 
 export const dynamic = "force-dynamic";
 
 export default async function OnboardingPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
+  // Demo skips first-login onboarding entirely; preferences live on the Settings page.
+  if (isPrototype()) redirect("/chats");
   if (!isSupabaseConfigured()) redirect("/login");
   const client = await createClient();
   const { data: { user } } = await client.auth.getUser();

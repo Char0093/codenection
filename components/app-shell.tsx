@@ -4,19 +4,27 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  CalendarClock, Compass, ListChecks, LogOut, Menu, MessageCircle,
-  Settings, Users, UserRound, X,
+  CalendarClock, Compass, Info, ListChecks, LogOut, Luggage, Map as MapIcon, Menu, MessageCircle,
+  Settings, ShieldCheck, Split, Users, UserRound, Wallet, X,
 } from "lucide-react";
+import { isPrototype } from "@/lib/prototype/config";
 
 type TripContext = { id: string; name: string; ready: boolean };
 
 // Trip-scoped items: only shown once a specific trip is open (see the `trip` prop below).
-// Unlike Chat/Your prefs, Plan and Timeline need a ready trip (valid destination + dates).
+// Unlike Chat/Your prefs, the planning surfaces need a ready trip (valid destination + dates).
+// `demoOnly` items have no non-prototype implementation yet, so they are hidden outside it
+// rather than linking to a 404.
 const TRIP_ITEMS = [
-  { key: "chat", label: "Chat", needsReady: false, icon: MessageCircle },
-  { key: "plan", label: "Plan", needsReady: true, icon: ListChecks },
-  { key: "timeline", label: "Timeline", needsReady: true, icon: CalendarClock },
-  { key: "entry", label: "Your prefs", needsReady: false, icon: UserRound },
+  { key: "chat", label: "Chat", needsReady: false, icon: MessageCircle, demoOnly: false },
+  { key: "plan", label: "Plan", needsReady: true, icon: ListChecks, demoOnly: false },
+  { key: "timeline", label: "Timeline", needsReady: true, icon: CalendarClock, demoOnly: false },
+  { key: "map", label: "Map", needsReady: true, icon: MapIcon, demoOnly: true },
+  { key: "jigsaw", label: "Split & merge", needsReady: true, icon: Split, demoOnly: true },
+  { key: "budget", label: "Budget", needsReady: true, icon: Wallet, demoOnly: true },
+  { key: "safety", label: "Food check", needsReady: true, icon: ShieldCheck, demoOnly: true },
+  { key: "packing", label: "Packing", needsReady: true, icon: Luggage, demoOnly: true },
+  { key: "entry", label: "Your prefs", needsReady: false, icon: UserRound, demoOnly: false },
 ] as const;
 
 /**
@@ -47,6 +55,12 @@ export function AppShell({ trip, accountEmail, children }: {
 
   return (
     <div className="shell">
+      {isPrototype() && (
+        <p className="demo-banner" role="status">
+          <Info aria-hidden="true" />
+          <span><strong>Demo mode</strong> — sample data only. Anything you change here resets on refresh.</span>
+        </p>
+      )}
       <div className="mobile-topbar">
         <button type="button" className="icon-button" aria-label="Open menu" aria-expanded={open}
           onClick={() => setOpen(true)}>
@@ -76,7 +90,7 @@ export function AppShell({ trip, accountEmail, children }: {
             <>
               <p className="app-sidebar-heading">{trip.name}</p>
               <nav className="app-sidebar-nav" aria-label="Trip sections">
-                {TRIP_ITEMS.map((item) => {
+                {TRIP_ITEMS.filter((item) => !item.demoOnly || isPrototype()).map((item) => {
                   const href = `/trips/${trip.id}/${item.key}`;
                   const Icon = item.icon;
                   if (item.needsReady && !trip.ready) {

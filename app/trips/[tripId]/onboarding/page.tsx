@@ -3,13 +3,15 @@ import { OnboardingWizard } from "@/components/onboarding-wizard";
 import { getMyOnboarding } from "@/app/actions/onboarding";
 import { tripRepository } from "@/lib/repositories/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { isPrototype } from "@/lib/prototype/config";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 export default async function OnboardingPage({ params }: { params: Promise<{ tripId: string }> }) {
-  if (!isSupabaseConfigured()) redirect("/login");
   const { tripId } = await params;
+  if (isPrototype()) redirect(`/trips/${tripId}/plan`);
+  if (!isSupabaseConfigured()) redirect("/login");
 
   const client = await createClient();
   const { data: { user } } = await client.auth.getUser();

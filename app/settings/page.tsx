@@ -2,8 +2,11 @@ import { redirect } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { UserOnboardingWizard } from "@/components/user-onboarding-wizard";
+import { PreferenceSurvey } from "@/components/preference-survey";
 import { getMyUserOnboarding } from "@/app/actions/user-onboarding";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { isPrototype } from "@/lib/prototype/config";
+import { DEMO_USER } from "@/lib/prototype/fixtures";
 import { createClient } from "@/lib/supabase/server";
 
 // Global account settings: edits the same Travel DNA profile captured during first-login
@@ -14,6 +17,23 @@ import { createClient } from "@/lib/supabase/server";
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
+  if (isPrototype()) {
+    return (
+      <AppShell accountEmail={DEMO_USER.email}>
+        <div className="onboarding-shell">
+          <PreferenceSurvey />
+        </div>
+        <div className="settings-signout">
+          <h2>Travel DNA (safety)</h2>
+          <p className="field-hint">
+            In the demo the safety-vault editor is read-only. In the full app this is where
+            dietary, religious-access and mobility requirements are edited — the only changes
+            that force an itinerary review.
+          </p>
+        </div>
+      </AppShell>
+    );
+  }
   if (!isSupabaseConfigured()) redirect("/login");
   const client = await createClient();
   const { data: { user } } = await client.auth.getUser();

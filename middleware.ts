@@ -1,6 +1,7 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { isPrototype } from "@/lib/prototype/config";
 import { verifiedUser } from "@/lib/supabase/auth";
 import { AppError } from "@/lib/http/errors";
 import { isGateExempt, isOnboardingComplete } from "@/lib/onboarding/gate";
@@ -9,6 +10,11 @@ import { safeRedirectPath } from "@/lib/supabase/redirect";
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const publicRoute = path === "/login" || path.startsWith("/auth/");
+  // Prototype mode replaces the whole Supabase data path with fixtures, so there is no session
+  // to verify and no onboarding row to gate on -- let every route through. This is keyed off
+  // `isPrototype()` (an explicit env flag, or dev with no Supabase), NEVER off the request's
+  // `wp_prototype` cookie, so a client cannot opt itself past auth on a real deployment.
+  if (isPrototype()) return NextResponse.next();
   if (!isSupabaseConfigured()) {
     if (publicRoute || path.startsWith("/api/")) return NextResponse.next();
     return NextResponse.redirect(new URL("/login", request.url));
