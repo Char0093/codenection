@@ -1,10 +1,51 @@
 "use client";
 
 import React, { useEffect, useRef, useState, type FormEvent } from "react";
-import { Compass, LoaderCircle, Lock, Mail } from "lucide-react";
+import { Compass, LoaderCircle, Lock, Mail, PlayCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 const devPasswordLogin = process.env.NODE_ENV !== "production";
+
+/**
+ * Prototype entry: a sign-in form for show only. It accepts ANY email/password (or none) and
+ * drops a `wp_prototype` marker cookie -- that cookie is NOT what unlocks anything; middleware
+ * bypasses auth purely from `isPrototype()`. Rendered by the login page in place of the real
+ * sign-in form when the build is in prototype mode.
+ */
+export function PrototypeEntry() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  function enterDemo(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    document.cookie = "wp_prototype=1; path=/; max-age=86400; samesite=lax";
+    window.location.href = "/chats";
+  }
+
+  return (
+    <main className="login-shell">
+      <div className="brand-block"><Compass aria-hidden="true" /><strong>Waypoint</strong></div>
+      <h1>Sign in</h1>
+      <p className="inline-notice" role="status">
+        Demo build — any email and password get you in, and all data is sample data that resets
+        on refresh.
+      </p>
+      <form className="login-form" onSubmit={enterDemo}>
+        <label>Email
+          <input name="email" type="email" autoComplete="email" placeholder="you@example.com"
+            value={email} onChange={(event) => setEmail(event.target.value)} />
+        </label>
+        <label>Password
+          <input name="password" type="password" autoComplete="current-password"
+            value={password} onChange={(event) => setPassword(event.target.value)} />
+        </label>
+        <button className="primary-button" type="submit">
+          <PlayCircle aria-hidden="true" />Sign in to the demo
+        </button>
+      </form>
+    </main>
+  );
+}
 
 export function LoginForm({ configured }: { configured: boolean }) {
   const [email, setEmail] = useState("");

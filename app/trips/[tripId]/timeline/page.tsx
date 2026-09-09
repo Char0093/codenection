@@ -1,5 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { TimelinePane } from "@/features/timeline/timeline-pane";
+import { DemoTimeline } from "@/features/prototype/demo-timeline";
+import { isPrototype } from "@/lib/prototype/config";
 import { tripRepository } from "@/lib/repositories/server";
 import { createClient } from "@/lib/supabase/server";
 
@@ -8,6 +10,8 @@ import { createClient } from "@/lib/supabase/server";
 export const dynamic = "force-dynamic";
 
 export default async function TripTimelinePage({ params }: { params: Promise<{ tripId: string }> }) {
+  if (isPrototype()) return <DemoTimeline />;
+
   const { tripId } = await params;
   const client = await createClient();
   const { data: { user } } = await client.auth.getUser();

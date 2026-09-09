@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { MemberEntryPanel } from "@/components/member-entry-panel";
+import { DemoMemberEntry } from "@/features/prototype/demo-member-entry";
+import { isPrototype } from "@/lib/prototype/config";
 import { getMyMemberEntryContext } from "@/app/actions/member-entry";
 
 // Renders inside app/trips/[tripId]/layout.tsx (auth + membership gate + shell). Membership
@@ -7,6 +9,8 @@ import { getMyMemberEntryContext } from "@/app/actions/member-entry";
 export const dynamic = "force-dynamic";
 
 export default async function TripEntryPage({ params }: { params: Promise<{ tripId: string }> }) {
+  if (isPrototype()) return <DemoMemberEntry />;
+
   const { tripId } = await params;
   let initial;
   try {

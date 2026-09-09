@@ -1,5 +1,8 @@
 import { redirect } from "next/navigation";
 import { ChatPane } from "@/features/chat/chat-pane";
+import { DemoChat } from "@/features/prototype/demo-chat";
+import { ClientOnly } from "@/features/prototype/client-only";
+import { isPrototype } from "@/lib/prototype/config";
 import { colorForMemberIndex, listTripMembers } from "@/lib/repositories/members";
 import { createClient } from "@/lib/supabase/server";
 
@@ -8,6 +11,8 @@ import { createClient } from "@/lib/supabase/server";
 export const dynamic = "force-dynamic";
 
 export default async function TripChatPage({ params }: { params: Promise<{ tripId: string }> }) {
+  if (isPrototype()) return <ClientOnly><DemoChat /></ClientOnly>;
+
   const { tripId } = await params;
   const client = await createClient();
   const { data: { user } } = await client.auth.getUser();

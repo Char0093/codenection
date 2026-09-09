@@ -16,15 +16,28 @@ function supabaseConnectOrigins(): string[] {
 }
 
 function buildContentSecurityPolicy(): string {
+  // The prototype route map (features/prototype/route-map.tsx) uses the Google Maps JavaScript
+  // API + Directions API. Those hosts are added to the policy ONLY when a maps key is
+  // configured, and are all Google-owned -- never a wildcard `*`. With no key, the policy is
+  // unchanged (`frame-src 'none'`, no external script/img/connect origins).
+  const maps = Boolean(
+    process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY,
+  );
+  const mapsScript = maps ? " https://maps.googleapis.com" : "";
+  const mapsImg = maps ? " https://maps.googleapis.com https://maps.gstatic.com https://*.gstatic.com https://*.googleapis.com https://*.google.com" : "";
+  const mapsStyle = maps ? " https://fonts.googleapis.com" : "";
+  const mapsFont = maps ? " https://fonts.gstatic.com" : "";
+  const mapsConnect = maps ? ["https://maps.googleapis.com"] : [];
+
   return [
     "default-src 'self'",
     "base-uri 'self'",
     "object-src 'none'",
-    "frame-src 'none'",
+    maps ? "frame-src https://www.google.com" : "frame-src 'none'",
     "frame-ancestors 'none'",
     "form-action 'self'",
-    "img-src 'self' data:",
-    "font-src 'self'",
+    `img-src 'self' data:${mapsImg}`,
+    `font-src 'self'${mapsFont}`,
     // next/font self-hosts Google fonts at build time (no fonts.googleapis.com/gstatic.com
     // dependency), so font-src needs nothing beyond 'self'. script-src and style-src keep
     // 'unsafe-inline': Next's App Router injects small inline hydration/streaming scripts on
@@ -37,9 +50,9 @@ function buildContentSecurityPolicy(): string {
     // evaluates chunks via `eval()` for fast incremental rebuilds (confirmed by an actual
     // CSP violation against `next dev` without it); a `next build && next start` production
     // run does not use eval and stays strict.
-    `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV === "production" ? "" : " 'unsafe-eval'"}`,
-    "style-src 'self' 'unsafe-inline'",
-    `connect-src ${["'self'", ...supabaseConnectOrigins()].join(" ")}`,
+    `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV === "production" ? "" : " 'unsafe-eval'"}${mapsScript}`,
+    `style-src 'self' 'unsafe-inline'${mapsStyle}`,
+    `connect-src ${["'self'", ...supabaseConnectOrigins(), ...mapsConnect].join(" ")}`,
   ].join("; ");
 }
 
