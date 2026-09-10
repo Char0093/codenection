@@ -226,6 +226,33 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
 .chat-connection[data-state="connecting"] .chat-connection-dot, .chat-connection[data-state="polling"] .chat-connection-dot { background: var(--flexible); }
 .chat-connection[data-state="disconnected"] .chat-connection-dot { background: var(--error); }
 
+/* Invite control in the chat header: a compact toggle that drops a copyable link panel. */
+.chat-invite { position: relative; margin-left: auto; flex: none; }
+.chat-invite-button {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 5px 10px;
+  border: 1px solid var(--line-strong); border-radius: 999px; background: var(--surface);
+  color: var(--ink); font-size: 12px; font-weight: 600; white-space: nowrap;
+}
+.chat-invite-button:hover { background: var(--teal-soft); border-color: var(--teal); }
+.chat-invite-panel {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 20; width: min(340px, 78vw);
+  display: grid; gap: 10px; padding: 14px; border: 1px solid var(--line-strong); border-radius: 10px;
+  background: var(--surface); box-shadow: 0 12px 32px rgba(30, 36, 48, 0.16);
+}
+.chat-invite-hint { margin: 0; font-size: 12.5px; color: var(--muted); }
+.chat-invite-row { display: flex; gap: 8px; align-items: stretch; }
+.chat-invite-link-field {
+  flex: 1 1 auto; min-height: 38px; font-size: 12px; color: var(--muted);
+  background: var(--canvas); border-color: var(--line);
+}
+.chat-invite-copy { flex: none; min-height: 38px; padding: 8px 12px; }
+
+@media (max-width: 700px) {
+  .chat-invite-button span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
+  .chat-invite-row { flex-wrap: wrap; }
+  .chat-invite-copy { width: 100%; }
+}
+
 .presence-bar { display: flex; }
 .presence-avatar-wrap { position: relative; margin-left: -8px; }
 .presence-bar .presence-avatar-wrap:first-child { margin-left: 0; }

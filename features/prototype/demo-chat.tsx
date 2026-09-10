@@ -5,6 +5,7 @@ import { Search } from "lucide-react";
 import { MessageList } from "@/features/chat/message-list";
 import { Composer } from "@/features/chat/composer";
 import { ChatSignalCard } from "@/features/prototype/chat-signal-card";
+import { InvitePanel } from "@/features/prototype/invite-panel";
 import type { ChatEntry } from "@/features/chat/use-trip-channel";
 import { shouldAddressAssistant } from "@/lib/chat/mention";
 import {
@@ -38,6 +39,7 @@ export function DemoChat() {
     <div className="demo-chat">
       <div className="chat-pane-top">
         <span className="chat-pane-member-count">{DEMO_MEMBERS.length} members</span>
+        <InvitePanel />
         <span className="chat-connection" data-state="connected">
           <span className="chat-connection-dot" aria-hidden="true" />Demo
         </span>
