@@ -7,12 +7,19 @@ export type ChatChannelHandlers = {
   onMessage: (message: ChatMessage) => void;
   onPresenceSync?: (state: Record<string, unknown[]>) => void;
   onStatusChange?: (status: ChatConnectionStatus) => void;
+  /** Fired when another member reports they are composing. Never fired for your own pings. */
+  onTyping?: (memberId: string) => void;
 };
 
-export type ChatChannelHandle = { close: () => void };
+export type ChatChannelHandle = {
+  close: () => void;
+  /** Broadcasts "I am composing" to the other members. Cheap and lossy by design. */
+  sendTyping: (memberId: string) => void;
+};
 
 const POLL_INTERVAL_MS = 4000;
 const CONNECT_TIMEOUT_MS = 8000;
+const TYPING_EVENT = "typing";
 
 /**
  * Subscribes to a trip's realtime chat channel (Task 3.1). A dropped socket cannot silently lose
@@ -69,6 +76,12 @@ export function openChatChannel(client: SupabaseClient, tripId: string, handlers
     .on("presence", { event: "sync" }, () => {
       handlers.onPresenceSync?.(channel.presenceState());
     })
+    // Typing is ephemeral: a broadcast, never a row. Nothing is stored, a dropped ping just
+    // means the dots do not appear, and no schema or RLS policy is involved.
+    .on("broadcast", { event: TYPING_EVENT }, (payload) => {
+      const memberId = (payload as { payload?: { memberId?: unknown } } | undefined)?.payload?.memberId;
+      if (typeof memberId === "string" && memberId) handlers.onTyping?.(memberId);
+    })
     .subscribe((status) => {
       if (status === "SUBSCRIBED") {
         if (connectTimer) {
@@ -92,6 +105,19 @@ export function openChatChannel(client: SupabaseClient, tripId: string, handlers
       if (connectTimer) clearTimeout(connectTimer);
       stopPolling();
       void channel.unsubscribe();
+    },
+    sendTyping: (memberId: string) => {
+      // Best-effort only. A typing ping is worth nothing once it is late, so a closed channel,
+      // a transport without broadcast support, or a rejected send is all silently dropped
+      // rather than surfaced or retried.
+      if (closed || !memberId) return;
+      const send = (channel as { send?: (args: unknown) => unknown }).send;
+      if (typeof send !== "function") return;
+      try {
+        void send.call(channel, { type: "broadcast", event: TYPING_EVENT, payload: { memberId } });
+      } catch {
+        // Ignored: see above.
+      }
     },
   };
 }

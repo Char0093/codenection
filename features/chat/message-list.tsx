@@ -2,7 +2,9 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { MessageItem } from "@/features/chat/message-item";
+import { TypingIndicator } from "@/features/chat/typing-indicator";
 import type { ChatEntry } from "@/features/chat/use-trip-channel";
+import type { Tapback } from "@/features/chat/tapback";
 import type { JigsawMember } from "@/features/timeline/jigsaw-panel";
 import type { ProposalRecord } from "@/lib/repositories/planning-repository";
 
@@ -24,7 +26,7 @@ function dayLabel(iso: string): string {
   return parsed.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 }
 
-export function MessageList({ messages, members, selfMemberId, onRetry, proposalsById, canDecideProposals, activeProposalId, decidingProposalId, onDecision }: {
+export function MessageList({ messages, members, selfMemberId, onRetry, proposalsById, canDecideProposals, activeProposalId, decidingProposalId, onDecision, typingMemberIds = [], reactions, onReact }: {
   messages: readonly ChatEntry[];
   members: readonly JigsawMember[];
   selfMemberId: string | null;
@@ -34,6 +36,10 @@ export function MessageList({ messages, members, selfMemberId, onRetry, proposal
   activeProposalId?: string | null;
   decidingProposalId?: string | null;
   onDecision?: (proposalId: string, decision: "accept" | "reject") => void;
+  typingMemberIds?: readonly string[];
+  /** messageId -> the reaction this viewer applied. See features/chat/tapback.tsx on storage. */
+  reactions?: Readonly<Record<string, Tapback>>;
+  onReact?: (messageId: string, tapback: Tapback | null) => void;
 }) {
   const [announcement, setAnnouncement] = useState("");
   const seen = useRef(new Set<string>());
@@ -52,7 +58,19 @@ export function MessageList({ messages, members, selfMemberId, onRetry, proposal
   useEffect(() => {
     const list = listRef.current;
     if (list && typeof list.scrollTo === "function") list.scrollTo({ top: list.scrollHeight });
-  }, [messages.length]);
+  }, [messages.length, typingMemberIds.length]);
+
+  // "Delivered" belongs under the newest outgoing message only, and collapses off the previous
+  // one as soon as a newer outgoing message lands -- the same slot iMessage uses.
+  const lastDeliveredId = (() => {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index];
+      if (message.authorMemberId !== selfMemberId) continue;
+      if (message.pending || message.failed) return null;
+      return message.id;
+    }
+    return null;
+  })();
 
   return <>
     <ul className="chat-message-list" ref={listRef} aria-label="Trip chat messages">
@@ -68,9 +86,12 @@ export function MessageList({ messages, members, selfMemberId, onRetry, proposal
             onRetry={() => onRetry(message.id)}
             proposal={message.proposalId ? proposalsById?.[message.proposalId] : undefined}
             canDecideProposals={canDecideProposals} activeProposalId={activeProposalId}
-            decidingProposalId={decidingProposalId} onDecision={onDecision} />
+            decidingProposalId={decidingProposalId} onDecision={onDecision}
+            delivered={message.id === lastDeliveredId}
+            reaction={reactions?.[message.id] ?? null} onReact={onReact} />
         </React.Fragment>;
       })}
+      <TypingIndicator members={members} typingMemberIds={typingMemberIds} />
     </ul>
     <p className="sr-only" role="status" aria-live="polite">{announcement}</p>
   </>;

@@ -3,6 +3,7 @@ import { LogOut } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { UserOnboardingWizard } from "@/components/user-onboarding-wizard";
 import { PreferenceSurvey } from "@/components/preference-survey";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { getMyUserOnboarding } from "@/app/actions/user-onboarding";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { isPrototype } from "@/lib/prototype/config";
@@ -24,6 +25,7 @@ export default async function SettingsPage() {
           <PreferenceSurvey />
         </div>
         <div className="settings-signout">
+          <ThemeToggle />
           <h2>Travel DNA (safety)</h2>
           <p className="field-hint">
             In the demo the safety-vault editor is read-only. In the full app this is where
@@ -49,6 +51,7 @@ export default async function SettingsPage() {
           subtitle="Update the needs you always want respected, and how adventurous suggestions should be. Saved dietary, religious-access, and mobility requirements are add-only here for now." />
       </div>
       <div className="settings-signout">
+        <ThemeToggle />
         <h2>Account</h2>
         <p className="field-hint">Signed in as {user.email}.</p>
         <form action="/auth/signout" method="post">

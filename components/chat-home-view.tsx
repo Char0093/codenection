@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Search, SquarePen } from "lucide-react";
 import { budgetTiers } from "@/lib/domain/trip";
 import { TRIP_MODES, TRIP_MODE_LABELS, type TripMode } from "@/lib/domain/trip";
 import type { BudgetTier } from "@/lib/domain/trip";
@@ -10,6 +11,11 @@ import type { ChatHomeTrip } from "@/lib/domain/chat-home";
 
 // Chat-group home (spec §2.3): membership-scoped list + an organizer create form
 // (destination + trip style + dates OR a rough length; optional proposed budget / split).
+//
+// Presented as the iOS Messages conversation list (ios-chat-design.md §4 "Conversation List"):
+// large title, search field, then 60pt rows of avatar / name / preview / timestamp. The data
+// contract, the create-form state and the POST /api/chats handler are unchanged -- only the
+// markup and class names moved.
 
 function timeframeSummary(trip: ChatHomeTrip): string {
   if (trip.startDate && trip.endDate) return `${trip.destinationName ?? "Somewhere"} · ${trip.startDate} → ${trip.endDate}`;
@@ -17,25 +23,65 @@ function timeframeSummary(trip: ChatHomeTrip): string {
   return `${trip.destinationName ?? "Somewhere"} · dates to be set`;
 }
 
+/**
+ * Messages-style relative stamp for the trailing edge of a row: clock time today, "Yesterday",
+ * weekday within the last week, else a short date. Locale-formatted, never a hand-rolled
+ * month table.
+ */
+function rowTimestamp(iso: string): string {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return "";
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const dayDiff = Math.floor((startOfToday.getTime() - new Date(at.getFullYear(), at.getMonth(), at.getDate()).getTime()) / 86_400_000);
+  if (dayDiff <= 0) return at.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  if (dayDiff === 1) return "Yesterday";
+  if (dayDiff < 7) return at.toLocaleDateString(undefined, { weekday: "short" });
+  return at.toLocaleDateString(undefined, { month: "numeric", day: "numeric", year: "2-digit" });
+}
+
 export function ChatHomeView({ trips }: { trips: ChatHomeTrip[] }) {
   const [showForm, setShowForm] = useState(false);
+  const [query, setQuery] = useState("");
+
+  // Filters the rows already in memory -- no request, no change to what the server sent.
+  const visible = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return trips;
+    return trips.filter((trip) =>
+      trip.name.toLowerCase().includes(needle)
+      || (trip.destinationName ?? "").toLowerCase().includes(needle)
+      || (trip.latestMessage?.preview ?? "").toLowerCase().includes(needle));
+  }, [trips, query]);
+
   return (
-    <>
-      <div className="section-heading">
-        <div>
-          <h1>Your trip groups</h1>
-          <p className="field-hint">Each group is one trip — its chat, its plan, its members.</p>
-        </div>
+    <div className="msg-list-screen">
+      <div className="msg-list-head">
+        <h1 className="msg-large-title">Messages</h1>
         {trips.length > 0 && !showForm && (
-          <button type="button" className="primary-button" onClick={() => setShowForm(true)}>
-            New trip group
+          <button type="button" className="msg-compose-button" onClick={() => setShowForm(true)} title="New trip group">
+            <SquarePen size={19} aria-hidden="true" />
+            <span className="sr-only">New trip group</span>
           </button>
         )}
       </div>
 
+      {trips.length > 0 && !showForm && (
+        <div className="msg-search">
+          <Search size={15} aria-hidden="true" />
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search"
+            aria-label="Search trip groups"
+          />
+        </div>
+      )}
+
       {trips.length === 0 && !showForm && (
-        <div className="inline-notice">
-          <span>You have no trip groups yet. Start one and invite people when you are ready.</span>
+        <div className="msg-empty">
+          <p>You have no trip groups yet. Start one and invite people when you are ready.</p>
           <button type="button" className="primary-button" onClick={() => setShowForm(true)}>
             Create your first trip group
           </button>
@@ -44,30 +90,52 @@ export function ChatHomeView({ trips }: { trips: ChatHomeTrip[] }) {
 
       {showForm && <CreateForm onCancel={() => setShowForm(false)} />}
 
-      {trips.length > 0 && (
-        <ul className="chat-home-list">
-          {trips.map((trip) => (
-            <li key={trip.id} className="chat-home-row">
-              <Link href={`/trips/${trip.id}/chat`} className="chat-home-link">
-                <span className="chat-home-name">{trip.name}</span>
-                <span className="field-hint">{timeframeSummary(trip)}</span>
-                <span className="chat-home-preview">{trip.latestMessage ? trip.latestMessage.preview : "No messages yet"}</span>
-                <span className="chat-home-avatars" aria-label={`${trip.memberCount} members`}>
-                  {trip.memberAvatars.map((avatar) => (
-                    <span key={avatar.id} className="chat-home-avatar" style={{ background: avatar.color }} title={avatar.displayName}>
-                      {avatar.displayName.slice(0, 1).toUpperCase()}
+      {trips.length > 0 && !showForm && visible.length === 0 && (
+        <p className="msg-no-results">No trip groups match “{query.trim()}”.</p>
+      )}
+
+      {visible.length > 0 && !showForm && (
+        <ul className="msg-rows">
+          {visible.map((trip) => {
+            // `unread` is null until the unread infrastructure lands (see chat-home.ts), so the
+            // badge simply does not render rather than showing a fabricated count.
+            const unread = trip.unread ?? 0;
+            return (
+              <li key={trip.id} className="msg-row" data-unread={unread > 0 ? "true" : "false"}>
+                <Link href={`/trips/${trip.id}/chat`} className="chat-home-link msg-row-link">
+                  <span className="msg-row-dot" aria-hidden="true" />
+                  <span className="msg-row-avatars" aria-label={`${trip.memberCount} members`}>
+                    {trip.memberAvatars.slice(0, 3).map((avatar) => (
+                      <span key={avatar.id} className="msg-row-avatar" style={{ background: avatar.color }} title={avatar.displayName}>
+                        {avatar.displayName.slice(0, 1).toUpperCase()}
+                      </span>
+                    ))}
+                  </span>
+                  <span className="msg-row-main">
+                    <span className="msg-row-top">
+                      <span className="msg-row-name">{trip.name}</span>
+                      {trip.latestMessage && (
+                        <time className="msg-row-time" dateTime={trip.latestMessage.at}>
+                          {rowTimestamp(trip.latestMessage.at)}
+                        </time>
+                      )}
                     </span>
-                  ))}
-                </span>
-              </Link>
-              {trip.status === "draft" && (
-                <p className="field-hint">Planning locked until dates are set.</p>
-              )}
-            </li>
-          ))}
+                    <span className="msg-row-preview">
+                      {trip.latestMessage ? trip.latestMessage.preview : "No messages yet"}
+                    </span>
+                    <span className="msg-row-meta">
+                      {timeframeSummary(trip)}
+                      {trip.status === "draft" && " · Planning locked until dates are set"}
+                    </span>
+                  </span>
+                  {unread > 0 && <span className="msg-row-badge" aria-label={`${unread} unread`}>{unread}</span>}
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       )}
-    </>
+    </div>
   );
 }
 

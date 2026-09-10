@@ -10,3 +10,4 @@ playwright-report/
 .claude/scheduled_tasks.lock
 supabase/.temp/
 .idea/
+dev.log

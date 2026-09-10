@@ -7,6 +7,7 @@ import { PresenceBar } from "@/features/chat/presence-bar";
 import { MessageList } from "@/features/chat/message-list";
 import { Composer } from "@/features/chat/composer";
 import { shouldAddressAssistant } from "@/lib/chat/mention";
+import type { Tapback } from "@/features/chat/tapback";
 import type { JigsawMember } from "@/features/timeline/jigsaw-panel";
 import type { ProposalRecord } from "@/lib/repositories/planning-repository";
 
@@ -20,9 +21,21 @@ export function ChatPane({ tripId, selfMemberId, members, proposalsById, canDeci
   decidingProposalId?: string | null;
   onDecision?: (proposalId: string, decision: "accept" | "reject") => void;
 }) {
-  const { messages, status, presentMemberIds, loading, loadError, send, retry } = useTripChannel(tripId, selfMemberId);
+  const { messages, status, presentMemberIds, typingMemberIds, loading, loadError, send, retry, notifyTyping } = useTripChannel(tripId, selfMemberId);
   const [assistantThinking, setAssistantThinking] = useState(false);
   const [assistantError, setAssistantError] = useState<string | null>(null);
+  // Viewer-local reactions. Not persisted and not shared -- see features/chat/tapback.tsx.
+  const [reactions, setReactions] = useState<Record<string, Tapback>>({});
+
+  function react(messageId: string, tapback: Tapback | null) {
+    setReactions((existing) => {
+      if (!tapback) {
+        const { [messageId]: _removed, ...rest } = existing;
+        return rest;
+      }
+      return { ...existing, [messageId]: tapback };
+    });
+  }
 
   async function handleSend(body: string) {
     await send(body);
@@ -64,10 +77,11 @@ export function ChatPane({ tripId, selfMemberId, members, proposalsById, canDeci
     ) : (
       <MessageList messages={messages} members={members} selfMemberId={selfMemberId} onRetry={retry}
         proposalsById={proposalsById} canDecideProposals={canDecideProposals}
-        activeProposalId={activeProposalId} decidingProposalId={decidingProposalId} onDecision={onDecision} />
+        activeProposalId={activeProposalId} decidingProposalId={decidingProposalId} onDecision={onDecision}
+        typingMemberIds={typingMemberIds} reactions={reactions} onReact={react} />
     )}
     {assistantThinking && <p className="inline-notice chat-assistant-note" role="status"><Sparkles size={14} aria-hidden="true" />Assistant is thinking...</p>}
     {assistantError && <p className="error-notice chat-assistant-note" role="alert"><AlertCircle aria-hidden="true" /><span>{assistantError}</span></p>}
-    <Composer onSend={(body) => void handleSend(body)} disabled={!selfMemberId} />
+    <Composer onSend={(body) => void handleSend(body)} disabled={!selfMemberId} onTyping={notifyTyping} />
   </div>;
 }
