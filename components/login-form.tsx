@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useEffect, useRef, useState, type FormEvent } from "react";
-import { Compass, LoaderCircle, Lock, Mail, PlayCircle } from "lucide-react";
+import { LoaderCircle, Lock, Mail, PlayCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { BrandMark } from "@/components/brand-mark";
 
 const devPasswordLogin = process.env.NODE_ENV !== "production";
 
@@ -24,7 +25,7 @@ export function PrototypeEntry() {
 
   return (
     <main className="login-shell">
-      <div className="brand-block"><Compass aria-hidden="true" /><strong>Waypoint</strong></div>
+      <div className="brand-block"><BrandMark /><strong>Waypoint</strong></div>
       <h1>Sign in</h1>
       <p className="inline-notice" role="status">
         Demo build — any email and password get you in, and all data is sample data that resets
@@ -108,7 +109,7 @@ export function LoginForm({ configured }: { configured: boolean }) {
   }
 
   return <main className="login-shell">
-    <div className="brand-block"><Compass aria-hidden="true" /><strong>Waypoint</strong></div>
+    <div className="brand-block"><BrandMark /><strong>Waypoint</strong></div>
     <h1>Sign in</h1>
     <form className="login-form" onSubmit={submit}>
     {!configured && <p className="inline-notice" role="status">Sign-in is not configured yet.</p>}

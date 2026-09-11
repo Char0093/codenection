@@ -1,32 +1,187 @@
+/* ============================================================================
+   Waypoint design tokens -- editorial / monochrome (see "Waypoint UI Mockups").
+   The primary action colour is near-black ink; structure is carried by a cool
+   grey ramp; blue and green appear ONLY as informational accents (tags, the
+   time column, the demo notice, links). Everything interactive -- buttons, the
+   active nav pill, a selected chip, a ticked checkbox -- is solid ink with
+   white on top, and every pill is fully rounded.
+
+   Token NAMES are inherited from the earlier theme so the ~1300 rules below
+   keep resolving; only their VALUES changed. Read them by role:
+     --canvas       page ground (cool light grey)
+     --surface      card / elevated row (white)
+     --surface-2    field fill, inert control, segmented track (light grey)
+     --ink          primary text AND the action colour
+     --muted        secondary label / subtitle   --faint  placeholder / tertiary
+     --line         hairline divider   --line-strong  visible control border
+     --teal         legacy name for the action colour -> now resolves to ink
+     --blue         informational blue (NOT an action colour)
+   Dark values live in the two blocks after this one -- never define a colour
+   only inside a media query, or the toggle cannot win in both directions.
+   ============================================================================ */
 :root {
   color-scheme: light;
-  /* Warm editorial palette: cream canvas, deep navy chrome, gold accent. */
-  --canvas: #f7f1e4;
-  --surface: #ffffff;
-  --ink: #1e2430;
-  --muted: #7c725f;
-  --line: #e9e0cc;
-  --line-strong: #d5c7a4;
-  --teal: #182544;
-  --teal-dark: #0e1730;
-  --teal-soft: #f1e4c4;
-  --blue: #a9803f;
-  --error: #a6432e;
-  --navy: #101a2e;
-  --navy-soft: #1c2a45;
-  --navy-line: #2a3b5c;
-  --gold-light: #e4c588;
-  --error-soft: #f8e3da;
-  --error-dark: #7a2e1e;
-  /* Jigsaw block textures: semantic status colors, kept distinct from the navy/gold brand accent. */
-  --consensus: #3f7d52;
-  --consensus-soft: #e4ede4;
-  --wishlist: #7d5ba6;
-  --wishlist-soft: #ece5f2;
-  --flexible: #c1861f;
-  --flexible-soft: #f5e8d3;
-  --flexible-dark: #7a4a12;
-  /* --font-display / --font-body come from next/font via the <html> class in app/layout.tsx. */
+
+  --canvas: #f4f5f7;          /* cool page ground */
+  --surface: #ffffff;         /* card / elevated row */
+  --surface-2: #eef0f3;       /* field fill, unselected chip, segmented track */
+  --surface-3: #e4e7ec;       /* pressed / stronger inert fill */
+
+  --ink: #17181c;             /* primary text + the action colour */
+  --muted: #5b616e;           /* secondary label, subtitle */
+  --faint: #9aa1ae;           /* placeholder, tertiary, disabled glyph */
+
+  --line: #ebedf0;            /* hairline divider */
+  --line-strong: #dcdfe4;     /* visible control border */
+
+  /* The action colour. --teal/--teal-dark/--teal-soft are legacy names for it;
+     they now resolve to the ink ramp so every "primary" surface goes black. */
+  --teal: #17181c;
+  --teal-dark: #000000;       /* hover / pressed */
+  --teal-soft: rgba(23, 24, 28, 0.06);   /* faint ink wash for hover states */
+  --on-accent: #ffffff;       /* text/glyph that rides on a solid --teal fill */
+
+  /* Informational blue -- tags, the itinerary time column, the demo notice,
+     links. Deliberately NOT used for buttons or selected states. */
+  --blue: #3a63dd;
+  --blue-soft: #ebeefb;
+  --blue-dark: #2b4bb8;
+  --gold-light: #9aa1ae;      /* legacy name: muted glyph on light chrome */
+
+  /* Legacy dark-chrome names (only the dead trip-setup topbar still reads these). */
+  --navy: #17181c;
+  --navy-soft: #26272b;
+  --navy-line: #3a3b40;
+
+  /* Semantic */
+  --error: #e5484d;
+  --error-soft: #fdecec;
+  --error-dark: #c62a2f;
+  --consensus: #1a9750;       /* positive / "balanced pace" tag */
+  --consensus-soft: #e7f4ec;
+  --wishlist: #8250df;        /* assistant / wishlist accent */
+  --wishlist-soft: #f1ebfc;
+  --flexible: #e0850d;        /* caution / flexible-fill */
+  --flexible-soft: #fdf1e1;
+  --flexible-dark: #b5670a;
+
+  /* --- Chat thread bubble pair. Kept blue -- an established messaging idiom the
+     mockups don't touch; only the surrounding app chrome goes monochrome. --- */
+  --imsg-out: #3a63dd;             /* outgoing bubble */
+  --imsg-out-sms: #1a9750;         /* SMS fallback */
+  --imsg-out-text: #ffffff;
+  --imsg-in: #eef0f3;              /* incoming, neutral */
+  --imsg-in-text: #17181c;
+  --imsg-thread: #ffffff;          /* thread canvas */
+
+  /* Radius scale -- the mockups are pill-heavy: buttons, nav-active, chips and
+     tags are all fully round; cards sit at ~20px. */
+  --r-tail: 6px;
+  --r-subtle: 10px;
+  --r-standard: 12px;        /* fields, inline cards */
+  --r-bubble: 19px;          /* chat bubble body */
+  --r-comfortable: 20px;     /* page cards, sidebar */
+  --r-capsule: 999px;        /* every button, pill, chip, tag */
+
+  /* Elevation -- soft, diffuse card lift on the grey ground (mockup style),
+     with a deeper shadow reserved for true floating popovers. */
+  --shadow-card: 0 1px 2px rgba(17, 18, 22, 0.04), 0 10px 28px rgba(17, 18, 22, 0.06);
+  --shadow-float: 0 12px 34px rgba(17, 18, 22, 0.14);
+  --shadow-sheet: 0 -4px 24px rgba(17, 18, 22, 0.16);
+
+  --font-body: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+  --font-display: var(--font-body);
+}
+
+/* Dark: true black ground for OLED, per the spec's "never off-white in dark".
+   Guarded with :not([data-theme="light"]) so an explicit light choice still wins
+   over the OS preference. */
+/* Dark: the monochrome design inverts -- near-black ground, near-white ink, and
+   the action colour becomes white with black (--on-accent) riding on top.
+   Guarded with :not([data-theme="light"]) so an explicit light choice still wins. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --canvas: #0e0f11;
+    --surface: #17181b;
+    --surface-2: #232428;
+    --surface-3: #2d2f34;
+    --ink: #f3f4f6;
+    --muted: #9aa0ac;
+    --faint: #6b7280;
+    --line: #26272b;
+    --line-strong: #34363b;
+    --teal: #f3f4f6;
+    --teal-dark: #ffffff;
+    --teal-soft: rgba(243, 244, 246, 0.1);
+    --on-accent: #17181c;
+    --blue: #6f8ffb;
+    --blue-soft: #1e2a4d;
+    --blue-dark: #9db2fc;
+    --gold-light: #6b7280;
+    --navy: #17181b;
+    --navy-soft: #232428;
+    --navy-line: #34363b;
+    --error: #ff6b6b;
+    --error-soft: #3a1e1f;
+    --error-dark: #ff9d9d;
+    --consensus: #3ddc84;
+    --consensus-soft: #10321f;
+    --wishlist: #b78cf0;
+    --wishlist-soft: #2a1f3d;
+    --flexible: #f0a94a;
+    --flexible-soft: #3a2a12;
+    --flexible-dark: #f7c483;
+    --imsg-out: #3a63dd;
+    --imsg-in: #232428;
+    --imsg-in-text: #f3f4f6;
+    --imsg-thread: #0e0f11;
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 28px rgba(0, 0, 0, 0.5);
+    --shadow-float: 0 12px 34px rgba(0, 0, 0, 0.6);
+  }
+}
+
+/* The same dark values again under an explicit choice, so the toggle overrides a
+   light OS preference. Kept in sync with the block above by hand. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: #0e0f11;
+  --surface: #17181b;
+  --surface-2: #232428;
+  --surface-3: #2d2f34;
+  --ink: #f3f4f6;
+  --muted: #9aa0ac;
+  --faint: #6b7280;
+  --line: #26272b;
+  --line-strong: #34363b;
+  --teal: #f3f4f6;
+  --teal-dark: #ffffff;
+  --teal-soft: rgba(243, 244, 246, 0.1);
+  --on-accent: #17181c;
+  --blue: #6f8ffb;
+  --blue-soft: #1e2a4d;
+  --blue-dark: #9db2fc;
+  --gold-light: #6b7280;
+  --navy: #17181b;
+  --navy-soft: #232428;
+  --navy-line: #34363b;
+  --error: #ff6b6b;
+  --error-soft: #3a1e1f;
+  --error-dark: #ff9d9d;
+  --consensus: #3ddc84;
+  --consensus-soft: #10321f;
+  --wishlist: #b78cf0;
+  --wishlist-soft: #2a1f3d;
+  --flexible: #f0a94a;
+  --flexible-soft: #3a2a12;
+  --flexible-dark: #f7c483;
+  --imsg-out: #3a63dd;
+  --imsg-in: #232428;
+  --imsg-in-text: #f3f4f6;
+  --imsg-thread: #0e0f11;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 28px rgba(0, 0, 0, 0.5);
+  --shadow-float: 0 12px 34px rgba(0, 0, 0, 0.6);
 }
 
 * { box-sizing: border-box; }
@@ -35,19 +190,20 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 button { cursor: pointer; }
 button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: not-allowed; opacity: 0.6; }
-:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
 button, a { touch-action: manipulation; }
 svg { width: 18px; height: 18px; flex-shrink: 0; }
 h1, h2, h3, p { overflow-wrap: anywhere; }
-h1, h2, h3 { line-height: 1.25; font-family: var(--font-display); font-weight: 600; }
-h1 { font-size: 26px; margin: 0; }
-h2 { font-size: 18px; margin: 0; }
+/* Editorial title scale from the mockups: heavy, tight, near-black. */
+h1, h2, h3 { line-height: 1.2; font-family: var(--font-display); font-weight: 700; letter-spacing: -0.02em; color: var(--ink); }
+h1 { font-size: 30px; margin: 0; font-weight: 800; }
+h2 { font-size: 19px; margin: 0; }
 h3 { font-size: 15px; margin: 0; }
-a { color: var(--teal-dark); }
+a { color: var(--blue); }
 [hidden] { display: none !important; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
-.app-shell { min-height: 100vh; padding: 0 20px; flex: 1 1 auto; min-width: 0; }
+.app-shell { min-height: 100vh; padding: 0 24px; flex: 1 1 auto; min-width: 0; }
 /* A page whose own top-level content is .workspace-main (every /trips/[tripId]/* page, via
    AppShell) needs to fill the row beside the sidebar and hand that height down so the chat
    pane can scroll internally. Every other .app-shell page (the trip-groups list, settings,
@@ -57,13 +213,18 @@ a { color: var(--teal-dark); }
 .app-shell:has(> .workspace-main) { display: flex; flex-direction: column; min-height: 0; }
 .app-shell:has(> .workspace-main) > .workspace-main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding-top: 20px; }
 .topbar { min-height: 72px; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 16px max(24px, calc((100% - 1200px) / 2)); background: var(--navy); color: #fff; }
-.brand-block { display: inline-flex; align-items: center; gap: 10px; min-width: 0; color: inherit; text-decoration: none; }
-.brand-block strong { font-family: var(--font-display); font-size: 24px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
-.brand-block > svg { width: 26px; height: 26px; color: var(--gold-light); }
+.brand-block { display: inline-flex; align-items: center; gap: 9px; min-width: 0; color: var(--ink); text-decoration: none; }
+.brand-block strong { font-family: var(--font-display); font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+.brand-block > svg, .brand-block .brand-mark { width: 22px; height: 22px; color: var(--ink); flex: none; }
 .account-actions { display: flex; align-items: center; gap: 14px; min-width: 0; }
-.account-email { font-size: 12px; color: var(--gold-light); opacity: 0.85; overflow-wrap: anywhere; }
-.icon-button { width: 40px; height: 40px; display: inline-grid; place-items: center; padding: 0; border: 1px solid var(--navy-line); border-radius: 6px; background: transparent; color: inherit; }
-.icon-button:hover:not(:disabled) { background: var(--navy-soft); }
+.account-email { font-size: 12px; color: var(--muted); opacity: 0.85; overflow-wrap: anywhere; }
+/* Plain circular icon button, 44pt hit area: transparent until pressed, never a bordered box.
+   .topbar (dead trip-setup dashboard) is the one dark-chrome exception. */
+.icon-button { width: 44px; height: 44px; display: inline-grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--ink); transition: background 0.15s, opacity 0.15s; }
+.icon-button:hover:not(:disabled) { background: var(--surface-2); }
+.icon-button:active:not(:disabled) { opacity: 0.5; }
+.topbar .icon-button { color: #fff; border: 1px solid var(--navy-line); border-radius: 6px; }
+.topbar .icon-button:hover:not(:disabled) { background: var(--navy-soft); }
 .trip-toolbar { width: min(1200px, calc(100% - 48px)); margin: 0 auto; padding: 22px 0; display: flex; gap: 16px; align-items: flex-end; }
 .trip-selector { display: grid; gap: 5px; min-width: 0; width: 370px; font-size: 12px; font-weight: 600; }
 .trip-toolbar > button { flex-shrink: 0; }
@@ -79,59 +240,144 @@ a { color: var(--teal-dark); }
 .section-heading h2 { display: flex; gap: 8px; align-items: center; min-width: 0; }
 .role-label { color: var(--blue); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
 
-label { font-size: 13px; font-weight: 600; }
-input, select, textarea { width: 100%; min-width: 0; min-height: 42px; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 5px; background: var(--surface); font-weight: 400; }
+label { font-size: 13px; font-weight: 600; color: var(--ink); }
+/* Fields: a soft grey fill with no visible border, label sitting above -- the mockup's
+   form-field treatment. Focus lifts the fill to white and draws a 2px ink ring. */
+input, select, textarea {
+  width: 100%; min-width: 0; min-height: 44px; padding: 11px 14px; border: 1px solid transparent;
+  border-radius: var(--r-standard); background: var(--surface-2); color: var(--ink); font-weight: 400;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+input::placeholder, textarea::placeholder { color: var(--faint); }
 /* The text-field sizing above must not apply to tick boxes: it stretched every checkbox and
-   radio in the app to a full-width 42px box. */
+   radio in the app to a full-width 42px box. Bare checkboxes get a drawn box in the ink
+   colour; the fully animated version is <AnimatedCheckbox> / .checkbox-wrapper below. */
 input[type="checkbox"], input[type="radio"] {
   width: auto; min-width: 0; min-height: 0; padding: 0; border: 0; border-radius: 0;
-  background: none; flex: none; accent-color: var(--teal);
+  background: none; flex: none; accent-color: var(--ink);
 }
+input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none;
+  width: 20px; height: 20px; border-radius: 6px;
+  border: 2px solid var(--faint); background: rgba(207, 205, 205, 0.425);
+  display: inline-grid; place-content: center; cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+input[type="checkbox"]:hover:not(:disabled) { border-color: var(--ink); }
+input[type="checkbox"]::after {
+  content: ""; width: 10px; height: 10px;
+  clip-path: polygon(14% 46%, 0 60%, 40% 100%, 100% 22%, 86% 8%, 40% 72%);
+  background: var(--on-accent); transform: scale(0); transition: transform 0.15s ease;
+}
+input[type="checkbox"]:checked { background: var(--ink); border-color: var(--ink); }
+input[type="checkbox"]:checked::after { transform: scale(1); }
+input[type="checkbox"]:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 textarea { resize: vertical; }
-input:focus, select:focus, textarea:focus { border-color: var(--teal); }
+
+/* ---------- Animated draw-on checkbox (components/animated-checkbox.tsx) ----------
+   The mockup spec: box outline + tick each animate stroke-dashoffset 800/172 -> 0 on check.
+   Colour follows the mockup -- ink, not the reference snippet's purple. ---------------- */
+.checkbox-wrapper input[type="checkbox"] { display: none; }
+.checkbox-wrapper .terms-label { cursor: pointer; display: flex; align-items: center; }
+.checkbox-wrapper input[type="checkbox"]:disabled + .terms-label { cursor: not-allowed; opacity: 0.5; }
+.checkbox-wrapper .terms-label .label-text { margin-left: 10px; font-size: 13px; font-weight: 500; color: var(--ink); }
+.checkbox-wrapper .checkbox-svg { width: 28px; height: 28px; flex: none; overflow: visible; }
+.checkbox-wrapper .checkbox-box {
+  fill: rgba(207, 205, 205, 0.425); stroke: var(--ink); stroke-width: 2;
+  stroke-dasharray: 800; stroke-dashoffset: 800;
+  transition: stroke-dashoffset 0.6s ease-in;
+}
+.checkbox-wrapper .checkbox-tick {
+  stroke: var(--ink); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round;
+  stroke-dasharray: 172; stroke-dashoffset: 172;
+  transition: stroke-dashoffset 0.6s ease-in;
+}
+.checkbox-wrapper input[type="checkbox"]:checked + .terms-label .checkbox-box,
+.checkbox-wrapper input[type="checkbox"]:checked + .terms-label .checkbox-tick {
+  stroke-dashoffset: 0;
+}
+input:focus, select:focus, textarea:focus {
+  outline: none; background: var(--surface); border-color: var(--ink);
+  box-shadow: 0 0 0 3px var(--teal-soft);
+}
 .trip-fields { border: 0; padding: 0; margin: 0; min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px 16px; }
 .trip-fields > label, .login-form > label { display: grid; gap: 7px; min-width: 0; }
 .wide { grid-column: 1 / -1; }
 .pace-field { margin: 0; padding: 0; border: 0; min-width: 0; }
 .pace-field legend { padding: 0; margin-bottom: 7px; font-size: 13px; font-weight: 600; }
-.segmented { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px; padding: 3px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--canvas); }
+/* Segmented control: a capsule track with a riding pill, the same construction as the
+   Appearance control (.theme-segmented/.theme-segment below) rather than a bordered grid of
+   boxes -- this is what an iOS UISegmentedControl actually looks like. */
+.segmented { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px; padding: 3px; border: 0; border-radius: var(--r-capsule); background: var(--surface-2); }
 .segmented label { position: relative; min-width: 0; }
 .segmented input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; min-height: 0; cursor: pointer; }
-.segmented span { display: grid; place-items: center; min-height: 36px; padding: 6px; border-radius: 3px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
-.segmented input:checked + span { background: var(--surface); color: var(--teal-dark); box-shadow: 0 1px 3px #172b231a; }
-.segmented input:focus-visible + span { outline: 2px solid var(--blue); outline-offset: 1px; }
+.segmented span { display: grid; place-items: center; min-height: 38px; padding: 6px 8px; border-radius: var(--r-capsule); color: var(--muted); font-size: 13px; font-weight: 500; overflow-wrap: anywhere; transition: background 0.15s, color 0.15s; }
+.segmented input:checked + span { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 1px 3px rgba(17, 18, 22, 0.12); }
+.segmented input:focus-visible + span { outline: 2px solid var(--ink); outline-offset: 1px; }
 .segmented input:disabled + span { opacity: 0.6; }
 .form-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
-.primary-button, .secondary-button { display: inline-flex; justify-content: center; align-items: center; gap: 8px; min-height: 42px; padding: 10px 14px; border: 1px solid var(--line-strong); border-radius: 5px; background: var(--surface); font-size: 13px; font-weight: 600; line-height: 1.3; }
-.primary-button { color: #fff; background: var(--teal); border-color: var(--teal); }
+/* Buttons are fully-rounded pills (mockup style). Primary = solid ink with white on top;
+   secondary = white with a hairline border. */
+.primary-button, .secondary-button {
+  display: inline-flex; justify-content: center; align-items: center; gap: 8px; min-height: 44px;
+  padding: 11px 22px; border: 1px solid transparent; border-radius: var(--r-capsule);
+  font-size: 14px; font-weight: 600; line-height: 1.3; transition: background 0.15s, border-color 0.15s, opacity 0.15s, transform 0.1s;
+}
+.primary-button { color: var(--on-accent); background: var(--teal); }
 .primary-button:hover:not(:disabled) { background: var(--teal-dark); }
-.secondary-button:hover:not(:disabled) { background: #edf1f4; border-color: #8c9da7; }
-.inline-notice, .error-notice { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; padding: 12px 14px; margin: 0 0 20px; border-left: 3px solid var(--teal); background: var(--teal-soft); font-size: 13px; overflow-wrap: anywhere; }
-.error-notice { border-color: var(--error); background: var(--error-soft); color: var(--error-dark); }
+.primary-button:active:not(:disabled) { transform: scale(0.98); }
+.secondary-button { color: var(--ink); background: var(--surface); border-color: var(--line-strong); }
+.secondary-button:hover:not(:disabled) { background: var(--surface-2); border-color: var(--muted); }
+.secondary-button:active:not(:disabled) { transform: scale(0.98); }
+.inline-notice, .error-notice {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 9px; padding: 12px 16px; margin: 0 0 20px;
+  border-radius: var(--r-standard); background: var(--blue-soft); color: var(--blue-dark);
+  font-size: 13px; overflow-wrap: anywhere;
+}
+.error-notice { background: var(--error-soft); color: var(--error-dark); }
 .error-notice > span { flex: 1; min-width: 0; }
-.empty-state { min-height: 220px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 14px; padding: 24px 0; color: var(--muted); border-top: 1px solid var(--line); }
-.empty-state > svg { width: 28px; height: 28px; color: var(--line-strong); }
-.empty-state h2 { font-size: 15px; font-weight: 500; }
+/* Centered, muted, icon-led -- the iOS empty-state convention (Settings.app "No results",
+   Mail's empty inbox) rather than a left-aligned block with a hairline rule above it. */
+.empty-state {
+  min-height: 220px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; padding: 24px; text-align: center; color: var(--muted); border: 0;
+}
+.empty-state > svg { width: 30px; height: 30px; color: var(--faint); }
+.empty-state h2 { font-size: 16px; font-weight: 600; color: var(--ink); }
+.empty-state > .secondary-button, .empty-state > .primary-button { margin-top: 4px; }
+
+/* ---------- Collapsible section: native <details>/<summary> with a rotating chevron.
+   Content stays in the DOM when folded, so nothing that was queryable stops being so. ---- */
+details > summary { list-style: none; cursor: pointer; user-select: none; border-radius: inherit; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.collapse-chevron { margin-left: auto; color: var(--faint); flex: none; transition: transform 0.2s ease; }
+details[open] > summary .collapse-chevron { transform: rotate(180deg); }
 
 .dietary-field { margin: 8px 0 0; padding: 18px 0 0; border: 0; border-top: 1px solid var(--line); min-width: 0; }
 .dietary-field legend { display: flex; align-items: center; gap: 8px; padding: 0; margin-bottom: 4px; font-size: 13px; font-weight: 600; }
 .field-hint { margin: 0 0 12px; font-size: 12px; color: var(--muted); }
 .flag-grid { display: flex; flex-wrap: wrap; gap: 8px; }
-.flag-chip { min-height: 36px; padding: 7px 14px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--surface); color: var(--muted); font-size: 12.5px; font-weight: 600; }
-.flag-chip:hover:not(:disabled) { border-color: var(--teal); color: var(--teal-dark); }
-.flag-chip[aria-pressed="true"] { background: var(--teal-soft); border-color: var(--teal); color: var(--teal-dark); }
+/* Chips (mockup "Interests" row): unselected = soft grey fill, no border; selected = solid ink. */
+.flag-chip { min-height: 38px; padding: 8px 16px; border: 1px solid transparent; border-radius: var(--r-capsule); background: var(--surface-2); color: var(--muted); font-size: 13px; font-weight: 600; transition: background 0.15s, border-color 0.15s, color 0.15s; }
+.flag-chip:hover:not(:disabled) { background: var(--surface-3); color: var(--ink); }
+.flag-chip[aria-pressed="true"] { background: var(--teal); border-color: var(--teal); color: var(--on-accent); }
+.flag-chip[aria-pressed="true"]:hover:not(:disabled) { background: var(--teal-dark); color: var(--on-accent); }
 
 .proposal-review { min-width: 0; }
-.proposal-review + .proposal-review { margin-top: 36px; padding-top: 26px; border-top: 2px solid var(--line); }
+.proposal-review + .proposal-review { margin-top: 36px; padding-top: 26px; border-top: 1px solid var(--line); }
 .proposal-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
-.proposal-heading h2 { font-size: 16px; }
-.proposal-status { flex-shrink: 0; padding: 3px 7px; border-radius: 4px; color: var(--muted); background: var(--canvas); font-size: 11px; font-weight: 700; }
-.proposal-status.pending { color: #7a5a12; background: #f6e8c4; }
+.proposal-heading h2 { font-size: 17px; }
+.proposal-status { flex-shrink: 0; padding: 4px 9px; border-radius: var(--r-capsule); color: var(--muted); background: var(--surface-2); font-size: 11px; font-weight: 700; }
+.proposal-status.pending { color: var(--flexible-dark); background: var(--flexible-soft); }
 .proposal-status.accepted { color: var(--teal-dark); background: var(--teal-soft); }
-.proposal-status.rejected, .proposal-status.expired { color: #7a2e1e; background: #f2ded4; }
-.proposal-summary { margin: 16px 0 24px; color: var(--muted); }
-.activity-list { list-style: none; padding: 0; margin: 0; }
+.proposal-status.rejected, .proposal-status.expired { color: var(--error-dark); background: var(--error-soft); }
+.proposal-summary { margin: 16px 0 20px; color: var(--muted); }
+/* A single grouped surface with inset hairline rows -- the same "iOS Settings list" construction
+   as .msg-rows, rather than dividers floating directly on the canvas with no enclosing card. */
+.activity-list { list-style: none; padding: 0 18px; margin: 0; background: var(--surface); border-radius: var(--r-standard); overflow: hidden; box-shadow: var(--shadow-card); }
 .activity-list > li { padding: 18px 0; border-top: 1px solid var(--line); }
+.activity-list > li:first-child { border-top: 0; }
 .activity-schedule { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 10px; font-size: 12px; color: var(--blue); font-weight: 600; }
 .activity-schedule > span { display: inline-flex; align-items: center; gap: 5px; }
 .activity-schedule svg { width: 14px; height: 14px; }
@@ -146,13 +392,23 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
 .spin { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.login-shell { width: min(420px, calc(100% - 40px)); margin: 80px auto; }
-.login-shell .brand-block { color: var(--ink); margin-bottom: 36px; }
-.login-shell .brand-block > svg { color: var(--teal); }
-.login-shell h1 { margin-bottom: 24px; }
-.login-form { display: grid; gap: 20px; margin-top: 24px; }
+/* Sign-in as a centered on-system sheet: a large brand mark, an iOS Large-Title heading, pill
+   fields -- reading the same surface/radius/shadow language as the onboarding sheet rather than
+   a plain form dropped on the grouped canvas. */
+/* Sign-in as one self-contained card on the grey ground (mockup page 1): the mark, the
+   title, the notice, the fields and the button all live inside .login-shell itself. */
+.login-shell {
+  width: min(460px, calc(100% - 32px)); margin: 8vh auto; padding: 40px;
+  display: flex; flex-direction: column; gap: 6px;
+  background: var(--surface); border-radius: var(--r-comfortable); box-shadow: var(--shadow-card);
+}
+.login-shell .brand-block { margin-bottom: 14px; }
+.login-shell h1 { margin-bottom: 6px; font-size: 32px; }
+.login-shell > .inline-notice, .login-shell > .error-notice { width: 100%; margin: 6px 0 14px; }
+.login-form { width: 100%; display: grid; gap: 14px; margin: 0; padding: 0; background: none; box-shadow: none; }
 .login-form .inline-notice, .login-form .error-notice { margin: 0; }
-.dev-login-form { margin-top: 32px; padding-top: 24px; border-top: 1px dashed var(--line-strong); }
+.login-form .primary-button { min-height: 46px; margin-top: 2px; }
+.dev-login-form { margin-top: 18px; padding-top: 20px; border-top: 1px solid var(--line); }
 .dev-login-form .field-hint { margin: 0; }
 
 @media (max-width: 900px) {
@@ -212,14 +468,32 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
    timestamps, date dividers, a pill composer) on the app's own tokens, not a literal copy of
    its palette. ---------- */
 
-.chat-pane { display: flex; flex-direction: column; flex: 1 1 auto; height: 100%; min-height: 0; background: var(--canvas); }
+/* The thread runs on pure white / true black rather than the grouped-grey app ground -- the
+   list screen is the grouped surface, the conversation is the bare canvas. */
+.chat-pane { display: flex; flex-direction: column; flex: 1 1 auto; height: 100%; min-height: 0; background: var(--imsg-thread); }
+/* Flat solid bar -- no frosted material behind it, so the thread reads as one plain surface. */
 .chat-pane-top {
-  display: flex; align-items: center; gap: 10px; padding: 10px 16px; flex: none;
-  border-bottom: 1px solid var(--line); background: var(--surface);
-  box-shadow: 0 1px 0 rgba(30, 36, 48, 0.03);
+  display: flex; align-items: center; gap: 8px; padding: 8px 14px; flex: none;
+  border-bottom: 1px solid var(--line); background: var(--imsg-thread);
 }
+/* The member count + group title are one button: pressing the strip opens the group-info view. */
+.chat-pane-heading {
+  flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 10px;
+  border: 0; background: none; color: var(--ink); text-align: left;
+  padding: 6px 8px; margin: -4px -2px -4px -8px; border-radius: 10px;
+}
+.chat-pane-heading:hover { background: var(--surface-2); }
+.chat-pane-heading:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+.chat-pane-heading .presence-bar { flex: none; }
 .chat-pane-members { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.chat-pane-member-count { font-size: 12px; font-weight: 600; color: var(--ink); white-space: nowrap; }
+.chat-pane-member-count { font-size: 12px; font-weight: 600; color: var(--muted); white-space: nowrap; flex: none; }
+.chat-pane-title {
+  flex: 1 1 auto; min-width: 0; text-align: center;
+  font-size: 15px; font-weight: 600; color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.chat-pane-heading-hint { color: var(--faint); flex: none; }
+.chat-pane-top-actions { flex: none; display: flex; align-items: center; gap: 8px; }
 .chat-connection { display: flex; align-items: center; gap: 6px; margin-left: auto; font-size: 11.5px; color: var(--muted); flex: none; }
 .chat-connection-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex: none; }
 .chat-connection[data-state="connected"] .chat-connection-dot { background: var(--consensus); }
@@ -261,74 +535,169 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
 
 .chat-message-list {
   flex: 1; min-height: 0; overflow-y: auto; list-style: none; margin: 0; padding: 14px 14px 6px;
-  display: flex; flex-direction: column; gap: 3px; scroll-behavior: smooth;
+  display: flex; flex-direction: column; gap: 0; scroll-behavior: smooth;
 }
-.chat-message-list > .chat-date-sep { margin: 14px 0 8px; }
+/* Conversation rhythm (ios-chat-design.md §5): 3pt inside one sender's run, 9pt when the
+   turn changes. The eye reads the dialogue's turns off the gaps alone. */
+.chat-message-list > .chat-date-sep { margin: 10px 0 6px; }
 .chat-message-list > .chat-message + .chat-message { margin-top: 3px; }
-.chat-message-list > .chat-message[data-group-start="true"] { margin-top: 12px; }
+.chat-message-list > .chat-message[data-group-start="true"] { margin-top: 9px; }
 
 .chat-date-sep { display: flex; justify-content: center; }
 .chat-date-sep span {
-  padding: 4px 12px; border-radius: 999px; background: var(--surface); color: var(--muted);
-  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
-  box-shadow: 0 1px 2px rgba(30, 36, 48, 0.06);
+  padding: 2px 8px; border-radius: 0; background: transparent; color: var(--muted);
+  font-size: 12px; font-weight: 400; text-transform: none; letter-spacing: 0;
+  box-shadow: none;
 }
 
-.chat-message { max-width: 74%; display: flex; flex-direction: column; animation: chat-message-in 0.15s ease-out; }
-@keyframes chat-message-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-.chat-message[data-self="true"] { align-self: flex-end; align-items: flex-end; }
-.chat-message[data-self="false"] { align-self: flex-start; align-items: flex-start; }
-.chat-message-header { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; padding: 0 2px; }
-.chat-message[data-self="true"] .chat-message-header { flex-direction: row-reverse; }
+/* Bubble max width ~82% (a touch tighter once the avatar gutter is added) so the empty
+   opposite margin is still the directional cue. */
+.chat-message { max-width: 82%; display: flex; flex-direction: column; animation: chat-message-in 0.2s ease-out; }
+@keyframes chat-message-in { from { opacity: 0; transform: translateY(4px) scale(0.96); } to { opacity: 1; transform: none; } }
+.chat-message[data-self="true"] { align-self: flex-end; }
+.chat-message[data-self="false"] { align-self: flex-start; }
+/* Avatar rides in a fixed 24px gutter beside the bubble column -- left of incoming, right of
+   outgoing (row-reverse). The gutter stays reserved on every row of a run so stacked bubbles
+   keep their edge; only the run's last row paints an avatar into it. */
+.chat-message-row { display: flex; align-items: flex-end; gap: 8px; }
+.chat-message[data-self="true"] .chat-message-row { flex-direction: row-reverse; }
+.chat-message-gutter { flex: none; width: 24px; align-self: flex-end; }
+.chat-message[data-author-kind="system"] .chat-message-gutter { display: none; }
+.chat-message-col { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
+.chat-message[data-self="true"] .chat-message-col { align-items: flex-end; }
 .chat-message-avatar { flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--muted); color: #fff; display: grid; place-items: center; font-size: 10.5px; font-weight: 700; }
 .chat-message[data-author-kind="assistant"] .chat-message-avatar { background: var(--wishlist); }
 .chat-message[data-author-kind="system"] .chat-message-avatar { background: var(--muted); }
-.chat-message-name { font-size: 12px; font-weight: 700; }
+.chat-message-name { font-size: 12px; font-weight: 700; margin: 0 0 3px; padding: 0 4px; color: var(--muted); }
 
+/* The bubble is iMessage's fundamental unit: flat (no border, no shadow), 19pt radius,
+   8pt/14pt padding, 17pt body text. Incoming is neutral grey and never tinted -- its
+   contrast against the blue is the entire point. */
 .chat-message-body {
-  margin: 0; padding: 8px 12px; border-radius: 16px; background: var(--surface);
-  border: 1px solid var(--line-strong); box-shadow: 0 1px 2px rgba(30, 36, 48, 0.05);
-  font-size: 13.5px; line-height: 1.42; overflow-wrap: anywhere; text-align: left; max-width: 100%;
+  margin: 0; padding: 8px 14px; border-radius: var(--r-bubble);
+  background: var(--imsg-in); border: 0; box-shadow: none; color: var(--imsg-in-text);
+  font-size: 17px; line-height: 1.3; letter-spacing: -0.4px;
+  overflow-wrap: anywhere; text-align: left; max-width: 100%;
 }
-/* Grouped consecutive bubbles get a "tail" on the first message of the group -- a tighter
-   corner on the side nearest the avatar -- and stay softly rounded through the rest, the same
-   asymmetric shape a real messaging app uses instead of one uniform pill per line. */
-.chat-message[data-self="false"][data-group-start="true"] .chat-message-body { border-top-left-radius: 5px; }
-.chat-message[data-self="true"][data-group-start="true"] .chat-message-body { border-top-right-radius: 5px; }
 .chat-message[data-self="true"] .chat-message-body {
-  background: var(--teal); border-color: var(--teal); color: #fff;
+  background: var(--imsg-out); color: var(--imsg-out-text);
 }
-.chat-message[data-author-kind="assistant"] .chat-message-body { background: var(--wishlist-soft); border-color: var(--wishlist); }
+/* The tail is the corner pinched to 6pt on the sender's edge, and it belongs to the LAST
+   bubble of a same-sender run -- not the first. A run ends where the next message starts a
+   new group, or at the end of the list, which is what these two selectors say. */
+.chat-message[data-self="false"]:last-child .chat-message-body,
+.chat-message[data-self="false"]:has(+ .chat-message[data-group-start="true"]) .chat-message-body {
+  border-bottom-left-radius: var(--r-tail);
+}
+.chat-message[data-self="true"]:last-child .chat-message-body,
+.chat-message[data-self="true"]:has(+ .chat-message[data-group-start="true"]) .chat-message-body {
+  border-bottom-right-radius: var(--r-tail);
+}
+/* Assistant and system are this product's own additions, not iMessage roles. They stay inside
+   the system palette (systemPurple tint / plain tertiary text) rather than inventing a hue. */
+.chat-message[data-author-kind="assistant"] .chat-message-body { background: var(--wishlist-soft); color: var(--ink); }
 .chat-message[data-author-kind="system"] .chat-message-body {
-  background: transparent; border: 1px dashed var(--line-strong); box-shadow: none; color: var(--muted); font-style: italic;
+  background: transparent; border: 0; box-shadow: none; color: var(--muted); font-style: normal;
+  font-size: 12px; text-align: center; padding: 2px 8px;
 }
 /* Trailing inline timestamp -- part of the paragraph's own text flow (not a hover reveal, so
    it works on touch too), the same way a real messaging bubble hugs its send time at the end
    of the last line rather than hiding it in a header shared by a whole grouped run. */
-.chat-message-time-inline { margin-left: 6px; font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.chat-message[data-self="true"] .chat-message-time-inline { color: rgba(255, 255, 255, 0.72); }
+.chat-message-time-inline { margin-left: 6px; font-size: 11px; color: var(--faint); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.chat-message[data-self="true"] .chat-message-time-inline { color: rgba(255, 255, 255, 0.7); }
 .chat-message[data-author-kind="system"] .chat-message-time-inline { display: none; }
 
-.chat-message-status { display: block; margin-top: 3px; padding: 0 2px; font-size: 11px; color: var(--muted); }
+/* "Sending..." / "Not sent" sit under the last outgoing bubble as tiny right-aligned
+   footnote text, the slot iMessage gives Delivered / Read. */
+.chat-message-status { display: block; margin-top: 2px; padding: 0 4px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.chat-message[data-self="true"] .chat-message-status { text-align: right; }
 .chat-message-failed { color: var(--error-dark); display: flex; align-items: center; gap: 6px; }
 .chat-message[data-self="true"] .chat-message-failed { justify-content: flex-end; }
 .chat-message-failed button { display: inline-flex; align-items: center; gap: 3px; border: 0; background: none; color: inherit; font-size: 11px; font-weight: 600; text-decoration: underline; padding: 0; }
 
-.chat-composer { display: flex; align-items: center; gap: 10px; padding: 12px 14px; flex: none; border-top: 1px solid var(--line); background: var(--surface); }
+/* Compose bar: blur-backed, pill field with a 1pt opaque border and a transparent fill,
+   trailing 30pt circular send button that greys out when the field is empty. */
+.chat-composer {
+  display: flex; align-items: flex-end; gap: 8px; padding: 8px 12px; flex: none;
+  border-top: 1px solid var(--line); background: var(--imsg-thread);
+}
 .chat-composer input {
-  flex: 1; min-height: 42px; padding: 10px 16px; border-radius: 999px; border: 1px solid var(--line-strong);
-  background: var(--canvas); transition: border-color 0.15s, background 0.15s;
+  flex: 1; min-height: 36px; padding: 7px 14px; border-radius: 18px;
+  border: 1px solid var(--line-strong); background: transparent; color: var(--ink);
+  font-size: 17px; letter-spacing: -0.4px; transition: border-color 0.15s;
 }
-.chat-composer input:focus { border-color: var(--teal); background: var(--surface); }
+.chat-composer input::placeholder { color: var(--faint); }
+.chat-composer input:focus { border-color: var(--teal); background: transparent; }
 .chat-composer .icon-button {
-  flex: none; width: 42px; height: 42px; border-radius: 50%; border-color: transparent;
-  background: var(--line); color: var(--muted); transition: background 0.15s, color 0.15s, transform 0.1s;
+  flex: none; width: 32px; height: 32px; border-radius: 50%; border-color: transparent;
+  background: var(--surface-2); color: var(--faint);
+  transition: background 0.15s, color 0.15s, transform 0.1s;
 }
-.chat-composer .icon-button:not(:disabled) { background: var(--teal); color: #fff; }
-.chat-composer .icon-button:hover:not(:disabled) { background: var(--teal-dark); transform: scale(1.05); }
+.chat-composer .icon-button:not(:disabled) { background: var(--imsg-out); color: #fff; }
+.chat-composer .icon-button:active:not(:disabled) { transform: scale(0.92); background: var(--teal-dark); }
+.chat-composer .icon-button svg { width: 16px; height: 16px; }
 .chat-assistant-note { margin: 0; border-radius: 0; flex: none; }
 
-.assistant-proposal-card { margin-top: 8px; padding: 12px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface); text-align: left; }
+/* ---------- Group info (reached by pressing the chat header -- wireframe panels 2-3).
+   Centred group identity + a quick-action row, then a Members / Setting segmented control
+   over a plain titled list. Rendered in place of the thread. ---------- */
+.group-info { display: flex; flex-direction: column; background: var(--imsg-thread); }
+.chat-pane > .group-info { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.group-info-top { padding: 8px 12px 0; }
+.group-info-back {
+  width: 32px; height: 32px; border: 0; border-radius: 999px; background: none;
+  color: var(--ink); display: grid; place-items: center;
+}
+.group-info-back:hover { background: var(--surface-2); }
+.group-info-head {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 4px 16px 18px; border-bottom: 1px solid var(--line);
+}
+.group-info-avatar {
+  width: 72px; height: 72px; border-radius: 999px;
+  background: var(--surface-2); color: var(--ink); display: grid; place-items: center;
+}
+.group-info-name { margin: 2px 0 0; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; text-align: center; }
+.group-info-quick { display: flex; gap: 26px; margin-top: 6px; }
+.group-info-quick-item {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  border: 0; background: none; color: var(--ink); font-size: 11px; font-weight: 500;
+}
+.group-info-quick-item span { color: var(--muted); }
+.group-info-quick-item:hover { color: var(--blue); }
+.group-info-quick-item:hover span { color: var(--blue); }
+.group-info-tabs {
+  align-self: center; display: flex; gap: 4px; margin: 16px 0;
+  padding: 3px; background: var(--surface-2); border-radius: 999px;
+}
+.group-info-tab {
+  border: 0; background: none; padding: 6px 22px; border-radius: 999px;
+  font-size: 13px; font-weight: 600; color: var(--muted);
+}
+.group-info-tab[data-active="true"] {
+  background: var(--surface); color: var(--ink);
+  box-shadow: 0 1px 2px rgba(17, 18, 22, 0.10);
+}
+.group-info-list { list-style: none; margin: 0; padding: 0 0 24px; }
+.group-info-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 20px; border-bottom: 1px solid var(--line);
+}
+.group-info-row-link, .group-info-row-action { cursor: pointer; }
+.group-info-row-link:hover, .group-info-row-action:hover { background: var(--surface-2); }
+.group-info-row-icon {
+  flex: none; width: 34px; height: 34px; border-radius: 999px;
+  border: 1px solid var(--line-strong); display: grid; place-items: center; color: var(--ink);
+}
+.group-info-member-avatar {
+  flex: none; width: 34px; height: 34px; border-radius: 999px;
+  display: grid; place-items: center; color: #fff; font-size: 13px; font-weight: 700;
+}
+.group-info-row-label { flex: 1; min-width: 0; font-size: 15px; color: var(--ink); }
+.group-info-row-action .group-info-row-label { font-weight: 600; }
+.group-info-row-chevron { flex: none; color: var(--faint); }
+
+.assistant-proposal-card { margin-top: 8px; padding: 12px; border: 1px solid var(--line); border-radius: var(--r-standard); background: var(--surface); text-align: left; }
 .assistant-proposal-missing { margin: 8px 0 0; font-size: 12px; font-style: italic; color: var(--muted); }
 
 /* ---------- Active-itinerary calendar timeline (Task 3.4) ---------- */
@@ -596,7 +965,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
 .onb-btn { flex: 1; min-height: 46px; padding: 12px 16px; border-radius: 12px; border: 1px solid transparent; font-size: 14px; font-weight: 700; }
 .onb-btn-ghost { flex: 0 0 auto; min-width: 96px; background: transparent; border-color: var(--line-strong); color: var(--muted); }
 .onb-btn-ghost:hover:not(:disabled) { color: var(--ink); border-color: var(--muted); }
-.onb-btn-primary { background: var(--teal); color: #fff; }
+.onb-btn-primary { background: var(--teal); color: var(--on-accent); }
 .onb-btn-primary:hover:not(:disabled) { background: var(--teal-dark); }
 
 .onb-sheet .flag-chip { display: inline-flex; align-items: center; gap: 6px; }
@@ -612,7 +981,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
 .onb-toggle button[aria-pressed="true"] b { color: var(--teal-dark); }
 
 .onb-done { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 40px 28px 34px; text-align: center; }
-.onb-mark { width: 56px; height: 56px; margin-bottom: 10px; display: grid; place-items: center; border-radius: 999px; background: var(--teal); color: #fff; }
+.onb-mark { width: 56px; height: 56px; margin-bottom: 10px; display: grid; place-items: center; border-radius: 999px; background: var(--teal); color: var(--on-accent); }
 .onb-done h2 { margin: 0; font-size: 18px; outline: none; }
 .onb-done p { margin: 0; font-size: 13px; color: var(--muted); }
 .onb-summary { margin-top: 18px; width: 100%; border: 1px solid var(--line-strong); border-radius: 12px; text-align: left; font-size: 12.5px; }
@@ -625,21 +994,95 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
   .onb-sheet { border-radius: 18px; }
 }
 
-/* Chat-group home (spec 2026-09-06-first-login-travel-dna-chat-groups §2.3). */
-.chat-home-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-.chat-home-row { border: 1px solid var(--line-strong); border-radius: 8px; }
-.chat-home-link { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "name avatars" "meta avatars" "preview preview"; gap: 4px 12px; padding: 12px 14px; text-decoration: none; color: inherit; }
-.chat-home-link:hover { background: var(--teal-soft); }
-.chat-home-name { grid-area: name; font-weight: 600; }
-.chat-home-link .field-hint { grid-area: meta; margin: 0; }
-.chat-home-preview { grid-area: preview; font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chat-home-avatars { grid-area: avatars; display: flex; align-items: center; }
+/* ---------- Chat-group home as the iOS Messages conversation list ----------
+   ios-chat-design.md §4 "Conversation List": large title, search field, then
+   rows of leading circular avatar / name / 2-line preview / trailing timestamp,
+   separated by inset hairlines rather than cards. No dividers survive into the
+   thread itself -- those live only here, on the list. ---------------------- */
+.msg-list-screen { max-width: 680px; margin: 0 auto; padding: 20px 0 24px; }
+.msg-list-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding: 8px 0 10px; }
+.msg-large-title { font-size: 32px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; margin: 0; }
+.msg-compose-button {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; border: 0; border-radius: 50%; background: transparent;
+  color: var(--teal); cursor: pointer; transition: opacity 0.15s;
+}
+.msg-compose-button:hover { background: var(--teal-soft); }
+.msg-compose-button:active { opacity: 0.3; }
+
+/* Search field: 36pt, systemGray5 fill, 10pt radius, magnifier in tertiaryLabel. */
+.msg-search {
+  display: flex; align-items: center; gap: 7px; height: 36px; padding: 0 10px;
+  margin-bottom: 8px; border-radius: var(--r-subtle); background: var(--surface-2); color: var(--faint);
+}
+.msg-search input {
+  flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; background: transparent;
+  font-size: 17px; color: var(--ink); min-height: 0;
+}
+.msg-search input::placeholder { color: var(--faint); }
+.msg-search input:focus { outline: none; box-shadow: none; }
+.msg-search input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+
+.msg-rows { list-style: none; margin: 0; padding: 0; background: var(--surface); border-radius: var(--r-standard); overflow: hidden; box-shadow: var(--shadow-card); }
+.msg-row + .msg-row .msg-row-link::before {
+  /* Inset hairline aligned to the text column, the way a grouped iOS table draws it:
+     8px row padding + 10px unread dot + 12px gap + 104px avatar column + 12px gap. */
+  content: ""; position: absolute; left: 146px; right: 0; top: 0; height: 1px; background: var(--line);
+}
+.msg-row-link {
+  position: relative; display: flex; align-items: center; gap: 12px;
+  min-height: 60px; padding: 10px 14px 10px 8px; text-decoration: none; color: inherit;
+}
+.msg-row-link:hover { background: var(--teal-soft); }
+.msg-row-link:active { background: var(--surface-2); }
+
+/* Leading unread dot occupies its own 10pt column so names stay aligned whether or
+   not a row is unread -- it is only painted when the row carries unread state. */
+.msg-row-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: transparent; }
+.msg-row[data-unread="true"] .msg-row-dot { background: var(--blue); }
+
+/* Fixed-width avatar column (three 44px avatars overlapped by 14px = 104px) so the name and
+   preview columns line up down the list no matter how many members a group has. */
+.msg-row-avatars { flex: none; display: flex; align-items: center; width: 104px; }
+.msg-row-avatar {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; margin-left: -14px; border-radius: 50%;
+  border: 2px solid var(--surface); color: #fff; font-size: 15px; font-weight: 600;
+}
+.msg-row-avatars .msg-row-avatar:first-child { margin-left: 0; }
+
+.msg-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.msg-row-top { display: flex; align-items: baseline; gap: 8px; }
+.msg-row-name { flex: 1; min-width: 0; font-size: 17px; font-weight: 600; letter-spacing: -0.4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.msg-row-time { flex: none; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.msg-row-preview {
+  font-size: 15px; line-height: 1.35; letter-spacing: -0.2px; color: var(--muted);
+  display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.msg-row-meta { font-size: 13px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.msg-row-badge {
+  flex: none; min-width: 22px; height: 22px; padding: 0 7px; border-radius: var(--r-capsule);
+  background: var(--teal); color: var(--on-accent); font-size: 13px; font-weight: 600;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+
+.msg-empty { display: grid; gap: 12px; justify-items: start; padding: 20px 0; color: var(--muted); font-size: 15px; }
+.msg-empty p { margin: 0; }
+.msg-no-results { margin: 20px 0; font-size: 15px; color: var(--muted); text-align: center; }
+
+@media (max-width: 520px) {
+  .msg-large-title { font-size: 30px; }
+  .msg-rows { border-radius: 0; margin: 0 -20px; }
+  .msg-row + .msg-row .msg-row-link::before { left: 140px; }
+}
+
+/* Legacy .chat-home-* rules kept only where the create form still uses them. */
 .chat-home-avatar { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; margin-left: -6px; border-radius: 999px; border: 2px solid var(--surface); color: #fff; font-size: 11px; font-weight: 700; }
 .chat-home-row > .field-hint { margin: 0; padding: 0 14px 10px; }
 .chat-home-form { max-width: 520px; margin: 0 auto 20px; display: flex; flex-direction: column; gap: 12px; }
 .chat-home-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 600; }
-.chat-home-form input:not([type="checkbox"]):not([type="radio"]), .chat-home-form select { min-height: 40px; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: 5px; font-size: 13px; }
-.chat-home-form fieldset { border: 1px solid var(--line-strong); border-radius: 6px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.chat-home-form input:not([type="checkbox"]):not([type="radio"]), .chat-home-form select { min-height: 44px; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: var(--r-standard); font-size: 13px; }
+.chat-home-form fieldset { border: 0; border-radius: var(--r-standard); padding: 12px 14px; background: var(--canvas); display: flex; flex-direction: column; gap: 6px; }
 .chat-home-form fieldset label { flex-direction: row; align-items: center; gap: 8px; font-weight: 500; }
 .chat-home-dates { display: flex; gap: 12px; }
 .chat-home-dates label { flex: 1; }
@@ -647,15 +1090,15 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
 /* Per-trip member entry (spec 2026-09-06-first-login-travel-dna-chat-groups §2.4). */
 .member-entry { max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; padding-bottom: 32px; }
 .member-entry h2 { margin: 0 0 8px; font-size: 15px; }
-.member-entry-preview, .member-entry-alignment { border: 1px solid var(--line-strong); border-radius: 8px; padding: 14px; }
+.member-entry-preview, .member-entry-alignment { border: 0; border-radius: var(--r-standard); padding: 16px; background: var(--surface); box-shadow: var(--shadow-card); }
 .member-entry-preview dl { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
 .member-entry-preview dt { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
 .member-entry-preview dd { margin: 2px 0 0; font-size: 13px; font-weight: 600; }
 .member-entry-alignment ul { margin: 8px 0 0; padding-left: 18px; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
 .member-entry-form { display: flex; flex-direction: column; gap: 14px; }
 .member-entry-form > label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 600; }
-.member-entry-form select, .member-entry-form input[type="date"] { min-height: 40px; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: 5px; font-size: 13px; }
-.member-entry-form fieldset { border: 1px solid var(--line-strong); border-radius: 6px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; margin: 0; }
+.member-entry-form select, .member-entry-form input[type="date"] { min-height: 44px; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: var(--r-standard); font-size: 13px; }
+.member-entry-form fieldset { border: 0; border-radius: var(--r-standard); padding: 12px 14px; background: var(--canvas); display: flex; flex-direction: column; gap: 6px; margin: 0; }
 .member-entry-form fieldset label { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .member-entry-dates { display: flex; gap: 12px; }
 .member-entry-dates label { flex: 1; display: flex; flex-direction: column; gap: 4px; font-weight: 600; }
@@ -666,39 +1109,72 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
    there; a trip's Chat/Plan/Timeline/Your prefs section only appears while that trip is open.
    Desktop keeps the sidebar always visible; under 900px it collapses into an off-canvas drawer
    opened from the mobile top bar instead of a permanent rail. ---------- */
-.shell { display: flex; flex-direction: column; min-height: 100dvh; }
+.shell { display: flex; flex-direction: column; min-height: 100dvh; background: var(--canvas); }
 .mobile-topbar { display: none; }
-.shell-body { display: flex; flex: 1 1 auto; min-height: 0; }
+/* Desktop: sidebar + content float as separate rounded cards on the grey ground, with a
+   gutter around and between them -- the mockup's shell layout. */
+.shell-body { display: flex; flex: 1 1 auto; min-height: 0; gap: 16px; padding: 16px; }
 .app-sidebar-backdrop { display: none; }
 
 .app-sidebar {
-  flex: 0 0 232px; display: flex; flex-direction: column; gap: 4px;
-  padding: 20px 14px; border-right: 1px solid var(--line); background: var(--surface);
-  overflow-y: auto;
+  flex: 0 0 var(--sidebar-w, 240px); display: flex; flex-direction: column; gap: 4px;
+  padding: 18px 16px 18px 14px; border: 0; border-radius: var(--r-comfortable); background: var(--surface);
+  box-shadow: var(--shadow-card); overflow-y: auto; overflow-x: hidden; position: relative;
+  transition: flex-basis 0.18s ease;
 }
-.app-sidebar-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 18px; }
+.app-sidebar[data-dragging="true"] { transition: none; user-select: none; }
+.app-sidebar[data-collapsed="true"] { flex-basis: 76px; padding: 18px 12px; align-items: stretch; }
+.app-sidebar[data-collapsed="true"] .app-sidebar-heading,
+.app-sidebar[data-collapsed="true"] .app-sidebar-email,
+.app-sidebar[data-collapsed="true"] .app-sidebar-link span,
+.app-sidebar[data-collapsed="true"] .brand-block strong { display: none; }
+.app-sidebar[data-collapsed="true"] .app-sidebar-link,
+.app-sidebar[data-collapsed="true"] .app-sidebar-head { justify-content: center; }
+.app-sidebar[data-collapsed="true"] .app-sidebar-link { padding: 8px 0; }
+
+.app-sidebar-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 16px; }
 .app-sidebar-head .brand-block { color: var(--ink); }
-.app-sidebar-head .brand-block > svg { color: var(--teal); }
+.app-sidebar-head .brand-block > svg { color: var(--ink); }
+/* Fold / unfold control -- collapses the rail to an icons-only strip and back. */
+.app-sidebar-collapse {
+  flex: none; width: 30px; height: 30px; display: inline-grid; place-items: center; padding: 0;
+  border: 0; border-radius: 8px; background: transparent; color: var(--faint); cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.app-sidebar-collapse:hover { background: var(--surface-2); color: var(--ink); }
 .app-sidebar-close { display: none; }
 .app-sidebar-nav { display: flex; flex-direction: column; gap: 2px; }
 .app-sidebar-heading {
-  margin: 18px 0 4px; padding: 0 10px; font-size: 11px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.06em; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  margin: 16px 0 4px; padding: 0 10px; font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .app-sidebar-link {
-  display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 8px 10px; margin: 0; width: 100%;
-  border: 0; border-radius: 8px; background: none; color: var(--muted); font-size: 13.5px; font-weight: 600;
-  text-decoration: none; text-align: left; cursor: pointer;
+  display: flex; align-items: center; gap: 11px; min-height: 40px; padding: 8px 12px; margin: 0; width: 100%;
+  border: 0; border-radius: var(--r-capsule); background: none; color: var(--muted); font-size: 13.5px; font-weight: 600;
+  text-decoration: none; text-align: left; cursor: pointer; transition: background 0.15s, color 0.15s;
 }
-.app-sidebar-link svg { width: 17px; height: 17px; flex: none; }
-.app-sidebar-link:hover:not([aria-disabled="true"]) { background: var(--canvas); color: var(--ink); }
-.app-sidebar-link[aria-current="page"] { background: var(--teal-soft); color: var(--teal-dark); }
+.app-sidebar-link svg { width: 18px; height: 18px; flex: none; }
+.app-sidebar-link:hover:not([aria-disabled="true"]) { background: var(--surface-2); color: var(--ink); }
+.app-sidebar-link[aria-current="page"] { background: var(--teal); color: var(--on-accent); }
+.app-sidebar-link[aria-current="page"]:hover { background: var(--teal-dark); color: var(--on-accent); }
 .app-sidebar-link[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
 .app-sidebar-spacer { flex: 1 1 auto; }
-.app-sidebar-email { margin: 4px 10px; font-size: 11.5px; color: var(--muted); overflow-wrap: anywhere; }
+.app-sidebar-email { margin: 4px 12px; font-size: 11.5px; color: var(--faint); overflow-wrap: anywhere; }
 .app-sidebar-logout:hover { background: var(--error-soft); color: var(--error-dark); }
+/* Drag the right edge to resize the rail (desktop only; see app-shell.tsx). Sits inside the
+   card's right padding so it never overlaps a nav label. */
+.app-sidebar-resize {
+  position: absolute; top: 0; right: 0; width: 14px; min-height: 100%; height: 100%; border: 0; padding: 0;
+  background: transparent; cursor: col-resize; z-index: 5; touch-action: none;
+}
+.app-sidebar-resize::after {
+  content: ""; position: absolute; top: 50%; right: 3px; transform: translateY(-50%);
+  width: 4px; height: 44px; border-radius: 999px; background: var(--line-strong); opacity: 0;
+  transition: opacity 0.15s;
+}
+.app-sidebar-resize:hover::after, .app-sidebar[data-dragging="true"] .app-sidebar-resize::after { opacity: 1; }
 
-.settings-signout { max-width: 440px; margin: 24px 0 0; padding: 20px; border: 1px solid var(--line-strong); border-radius: 16px; background: var(--surface); }
+.settings-signout { max-width: 440px; margin: 20px auto 0; padding: 20px 24px; border: 0; border-radius: var(--r-comfortable); background: var(--surface); box-shadow: var(--shadow-card); }
 .settings-signout h2 { margin: 0 0 4px; font-size: 15px; }
 .settings-signout .field-hint { margin: 0; }
 .settings-signout form { margin-top: 14px; }
@@ -722,21 +1198,40 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
 }
 
 @media (max-width: 900px) {
+  /* Blur-backed like the chat header (ios-chat-design.md's nav-bar material), and carries a
+     two-line title: the page/trip name plus, when a trip section is open, which section --
+     mobile has no visible sidebar to read that from otherwise. */
   .mobile-topbar {
-    display: flex; align-items: center; gap: 10px; flex: none; padding: 10px 16px;
-    border-bottom: 1px solid var(--line); background: var(--surface);
+    display: flex; align-items: center; gap: 10px; flex: none; padding: 8px 12px;
+    border-bottom: 1px solid var(--line);
+    background: color-mix(in srgb, var(--surface) 82%, transparent);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
   }
+  .mobile-topbar-titles { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
   .mobile-topbar-title { font-family: var(--font-display); font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mobile-topbar-section { font-size: 11.5px; font-weight: 500; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .app-sidebar-backdrop {
     display: block; position: fixed; inset: 0; z-index: 29; margin: 0; padding: 0; border: 0;
     background: rgba(16, 18, 24, 0.4); cursor: default;
   }
+  .shell-body { gap: 0; padding: 0; }
   .app-sidebar {
     position: fixed; inset: 0 auto 0 0; z-index: 30; width: min(280px, 82vw); flex: none;
-    transform: translateX(-100%); transition: transform 0.2s ease; box-shadow: 2px 0 16px rgba(0, 0, 0, 0.12);
+    border-radius: 0; box-shadow: 2px 0 16px rgba(0, 0, 0, 0.12);
+    transform: translateX(-100%); transition: transform 0.2s ease;
     padding-top: calc(20px + env(safe-area-inset-top, 0px)); padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
   }
   .app-sidebar[data-open="true"] { transform: translateX(0); }
+  /* The desktop-only fold/resize affordances don't apply to the drawer -- and a fold state
+     saved on desktop must not hide the drawer's labels. */
+  .app-sidebar[data-collapsed="true"] { flex-basis: auto; padding-left: 14px; padding-right: 14px; }
+  .app-sidebar[data-collapsed="true"] .app-sidebar-heading,
+  .app-sidebar[data-collapsed="true"] .app-sidebar-email,
+  .app-sidebar[data-collapsed="true"] .app-sidebar-link span,
+  .app-sidebar[data-collapsed="true"] .brand-block strong { display: revert; }
+  .app-sidebar[data-collapsed="true"] .app-sidebar-link { padding: 8px 12px; justify-content: flex-start; }
+  .app-sidebar-collapse, .app-sidebar-resize { display: none; }
   .app-sidebar-close { display: inline-grid; }
 }
 
@@ -745,19 +1240,23 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
    is true (see lib/prototype/config.ts). None of it affects the real app.
    ========================================================================== */
 
+/* System notice, not a branded strip: systemOrange only as the leading glyph, body copy in
+   secondaryLabel on the ordinary elevated surface. */
 .demo-banner {
-  display: flex; align-items: center; gap: 8px; margin: 0; padding: 7px 16px;
-  background: var(--flexible-soft); color: var(--flexible-dark);
-  border-bottom: 1px solid var(--line-strong); font-size: 12px; line-height: 1.4;
+  display: flex; align-items: center; gap: 8px; margin: 0; padding: 8px 16px;
+  background: var(--surface); color: var(--muted);
+  border-bottom: 1px solid var(--line); font-size: 13px; line-height: 1.4;
 }
+.demo-banner strong { color: var(--ink); font-weight: 600; }
+.demo-banner > svg { color: var(--flexible); }
 .demo-banner svg { width: 15px; height: 15px; flex: none; }
 .demo-hint { margin: 6px 0 0; font-size: 11.5px; color: var(--muted); font-style: italic; }
 .ghost-button {
-  display: inline-flex; align-items: center; gap: 6px; min-height: 42px; padding: 10px 12px;
-  border: 1px solid transparent; border-radius: 5px; background: transparent;
-  color: var(--muted); font-size: 13px; font-weight: 600;
+  display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 10px 14px;
+  border: 0; border-radius: var(--r-standard); background: transparent;
+  color: var(--muted); font-size: 13px; font-weight: 600; transition: background 0.15s, color 0.15s;
 }
-.ghost-button:hover { color: var(--ink); }
+.ghost-button:hover { color: var(--ink); background: var(--canvas); }
 
 /* Prototype chat: a plain scrolling column (not the fixed-composer .chat-pane), so the
    extraction panel and composer flow after the messages and the page scrolls. The parent
@@ -766,17 +1265,20 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
 /* The route map is a full-bleed canvas with its own floating chrome: kill the shell padding
    and let it fill the content area. */
 .app-shell:has(> .workspace-main) > .workspace-main:has(> .map-screen) { padding: 0; position: relative; overflow: hidden; }
-.demo-chat { display: flex; flex-direction: column; gap: 8px; padding-bottom: 24px; }
+/* The prototype thread is still a thread: it gets the bare thread canvas (white / true black),
+   not the grouped-grey app ground, matching .chat-pane above. */
+.demo-chat { display: flex; flex-direction: column; gap: 8px; padding-bottom: 24px; background: var(--imsg-thread); }
 .demo-chat .chat-message-list { flex: none; overflow: visible; padding: 8px 0; }
 .demo-chat .chat-composer { position: sticky; bottom: 0; border: 1px solid var(--line); border-radius: 10px; }
 
 /* Chat preference extraction ------------------------------------------------- */
 .signal-panel {
-  margin: 10px 0 6px; padding: 12px; border: 1px solid var(--line-strong);
-  border-radius: 10px; background: var(--surface);
+  margin: 10px 0 6px; padding: 14px; border: 0;
+  border-radius: var(--r-standard); background: var(--surface); box-shadow: var(--shadow-card);
 }
+.signal-panel[open] .signal-panel-head { margin-bottom: 10px; }
 .signal-panel-head {
-  display: flex; align-items: center; gap: 8px; margin: 0 0 10px;
+  display: flex; align-items: center; gap: 8px; margin: 0;
   font-size: 12.5px; font-weight: 600; color: var(--ink);
 }
 .signal-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
@@ -834,14 +1336,14 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
 .cal-empty { position: absolute; inset: 40px 8px auto; margin: 0; font-size: 12px; color: var(--muted); }
 
 .demo-pool {
-  border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface);
-  padding: 12px; max-height: 620px; overflow: auto;
+  border: 0; border-radius: var(--r-standard); background: var(--surface); box-shadow: var(--shadow-card);
+  padding: 14px; max-height: 620px; overflow: auto;
 }
 .demo-pool h3 { margin: 0 0 8px; font-size: 13px; }
 .demo-pool ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .demo-pool-card {
   display: flex; gap: 8px; align-items: flex-start; justify-content: space-between;
-  padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--canvas);
+  padding: 10px; border: 0; border-radius: var(--r-subtle); background: var(--canvas);
 }
 .demo-pool-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .demo-pool-body strong { font-size: 12.5px; }
@@ -854,7 +1356,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
 .demo-pool-card button { flex: none; min-height: 34px; padding: 6px 9px; font-size: 11.5px; white-space: nowrap; }
 
 /* Daily rhythm ----------------------------------------------------------- */
-.daily-rhythm { margin: 8px 0; padding: 14px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface); }
+.daily-rhythm { margin: 8px 0; padding: 16px; border: 0; border-radius: var(--r-standard); background: var(--surface); box-shadow: var(--shadow-card); }
 .daily-rhythm h2 { margin: 0 0 4px; font-size: 15px; }
 .daily-rhythm-inputs { display: flex; gap: 14px; flex-wrap: wrap; margin: 10px 0; }
 .daily-rhythm-inputs label { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; }
@@ -870,17 +1372,24 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
 .rhythm-result .demo-hint { display: inline; font-weight: 400; }
 
 /* Preference survey ---------------------------------------------------- */
-.pref-survey { max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; padding-bottom: 32px; }
+/* Settings unification: PreferenceSurvey renders through the same on-system sheet card
+   (surface, comfortable radius, floating shadow) as UserOnboardingWizard's .onb-sheet, so
+   /settings reads as one consistent container no matter which editor is mounted inside it. */
+.pref-survey {
+  max-width: 620px; width: 100%; margin: 0 auto; padding: 32px;
+  display: flex; flex-direction: column; gap: 18px;
+  background: var(--surface); border-radius: var(--r-comfortable); box-shadow: var(--shadow-card);
+}
 .pref-survey > label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; font-weight: 600; }
-.pref-survey select { padding: 8px; border: 1px solid var(--line-strong); border-radius: 5px; font: inherit; }
-.pref-rank, .pref-role { border: 1px solid var(--line-strong); border-radius: 9px; padding: 12px; }
+.pref-rank, .pref-role { border: 0; border-radius: var(--r-standard); padding: 14px; background: var(--surface-2); margin: 0; }
 .pref-rank legend, .pref-role legend { padding: 0 6px; font-size: 12px; font-weight: 700; }
 .pref-rank ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.pref-rank li { display: flex; align-items: center; gap: 10px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--canvas); }
-.pref-rank-num { width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; background: var(--teal); color: #fff; font-size: 11px; font-weight: 700; flex: none; }
+.pref-rank li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 0; border-radius: var(--r-subtle); background: var(--surface); }
+.pref-rank-num { width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; background: var(--teal); color: var(--on-accent); font-size: 11px; font-weight: 700; flex: none; }
 .pref-rank-label { flex: 1; font-size: 13px; }
 .pref-rank-controls { display: flex; gap: 4px; }
-.pref-rank-controls button { width: 28px; height: 28px; display: grid; place-items: center; border: 1px solid var(--line-strong); border-radius: 5px; background: var(--surface); }
+.pref-rank-controls button { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid var(--line-strong); border-radius: var(--r-subtle); background: var(--surface); color: var(--muted); }
+.pref-rank-controls button:hover:not(:disabled) { border-color: var(--teal); color: var(--teal-dark); }
 .pref-rank-controls button:disabled { opacity: 0.35; }
 .pref-role label { display: flex; align-items: flex-start; gap: 8px; padding: 5px 0; font-size: 12.5px; font-weight: 400; }
 .pref-walk { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; }
@@ -898,7 +1407,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
    ========================================================================== */
 
 .jigsaw-view, .budget-view, .vqa-view, .pack-view {
-  max-width: 620px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; padding-bottom: 40px;
+  max-width: 680px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; padding: 20px 0 40px;
 }
 
 /* Shared small pieces */
@@ -1008,13 +1517,13 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
 
 /* Budget ledger */
 .bud-balances { display: flex; flex-direction: column; gap: 8px; }
-.bud-balance { display: grid; grid-template-columns: 24px 1fr auto; align-items: center; gap: 10px; padding: 11px 13px; border: 1px solid var(--line-strong); border-radius: 11px; background: var(--surface); }
+.bud-balance { display: grid; grid-template-columns: 24px 1fr auto; align-items: center; gap: 10px; padding: 12px 14px; border: 0; border-radius: var(--r-standard); background: var(--surface); }
 .bud-balance-name { font-size: 13px; font-weight: 600; }
 .bud-balance-paid { grid-column: 2; grid-row: 2; font-size: 11px; color: var(--muted); }
 .bud-balance-net { grid-column: 3; grid-row: 1 / span 2; font-size: 12.5px; font-variant-numeric: tabular-nums; }
 .bud-balance[data-state="up"] .bud-balance-net { color: var(--consensus); }
 .bud-balance[data-state="down"] .bud-balance-net { color: var(--error); }
-.bud-settle, .bud-list { padding: 14px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface); }
+.bud-settle, .bud-list { padding: 16px; border: 0; border-radius: var(--r-standard); background: var(--surface); box-shadow: var(--shadow-card); }
 .bud-transfers { list-style: none; margin: 10px 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .bud-transfer { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 10px; background: var(--canvas); }
 .bud-transfer[data-done="true"] { opacity: 0.5; text-decoration: line-through; }
@@ -1028,7 +1537,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
 .bud-expense-amount { font-size: 12.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 /* Food-safety check */
-.vqa-card { display: flex; gap: 12px; align-items: center; padding: 12px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface); }
+.vqa-card { display: flex; gap: 12px; align-items: center; padding: 14px; border: 0; border-radius: var(--r-standard); background: var(--surface); box-shadow: var(--shadow-card); }
 .vqa-dish { width: 150px; height: 105px; flex: none; border-radius: 9px; }
 .vqa-meta { display: flex; flex-direction: column; gap: 3px; }
 .vqa-meta strong { font-size: 14px; }
@@ -1040,7 +1549,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
 .vqa-verdict strong { display: block; font-size: 14px; margin-bottom: 4px; }
 .vqa-verdict p { margin: 0; font-size: 12.5px; line-height: 1.55; }
 .vqa-affected { display: flex; align-items: center; gap: 9px; padding: 10px 12px; border-radius: 10px; background: var(--canvas); border: 1px solid var(--line); font-size: 12.5px; }
-.vqa-detected { padding: 14px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface); }
+.vqa-detected { padding: 16px; border: 0; border-radius: var(--r-standard); background: var(--surface); box-shadow: var(--shadow-card); }
 .vqa-detected h2 { margin: 0 0 4px; font-size: 14px; }
 .vqa-detected ul { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
 .vqa-detected li { display: grid; grid-template-columns: 1fr 90px 34px; align-items: center; gap: 10px; font-size: 12.5px; }
@@ -1053,18 +1562,20 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
 .vqa-alt { margin: 0; padding: 11px 13px; border-radius: 10px; background: var(--teal-soft); font-size: 12.5px; line-height: 1.55; }
 
 /* Packing */
-.pack-count { padding: 5px 12px; border-radius: 999px; background: var(--teal); color: #fff; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.pack-group { padding: 14px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface); }
+.pack-count { padding: 5px 12px; border-radius: 999px; background: var(--teal); color: var(--on-accent); font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pack-group { padding: 16px; border: 0; border-radius: var(--r-standard); background: var(--surface); box-shadow: var(--shadow-card); }
 .pack-group-head { display: flex; align-items: center; gap: 7px; }
 .pack-group-head h2 { margin: 0; font-size: 14px; }
 .pack-group-count { margin-left: auto; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .pack-source { margin: 4px 0 10px; font-size: 11.5px; color: var(--muted); }
 .pack-group ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
-.pack-item { display: flex; align-items: flex-start; gap: 10px; padding: 9px 10px; border-radius: 9px; cursor: pointer; transition: background 0.15s; }
-.pack-item:hover { background: var(--canvas); }
-.pack-item input { margin-top: 2px; }
+.pack-item { list-style: none; border-radius: var(--r-subtle); transition: background 0.15s; }
+.pack-item:hover { background: var(--surface-2); }
+.pack-item .checkbox-wrapper .terms-label { align-items: flex-start; padding: 8px 10px; }
+.pack-item .checkbox-wrapper .checkbox-svg { margin-top: 1px; }
 .pack-item-text { display: flex; flex-direction: column; gap: 1px; }
-.pack-item-text strong { font-size: 12.5px; }
+.pack-item-text strong { font-size: 13px; font-weight: 600; display: block; }
+.pack-item-text .field-hint { margin: 0; }
 .pack-item[data-done="true"] .pack-item-text strong { text-decoration: line-through; color: var(--muted); }
 
 /* Weather disruption (on the timeline) */
@@ -1118,7 +1629,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
 .map-fab-sm { width: 36px; height: 36px; }
 .map-fab-sm svg { width: 16px; height: 16px; }
 .map-fab-view { width: auto; min-width: 42px; height: 42px; padding: 0 12px 0 10px; gap: 5px; font-size: 12px; font-weight: 700; color: var(--ink); }
-.map-fab-view[data-on="true"] { background: var(--teal); color: #fff; }
+.map-fab-view[data-on="true"] { background: var(--teal); color: var(--on-accent); }
 .map-fab-view[data-on="true"] svg { color: #fff; }
 .map-layer-fallback {
   background:
@@ -1168,7 +1679,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
   transition: background 0.2s, color 0.2s, transform 0.15s;
 }
 .map-daychip:active { transform: scale(0.96); }
-.map-daychip[data-active="true"] { background: var(--teal); color: #fff; }
+.map-daychip[data-active="true"] { background: var(--teal); color: var(--on-accent); }
 
 /* Edge controls */
 .map-screen-controls { position: absolute; right: 12px; z-index: 6; bottom: calc(var(--sheet-peek, 216px) + 14px); display: flex; flex-direction: column; gap: 10px; transition: bottom 0.42s cubic-bezier(0.22,1,0.36,1); }
@@ -1229,7 +1740,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
 .map-stoplist ol { list-style: none; margin: 0; padding: 0; }
 .map-stop { animation: chipRise 0.3s ease backwards; animation-delay: calc(var(--i) * 45ms); }
 .map-stop-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
-.map-stop-num { width: 22px; height: 22px; flex: none; display: grid; place-items: center; border-radius: 50%; background: var(--teal); color: #fff; font-size: 11px; font-weight: 700; }
+.map-stop-num { width: 22px; height: 22px; flex: none; display: grid; place-items: center; border-radius: 50%; background: var(--teal); color: var(--on-accent); font-size: 11px; font-weight: 700; }
 .map-stop-name { flex: 1; font-size: 13.5px; font-weight: 600; }
 .map-stop-time { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .map-stop-leg { display: flex; align-items: center; gap: 6px; margin-left: 10px; padding: 2px 0 6px 20px; position: relative; font-size: 11.5px; color: var(--muted); }
@@ -1246,7 +1757,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
 .map-steps-dist { flex: none; color: var(--muted); font-variant-numeric: tabular-nums; }
 .maneuver-icon {
   flex: none; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 8px;
-  background: var(--teal); color: #fff;
+  background: var(--teal); color: var(--on-accent);
 }
 .maneuver-icon-dest { background: var(--blue); }
 
@@ -1301,7 +1812,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
 .nav-card {
   position: absolute; top: 12px; left: 12px; right: 12px;
   display: flex; align-items: center; gap: 12px; padding: 13px 14px; border-radius: 14px;
-  background: var(--teal); color: #fff; box-shadow: 0 8px 26px rgba(0,0,0,0.3);
+  background: var(--teal); color: var(--on-accent); box-shadow: 0 8px 26px rgba(0,0,0,0.3);
   animation: cardDrop 0.32s ease backwards;
 }
 .nav-card[data-last="true"] { background: var(--consensus); }
@@ -1364,7 +1875,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
   box-shadow: 0 4px 14px rgba(16,18,24,0.3); transition: transform 0.15s, background 0.2s, color 0.2s;
 }
 .map-streetview-chip:hover { transform: translateY(-2px); }
-.map-streetview-chip[data-active="true"] { background: var(--teal); color: #fff; }
+.map-streetview-chip[data-active="true"] { background: var(--teal); color: var(--on-accent); }
 
 .map-stop-look {
   width: 26px; height: 26px; flex: none; display: grid; place-items: center; border-radius: 50%;
@@ -1389,8 +1900,12 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
 
 /* Wide screens: dock the sheet as a left rail against the map */
 @media (min-width: 900px) {
+  /* `top` must clear the whole top card, which stacks the route card (82px) over the day
+     chips (34px) with an 8px gap, starting 12px down: 12 + 82 + 8 + 34 = 136px. The extra 8px
+     is the gap between the card and the rail. Docking any higher hides the day chips behind
+     the rail, which sits on the layer above -- they stop being clickable, not just visible. */
   .map-sheet {
-    left: 16px; top: 96px; bottom: 16px; right: auto; width: 384px; height: auto;
+    left: 16px; top: 144px; bottom: 16px; right: auto; width: 384px; height: auto;
     border-radius: 16px; transform: none !important; box-shadow: 0 10px 40px rgba(16,18,24,0.2);
   }
   .map-sheet-handle { display: none; }
@@ -1401,3 +1916,94 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
   .map-rotate { left: 564px !important; right: 80px !important; bottom: 52px !important; opacity: 1 !important; pointer-events: auto !important; }
 }
 
+
+/* ---------- Appearance control (components/theme-toggle.tsx) ----------
+   An iOS segmented control: capsule track in systemGray5, the selected segment
+   riding as a white/elevated pill. ------------------------------------------ */
+.theme-toggle { display: grid; gap: 8px; margin: 20px 0; }
+.theme-toggle-label { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.theme-segmented {
+  display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--r-subtle);
+  background: var(--surface-2); width: fit-content; max-width: 100%;
+}
+.theme-segment {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 6px 14px;
+  border: 0; border-radius: 8px; background: transparent; color: var(--ink);
+  font-size: 13px; font-weight: 500; cursor: pointer; transition: background 0.15s, box-shadow 0.15s;
+}
+.theme-segment[data-active="true"] { background: var(--surface); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); font-weight: 600; }
+.theme-segment svg { width: 15px; height: 15px; }
+
+/* ---------- Typing indicator, tapbacks, delivery receipt ----------
+   ios-chat-design.md §4. All three hang off the existing bubble rules so they
+   inherit the same geometry, grouping and dark-mode tokens as a real message. */
+
+/* Three 7pt dots in an incoming-shaped bubble, each scaling 0.6 -> 1 -> 0.6 on a
+   1.4s loop staggered by 0.2s. */
+.chat-typing { max-width: 78%; }
+.chat-typing-bubble { display: inline-flex; align-items: center; padding: 11px 14px; border-bottom-left-radius: var(--r-tail); }
+.chat-typing-dots { display: inline-flex; align-items: center; gap: 4px; }
+.chat-typing-dots span {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--faint);
+  animation: chat-typing-pulse 1.4s ease-in-out infinite;
+}
+.chat-typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.chat-typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes chat-typing-pulse { 0%, 60%, 100% { transform: scale(0.6); opacity: 0.55; } 30% { transform: scale(1); opacity: 1; } }
+
+/* A message being delivered sits at half opacity until the server acknowledges it. */
+.chat-message[data-pending="true"] .chat-message-body { opacity: 0.5; }
+.chat-message-delivered { color: var(--faint); }
+
+/* The bubble and anything anchored to it. position:relative makes the docked chip and the
+   floating strip position against the bubble rather than the thread. */
+.chat-bubble-wrap { position: relative; display: inline-flex; max-width: 100%; }
+.chat-message[data-self="true"] .chat-bubble-wrap { flex-direction: row-reverse; }
+
+/* Docked reaction chip: overlaps the bubble's top corner nearest its owner. */
+.tapback-chip {
+  position: absolute; top: -14px; z-index: 2;
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 24px; height: 24px; padding: 0 5px; border-radius: var(--r-capsule);
+  background: var(--surface); border: 1px solid var(--line);
+  box-shadow: var(--shadow-float); font-size: 13px; line-height: 1;
+  animation: tapback-pop 0.2s ease-out;
+}
+.chat-message[data-self="false"] .tapback-chip { left: -8px; }
+.chat-message[data-self="true"] .tapback-chip { right: -8px; }
+.tapback-chip[data-tapback="heart"] { color: #ff2d55; }
+@keyframes tapback-pop { from { transform: scale(0.5); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* Floating capsule of six glyphs, anchored above the pressed bubble. */
+.tapback-strip {
+  position: absolute; bottom: calc(100% + 8px); z-index: 30;
+  display: flex; gap: 2px; padding: 5px 8px; border-radius: 24px;
+  background: var(--surface); border: 1px solid var(--line);
+  box-shadow: var(--shadow-float); animation: tapback-present 0.18s ease-out;
+}
+.chat-message[data-self="false"] .tapback-strip { left: 0; }
+.chat-message[data-self="true"] .tapback-strip { right: 0; }
+@keyframes tapback-present { from { transform: scale(0.7); opacity: 0; } to { transform: none; opacity: 1; } }
+.tapback-glyph {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%;
+  background: transparent; color: var(--ink); font-size: 17px; line-height: 1; cursor: pointer;
+  transition: background 0.12s, transform 0.12s;
+}
+.tapback-glyph:hover { background: var(--surface-2); }
+.tapback-glyph:active { transform: scale(0.92); }
+.tapback-glyph[data-selected="true"] { background: var(--teal-soft); }
+
+/* Keyboard route to the strip. Kept out of the pointer flow until the bubble is hovered or
+   the control itself is focused, so it never competes with the message text. */
+.tapback-open {
+  align-self: flex-end; flex: none; width: 22px; height: 22px; margin: 0 2px 2px;
+  border: 0; border-radius: 50%; background: transparent; color: var(--faint);
+  font-size: 15px; line-height: 1; cursor: pointer; opacity: 0; transition: opacity 0.12s, background 0.12s;
+}
+.chat-bubble-wrap:hover .tapback-open, .tapback-open:focus-visible { opacity: 1; }
+.tapback-open:hover { background: var(--surface-2); color: var(--ink); }
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-typing-dots span, .tapback-chip, .tapback-strip, .chat-message { animation: none; }
+}

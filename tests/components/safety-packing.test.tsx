@@ -47,7 +47,9 @@ describe("PackingView", () => {
     render(<PackingView />);
     const total = DEMO_PACKING.flatMap((g) => g.items).length;
     expect(screen.getByText(`0/${total}`)).toBeInTheDocument();
-    await user.click(screen.getAllByRole("checkbox")[0]);
+    // The item's checkbox is the custom <AnimatedCheckbox> (hidden native input + a clickable
+    // label), so drive it the way a user does -- by clicking the row label.
+    await user.click(screen.getByText(DEMO_PACKING[0].items[0].label));
     expect(screen.getByText(`1/${total}`)).toBeInTheDocument();
   });
 });

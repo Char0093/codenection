@@ -16,13 +16,16 @@ function fakeMessage(id: string, createdAt: string) {
 function makeChannel() {
   const inserts: Array<(payload: unknown) => void> = [];
   const presenceCallbacks: Array<() => void> = [];
+  const broadcasts: Array<(payload: unknown) => void> = [];
   let subscribeCallback: ((status: string) => void) | null = null;
   const channel = {
     on: vi.fn((type: string, _filter: unknown, callback: (payload: unknown) => void) => {
       if (type === "postgres_changes") inserts.push(callback);
+      else if (type === "broadcast") broadcasts.push(callback);
       else presenceCallbacks.push(callback as () => void);
       return channel;
     }),
+    send: vi.fn(),
     subscribe: vi.fn((callback: (status: string) => void) => {
       subscribeCallback = callback;
       return channel;
@@ -32,6 +35,7 @@ function makeChannel() {
     fireInsert: (payload: unknown) => inserts.forEach((callback) => callback(payload)),
     firePresenceSync: () => presenceCallbacks.forEach((callback) => callback()),
     fireStatus: (status: string) => subscribeCallback?.(status),
+    fireBroadcast: (payload: unknown) => broadcasts.forEach((callback) => callback(payload)),
   };
   return channel;
 }
@@ -91,6 +95,60 @@ describe("openChatChannel", () => {
     channel.fireInsert({ new: {} });
     await vi.advanceTimersByTimeAsync(0);
     expect(listMessagesSince).toHaveBeenCalled();
+  });
+
+  it("reports another member's typing broadcast", () => {
+    const channel = makeChannel();
+    const client = makeClient(channel);
+    const onTyping = vi.fn();
+    openChatChannel(client, "trip-1", { onMessage: vi.fn(), onTyping });
+    channel.fireBroadcast({ payload: { memberId: "member-2" } });
+    expect(onTyping).toHaveBeenCalledWith("member-2");
+  });
+
+  it("ignores a typing broadcast with no usable member id", () => {
+    const channel = makeChannel();
+    const client = makeClient(channel);
+    const onTyping = vi.fn();
+    openChatChannel(client, "trip-1", { onMessage: vi.fn(), onTyping });
+    channel.fireBroadcast({ payload: { memberId: 42 } });
+    channel.fireBroadcast({ payload: {} });
+    channel.fireBroadcast({});
+    channel.fireBroadcast(undefined);
+    expect(onTyping).not.toHaveBeenCalled();
+  });
+
+  it("broadcasts a typing ping for the sending member", () => {
+    const channel = makeChannel();
+    const client = makeClient(channel);
+    const handle = openChatChannel(client, "trip-1", { onMessage: vi.fn() });
+    handle.sendTyping("member-1");
+    expect(channel.send).toHaveBeenCalledWith({ type: "broadcast", event: "typing", payload: { memberId: "member-1" } });
+  });
+
+  it("does not broadcast typing once the channel is closed", () => {
+    const channel = makeChannel();
+    const client = makeClient(channel);
+    const handle = openChatChannel(client, "trip-1", { onMessage: vi.fn() });
+    handle.close();
+    handle.sendTyping("member-1");
+    expect(channel.send).not.toHaveBeenCalled();
+  });
+
+  it("survives a transport with no broadcast support", () => {
+    const channel = makeChannel();
+    const client = makeClient(channel);
+    const handle = openChatChannel(client, "trip-1", { onMessage: vi.fn() });
+    (channel as { send?: unknown }).send = undefined;
+    expect(() => handle.sendTyping("member-1")).not.toThrow();
+  });
+
+  it("swallows a rejected typing send rather than surfacing it", () => {
+    const channel = makeChannel();
+    const client = makeClient(channel);
+    const handle = openChatChannel(client, "trip-1", { onMessage: vi.fn() });
+    channel.send.mockImplementation(() => { throw new Error("socket gone"); });
+    expect(() => handle.sendTyping("member-1")).not.toThrow();
   });
 
   it("falls back to polling if the socket never reaches SUBSCRIBED", async () => {
