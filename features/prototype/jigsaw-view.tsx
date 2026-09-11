@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { Check, GitMerge, Split, TriangleAlert, Users, X } from "lucide-react";
+// `Map` is aliased: the component below builds a real `new Map()` lookup.
 import {
-  MIN_SATISFACTION_RATIO, SPLIT_STDDEV_THRESHOLD, evaluateTeam, shouldSplitCut,
-} from "@/lib/domain/jigsaw";
+  Check, Compass, Landmark, Map as MapIcon, MapPin, Split, TriangleAlert, UtensilsCrossed, Users, X,
+} from "lucide-react";
+import { MIN_SATISFACTION_RATIO, evaluateTeam, shouldSplitCut } from "@/lib/domain/jigsaw";
 import {
   DEMO_JIGSAW_CANDIDATES, DEMO_JIGSAW_TOGETHER, DEMO_SPLIT, MEMBER_IDS,
   memberColor, memberName,
@@ -13,10 +14,22 @@ import {
 const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 const pct = (r: number) => `${Math.round(r * 100)}%`;
 
+/** Branch identity, by what the branch is about rather than by fixture id. */
+const BRANCH_LOOK: Record<string, { Icon: typeof UtensilsCrossed; kind: string }> = {
+  food: { Icon: UtensilsCrossed, kind: "food" },
+  heritage: { Icon: Landmark, kind: "heritage" },
+};
+const branchLook = (label: string) =>
+  BRANCH_LOOK[label.toLowerCase().replace(/\s*branch$/, "")] ?? { Icon: Compass, kind: "other" };
+
 /**
  * Feature: jigsaw conflict resolution. The numbers here are not written down — they come from
  * `lib/domain/jigsaw`'s `evaluateTeam` / `shouldSplitCut` run against the fixture candidates, so
  * the screen shows what the real fairness engine decides. Accepting the split is local state.
+ *
+ * The engine's own vocabulary (standard deviation, split threshold, satisfaction ratio) stays in
+ * the domain module and the docs: a traveller is told who is short-changed and what to do about
+ * it, never how the solver reached that.
  */
 export function JigsawView() {
   const [accepted, setAccepted] = useState(false);
@@ -45,6 +58,7 @@ export function JigsawView() {
     return map;
   }, [byId]);
 
+  const worst = outcome.members.find((m) => m.memberId === outcome.worstMemberId);
   const worstName = outcome.worstMemberId ? memberName(outcome.worstMemberId) : "someone";
 
   return (
@@ -63,7 +77,7 @@ export function JigsawView() {
       {/* One shared plan */}
       <div className="jig-card">
         <div className="jig-card-head">
-          <Users size={15} aria-hidden="true" />
+          <span className="jig-card-icon" aria-hidden="true"><Users /></span>
           <h2>If everyone stays together</h2>
         </div>
         <ul className="jig-blocks">
@@ -88,44 +102,66 @@ export function JigsawView() {
           })}
         </ul>
 
-        <p className={splitRecommended ? "jig-verdict jig-verdict-bad" : "jig-verdict"} role="status">
-          <TriangleAlert size={14} aria-hidden="true" />
-          {splitRecommended
-            ? `${worstName} gets ${pct((outcome.members.find((m) => m.memberId === outcome.worstMemberId)?.ratio) ?? 0)} of their own best afternoon — under the ${pct(MIN_SATISFACTION_RATIO)} fair share. Spread is ${outcome.stdDev.toFixed(1)}, past the split threshold of ${SPLIT_STDDEV_THRESHOLD}.`
-            : "This plan is within everyone's fair share."}
-        </p>
+        {splitRecommended ? (
+          <p className="jig-verdict jig-verdict-bad" role="status">
+            <TriangleAlert size={16} aria-hidden="true" />
+            <span>
+              <strong>{worstName}&apos;s satisfaction is too low ({pct(worst?.ratio ?? 0)}).</strong>{" "}
+              We suggest splitting up for the afternoon — everyone still meets back before dinner.
+            </span>
+          </p>
+        ) : (
+          <p className="jig-verdict jig-verdict-good" role="status">
+            <Check size={16} aria-hidden="true" />
+            <span>This afternoon already works for everyone in the group.</span>
+          </p>
+        )}
       </div>
 
       {/* Split suggestion */}
       {splitRecommended && !dismissed && (
         <div className="jig-card jig-card-split" data-accepted={accepted ? "true" : undefined}>
           <div className="jig-card-head">
-            <Split size={15} aria-hidden="true" />
+            <span className="jig-card-icon" aria-hidden="true"><Split /></span>
             <h2>{accepted ? "Split accepted" : "Suggested: split, then rejoin"}</h2>
+            {accepted && <span className="jig-tag">Accepted</span>}
           </div>
 
-          <div className="jig-branches">
-            {DEMO_SPLIT.branches.map((branch) => (
-              <div key={branch.id} className="jig-branch">
-                <p className="jig-branch-label">{branch.label}</p>
-                <div className="jig-branch-members">
-                  {branch.memberIds.map((id) => (
-                    <span key={id} className="jig-avatar" style={{ background: memberColor(id) }} title={memberName(id)}>
-                      {memberName(id).slice(0, 1)}
-                    </span>
-                  ))}
-                  <span className="field-hint">{branch.memberIds.map(memberName).join(" & ")}</span>
+          <div className="jig-split-layout">
+            {DEMO_SPLIT.branches.map((branch) => {
+              const look = branchLook(branch.label);
+              return (
+                <div key={branch.id} className="jig-branch" data-branch={look.kind}>
+                  <p className="jig-branch-label">
+                    <span className="jig-branch-icon" aria-hidden="true"><look.Icon /></span>
+                    {branch.label}
+                  </p>
+                  <div className="jig-branch-members">
+                    {branch.memberIds.map((id) => (
+                      <span key={id} className="jig-avatar" style={{ background: memberColor(id) }} title={memberName(id)}>
+                        {memberName(id).slice(0, 1)}
+                      </span>
+                    ))}
+                    <span className="field-hint">{branch.memberIds.map(memberName).join(" & ")}</span>
+                  </div>
+                  <ul className="jig-blocks">
+                    {branch.blockIds.map((id) => <li key={id}>{byId.get(id)?.title}</li>)}
+                  </ul>
                 </div>
-                <ul className="jig-blocks">
-                  {branch.blockIds.map((id) => <li key={id}>{byId.get(id)?.title}</li>)}
-                </ul>
-              </div>
-            ))}
+              );
+            })}
+
+            <div className="jig-map-slot">
+              <MapIcon aria-hidden="true" />
+              <strong>Map View Integration</strong>
+              <span>Coming soon</span>
+            </div>
           </div>
 
           <p className="jig-rendezvous">
-            <GitMerge size={14} aria-hidden="true" />
-            Both branches rejoin at <strong>{DEMO_SPLIT.rendezvous.name}</strong> at {DEMO_SPLIT.rendezvous.time}
+            <MapPin size={17} aria-hidden="true" />
+            <span>Both branches rejoin at <strong>{DEMO_SPLIT.rendezvous.name}</strong></span>
+            <span className="jig-rendezvous-when">{DEMO_SPLIT.rendezvous.time}</span>
           </p>
 
           {accepted ? (
@@ -150,10 +186,12 @@ export function JigsawView() {
                 })}
               </ul>
               <p className="jig-verdict jig-verdict-good" role="status">
-                <Check size={14} aria-hidden="true" />
-                Everyone is at or above their fair share, and nobody&apos;s afternoon got worse. The
-                rendezvous anchor is now on the Map.
-                <span className="demo-hint"> (demo — resets on refresh)</span>
+                <Check size={16} aria-hidden="true" />
+                <span>
+                  Everyone is happy with their afternoon now, and nobody&apos;s afternoon got worse. The
+                  rejoin point is pinned on your map.
+                  <span className="demo-hint"> (demo — resets on refresh)</span>
+                </span>
               </p>
             </>
           ) : (

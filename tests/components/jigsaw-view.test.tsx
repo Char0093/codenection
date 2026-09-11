@@ -28,7 +28,10 @@ describe("JigsawView", () => {
     render(<JigsawView />);
     const arun = outcome.members.find((m) => m.memberId === ARUN)!;
     expect(screen.getAllByText(`${Math.round(arun.ratio * 100)}%`).length).toBeGreaterThan(0);
-    expect(screen.getByRole("status")).toHaveTextContent(/under the 70% fair share/i);
+    // The screen names who is short-changed in plain words -- the engine's spread/threshold
+    // vocabulary stays in lib/domain/jigsaw, out of the traveller's face.
+    expect(screen.getByRole("status")).toHaveTextContent(/satisfaction is too low/i);
+    expect(screen.getByRole("status")).not.toHaveTextContent(/threshold|spread/i);
   });
 
   it("accepting the split lifts the worst-served member and names the rendezvous", async () => {

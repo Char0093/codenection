@@ -902,40 +902,109 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
 }
 
 /* Shared small pieces */
-.jig-card-head { display: flex; align-items: center; gap: 7px; }
-.jig-card-head h2 { margin: 0; font-size: 14.5px; }
+.jig-card-head { display: flex; align-items: center; gap: 10px; }
+.jig-card-head h2 { margin: 0; font-size: 16px; }
 .jig-avatar {
   width: 24px; height: 24px; flex: none; display: grid; place-items: center; border-radius: 50%;
   color: #fff; font-size: 11px; font-weight: 700;
 }
 
-/* Split & merge */
-.jig-card { padding: 14px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface); }
-.jig-card-split { border-color: var(--blue); }
-.jig-card-split[data-accepted="true"] { border-color: var(--consensus); background: var(--consensus-soft); }
-.jig-blocks { list-style: none; margin: 8px 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
-.jig-blocks li { padding: 4px 10px; border-radius: 999px; background: var(--canvas); border: 1px solid var(--line); font-size: 12px; }
-.jig-members { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.jig-member { display: grid; grid-template-columns: 24px 62px 1fr auto; align-items: center; gap: 9px; }
-.jig-name { font-size: 12.5px; font-weight: 600; }
-.jig-bar { height: 9px; border-radius: 5px; background: var(--canvas); border: 1px solid var(--line); overflow: hidden; }
-.jig-bar i { display: block; height: 100%; background: var(--consensus); transition: width 0.5s cubic-bezier(0.22,1,0.36,1); }
-.jig-bar i[data-below="true"] { background: var(--error); }
-.jig-bar i[data-good="true"] { background: var(--consensus); }
+/* --- Split & rejoin ------------------------------------------------------------------
+   This screen carries its own light surface palette rather than the app's cream canvas:
+   white cards on near-white, with red/green reserved for the two things a traveller has
+   to read at a glance -- someone is short-changed, and where the group meets back up.
+   Tokens are scoped to .jigsaw-view so the rest of the app keeps the cream theme. */
+.jigsaw-view {
+  --jig-bg: #f7f9fa;
+  --jig-sunken: #f1f4f6;
+  --jig-line: #e4e9ed;
+  --jig-line-strong: #d3dbe1;
+  --jig-ink-2: #3d4c5c;
+  --jig-red-bg: #fef2f2;
+  --jig-red-line: #fecaca;
+  --jig-red-text: #991b1b;
+  --jig-red-bar: #ef4444;
+  --jig-green-bg: #f0fdf4;
+  --jig-green-line: #bbf7d0;
+  --jig-green-text: #166534;
+  --jig-green-bar: #16a34a;
+  --jig-food: #c2410c;
+  --jig-food-bg: #fff4ec;
+  --jig-heritage: #1d4ed8;
+  --jig-heritage-bg: #eef3fe;
+  --jig-shadow: 0 1px 2px rgba(16, 32, 44, 0.05), 0 1px 3px rgba(16, 32, 44, 0.04);
+  --jig-shadow-md: 0 4px 6px -2px rgba(16, 32, 44, 0.05), 0 12px 24px -8px rgba(16, 32, 44, 0.12);
+  max-width: 820px;
+  gap: 16px;
+  padding: 22px clamp(14px, 3vw, 26px) 34px;
+  border-radius: 20px;
+  background: var(--jig-bg);
+}
+.jigsaw-view .demo-hint { color: var(--muted); }
+
+.jig-card { padding: 20px; border: 1px solid var(--jig-line); border-radius: 18px; background: var(--surface); box-shadow: var(--jig-shadow); }
+.jig-card-split { border-color: var(--jig-line-strong); box-shadow: var(--jig-shadow-md); }
+.jig-card-split[data-accepted="true"] { border-color: var(--jig-green-line); }
+.jig-card-icon { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: 10px; background: var(--jig-sunken); color: var(--teal); }
+.jig-card-icon svg { width: 16px; height: 16px; }
+.jig-tag {
+  margin-left: auto; padding: 4px 10px; border-radius: 999px; font-size: 10.5px; font-weight: 700;
+  letter-spacing: 0.07em; text-transform: uppercase;
+  background: var(--jig-green-bg); border: 1px solid var(--jig-green-line); color: var(--jig-green-text);
+}
+.jig-blocks { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 7px; }
+.jig-blocks li { padding: 6px 12px; border-radius: 999px; background: var(--jig-sunken); border: 1px solid var(--jig-line); font-size: 12.5px; font-weight: 500; }
+.jig-members { list-style: none; margin: 18px 0 0; padding: 0; display: flex; flex-direction: column; gap: 11px; }
+.jig-member { display: grid; grid-template-columns: 24px 62px 1fr auto; align-items: center; gap: 11px; }
+.jig-name { font-size: 13px; font-weight: 600; }
+.jig-bar { height: 8px; border-radius: 99px; background: var(--jig-sunken); border: 1px solid var(--jig-line); overflow: hidden; }
+.jig-bar i { display: block; height: 100%; border-radius: 99px; background: var(--jig-green-bar); transition: width 0.6s cubic-bezier(0.22,1,0.36,1), background 0.3s ease; }
+.jig-bar i[data-below="true"] { background: var(--jig-red-bar); }
+.jig-bar i[data-good="true"] { background: var(--jig-green-bar); }
 .jig-ratio { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.jig-member[data-below="true"] .jig-ratio { color: var(--error); }
-.jig-delta { margin-left: 5px; font-style: normal; font-size: 11px; color: var(--consensus); }
-.jig-verdict { display: flex; align-items: flex-start; gap: 7px; margin: 12px 0 0; padding: 9px 11px; border-radius: 9px; font-size: 12px; line-height: 1.5; background: var(--canvas); }
-.jig-verdict svg { flex: none; margin-top: 1px; }
-.jig-verdict-bad { background: var(--error-soft); color: var(--error-dark); }
-.jig-verdict-good { background: var(--consensus-soft); color: var(--consensus); }
-.jig-branches { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
-.jig-branch { padding: 11px; border: 1px solid var(--line); border-radius: 10px; background: var(--canvas); }
-.jig-branch-label { margin: 0 0 6px; font-size: 12px; font-weight: 700; }
-.jig-branch-members { display: flex; align-items: center; gap: 5px; margin-bottom: 6px; }
-.jig-rendezvous { display: flex; align-items: center; gap: 7px; margin: 6px 0 12px; padding: 9px 11px; border-radius: 9px; background: var(--teal-soft); font-size: 12.5px; }
-.jig-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.jig-why { margin: 4px 0 0; line-height: 1.6; }
+.jig-member[data-below="true"] .jig-ratio { color: var(--jig-red-text); }
+.jig-delta { margin-left: 5px; font-style: normal; font-size: 11px; color: var(--jig-green-text); }
+.jig-verdict { display: flex; align-items: flex-start; gap: 10px; margin: 16px 0 0; padding: 13px 15px; border-radius: 13px; font-size: 13px; line-height: 1.5; background: var(--jig-sunken); }
+.jig-verdict svg { flex: none; margin-top: 2px; }
+.jig-verdict-bad { background: var(--jig-red-bg); border: 1px solid var(--jig-red-line); color: var(--jig-red-text); }
+.jig-verdict-good { background: var(--jig-green-bg); border: 1px solid var(--jig-green-line); color: var(--jig-green-text); }
+
+/* Branch routes and the map slot sit in one row on a wide screen, stacked on a phone. */
+.jig-split-layout { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 4px; }
+@media (min-width: 700px) { .jig-split-layout { grid-template-columns: 1fr 1fr 1fr; } }
+.jig-branch { padding: 15px; border: 1px solid var(--jig-line); border-top: 3px solid var(--jig-line-strong); border-radius: 14px; background: var(--surface); }
+.jig-branch[data-branch="food"] { border-top-color: var(--jig-food); background: var(--jig-food-bg); }
+.jig-branch[data-branch="heritage"] { border-top-color: var(--jig-heritage); background: var(--jig-heritage-bg); }
+.jig-branch .jig-blocks li { background: var(--surface); }
+.jig-branch-label { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 14px; font-weight: 700; }
+.jig-branch-icon { display: inline-flex; color: var(--jig-line-strong); }
+.jig-branch-icon svg { width: 17px; height: 17px; }
+.jig-branch[data-branch="food"] .jig-branch-icon { color: var(--jig-food); }
+.jig-branch[data-branch="heritage"] .jig-branch-icon { color: var(--jig-heritage); }
+.jig-branch-members { display: flex; align-items: center; gap: 6px; margin-bottom: 11px; }
+.jig-branch-members .field-hint { color: var(--jig-ink-2); }
+.jig-map-slot {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px;
+  min-height: 148px; padding: 16px; text-align: center; color: var(--muted);
+  border: 1.5px dashed var(--jig-line-strong); border-radius: 14px;
+  background-color: var(--jig-sunken);
+  background-image: linear-gradient(var(--jig-line) 1px, transparent 1px), linear-gradient(90deg, var(--jig-line) 1px, transparent 1px);
+  background-size: 26px 26px, 26px 26px;
+}
+.jig-map-slot svg { width: 26px; height: 26px; color: var(--jig-ink-2); }
+.jig-map-slot strong { font-size: 13px; color: var(--ink); }
+.jig-map-slot span { font-size: 10.5px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; }
+
+.jig-rendezvous {
+  display: flex; align-items: center; gap: 11px; flex-wrap: wrap; margin: 14px 0 0; padding: 14px 16px;
+  border-radius: 14px; background: var(--jig-green-bg); border: 1px solid var(--jig-green-line);
+  color: var(--jig-green-text); font-size: 13.5px;
+}
+.jig-rendezvous > svg { width: 17px; height: 17px; }
+.jig-rendezvous-when { margin-left: auto; padding: 3px 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--jig-green-line); font-weight: 700; font-variant-numeric: tabular-nums; }
+.jig-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+.jig-why { margin: 0; padding: 18px 20px; border-radius: 16px; background: var(--jig-sunken); border: 1px solid var(--jig-line); line-height: 1.65; color: var(--jig-ink-2); }
+.jig-why strong { color: var(--ink); }
 
 /* Budget ledger */
 .bud-balances { display: flex; flex-direction: column; gap: 8px; }
@@ -1016,7 +1085,6 @@ input:focus, select:focus, textarea:focus { border-color: var(--teal); }
 .cal-column .cal-block[data-atrisk="true"] { border-color: var(--flexible); box-shadow: 0 0 0 2px var(--flexible); }
 
 @media (max-width: 620px) {
-  .jig-branches { grid-template-columns: 1fr; }
   .vqa-card { flex-direction: column; align-items: stretch; }
   .vqa-dish { width: 100%; height: 130px; }
   .vqa-detected li { grid-template-columns: 1fr 60px 34px; }
