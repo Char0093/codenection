@@ -17,11 +17,14 @@ function formatTime(iso: string): string {
 /** Long-press threshold for opening the tapback strip (ios-chat-design.md §4: ~500ms). */
 const LONG_PRESS_MS = 500;
 
-export function MessageItem({ message, author, showHeader, groupStart, isSelf, onRetry, proposal, canDecideProposals, activeProposalId, decidingProposalId, onDecision, delivered, reaction, onReact }: {
+export function MessageItem({ message, author, showName, groupStart, showAvatar, isSelf, onRetry, proposal, canDecideProposals, activeProposalId, decidingProposalId, onDecision, delivered, reaction, onReact }: {
   message: ChatEntry;
   author?: JigsawMember;
-  showHeader: boolean;
+  /** First message of a sender's run -- render the name label above the bubble (others only). */
+  showName: boolean;
   groupStart: boolean;
+  /** Last message of a sender's run -- render the sender avatar in the side gutter. */
+  showAvatar: boolean;
   isSelf: boolean;
   onRetry?: () => void;
   proposal?: ProposalRecord;
@@ -62,42 +65,53 @@ export function MessageItem({ message, author, showHeader, groupStart, isSelf, o
 
   return <li className="chat-message" data-author-kind={message.authorKind} data-self={isSelf ? "true" : "false"}
     data-group-start={groupStart ? "true" : "false"} data-pending={message.pending ? "true" : "false"}>
-    {showHeader && <div className="chat-message-header">
-      <span className="chat-message-avatar" style={{ background: message.authorKind === "member" ? author?.color : undefined }}>
-        {message.authorKind === "assistant" ? <Sparkles size={12} aria-hidden /> : displayName.slice(0, 1).toUpperCase()}
+    {/* Avatar sits in a fixed-width gutter beside the bubble column -- left for incoming,
+        right for outgoing (row-reverse in CSS). The gutter stays reserved on every row so
+        stacked bubbles in a run keep their left/right edge; only the run's last row fills it. */}
+    <div className="chat-message-row">
+      <span className="chat-message-gutter" aria-hidden={showAvatar ? undefined : "true"}>
+        {showAvatar && message.authorKind !== "system" && (
+          <span className="chat-message-avatar" style={{ background: message.authorKind === "member" ? author?.color : undefined }}>
+            {message.authorKind === "assistant" ? <Sparkles size={12} aria-hidden /> : displayName.slice(0, 1).toUpperCase()}
+          </span>
+        )}
       </span>
-      <span className="chat-message-name">{displayName}</span>
-    </div>}
-    <div className="chat-bubble-wrap">
-      {stripOpen && <TapbackStrip current={reaction ?? null} onPick={pick} onDismiss={() => setStripOpen(false)} />}
-      <p className="chat-message-body"
-        onPointerDown={startPress}
-        onPointerUp={cancelPress}
-        onPointerLeave={cancelPress}
-        onContextMenu={(event) => { if (canReact) { event.preventDefault(); setStripOpen(true); } }}>
-        <span>{message.body}</span>
-        <span className="chat-message-time-inline">{formatTime(message.createdAt)}</span>
-      </p>
-      {reaction && <TapbackChip tapback={reaction} />}
-      {canReact && (
-        // Keyboard and assistive-tech route to the same strip: a long press is not reachable
-        // without a pointer, so the affordance needs a real focusable control of its own.
-        <button type="button" className="tapback-open" aria-haspopup="true" aria-expanded={stripOpen}
-          onClick={() => setStripOpen((open) => !open)}>
-          <span className="sr-only">React to message from {displayName}</span>
-          <span aria-hidden="true">+</span>
-        </button>
-      )}
+      <div className="chat-message-col">
+        {showName && message.authorKind !== "system" && (
+          <span className="chat-message-name">{displayName}</span>
+        )}
+        <div className="chat-bubble-wrap">
+          {stripOpen && <TapbackStrip current={reaction ?? null} onPick={pick} onDismiss={() => setStripOpen(false)} />}
+          <p className="chat-message-body"
+            onPointerDown={startPress}
+            onPointerUp={cancelPress}
+            onPointerLeave={cancelPress}
+            onContextMenu={(event) => { if (canReact) { event.preventDefault(); setStripOpen(true); } }}>
+            <span>{message.body}</span>
+            <span className="chat-message-time-inline">{formatTime(message.createdAt)}</span>
+          </p>
+          {reaction && <TapbackChip tapback={reaction} />}
+          {canReact && (
+            // Keyboard and assistive-tech route to the same strip: a long press is not reachable
+            // without a pointer, so the affordance needs a real focusable control of its own.
+            <button type="button" className="tapback-open" aria-haspopup="true" aria-expanded={stripOpen}
+              onClick={() => setStripOpen((open) => !open)}>
+              <span className="sr-only">React to message from {displayName}</span>
+              <span aria-hidden="true">+</span>
+            </button>
+          )}
+        </div>
+        {message.proposalId && <AssistantProposalCard proposal={proposal}
+          active={proposal !== undefined && proposal.id === activeProposalId}
+          canDecide={canDecideProposals} busy={decidingProposalId === message.proposalId}
+          onDecision={(decision) => onDecision?.(message.proposalId as string, decision)} />}
+        {message.pending && <span className="chat-message-status" role="status">Sending...</span>}
+        {delivered && !message.pending && !message.failed && <span className="chat-message-status chat-message-delivered">Delivered</span>}
+        {message.failed && <span className="chat-message-status chat-message-failed" role="alert">
+          Not sent.
+          <button type="button" onClick={onRetry}><RotateCcw size={12} aria-hidden />Retry</button>
+        </span>}
+      </div>
     </div>
-    {message.proposalId && <AssistantProposalCard proposal={proposal}
-      active={proposal !== undefined && proposal.id === activeProposalId}
-      canDecide={canDecideProposals} busy={decidingProposalId === message.proposalId}
-      onDecision={(decision) => onDecision?.(message.proposalId as string, decision)} />}
-    {message.pending && <span className="chat-message-status" role="status">Sending...</span>}
-    {delivered && !message.pending && !message.failed && <span className="chat-message-status chat-message-delivered">Delivered</span>}
-    {message.failed && <span className="chat-message-status chat-message-failed" role="alert">
-      Not sent.
-      <button type="button" onClick={onRetry}><RotateCcw size={12} aria-hidden />Retry</button>
-    </span>}
   </li>;
 }

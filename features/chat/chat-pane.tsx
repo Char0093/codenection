@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState } from "react";
-import { AlertCircle, LoaderCircle, Sparkles } from "lucide-react";
+import { AlertCircle, LoaderCircle, Sparkles, UserPlus } from "lucide-react";
 import { useTripChannel } from "@/features/chat/use-trip-channel";
-import { PresenceBar } from "@/features/chat/presence-bar";
+import { ChatHeader } from "@/features/chat/chat-header";
+import { GroupInfo } from "@/features/chat/group-info";
 import { MessageList } from "@/features/chat/message-list";
 import { Composer } from "@/features/chat/composer";
 import { shouldAddressAssistant } from "@/lib/chat/mention";
@@ -11,8 +12,10 @@ import type { Tapback } from "@/features/chat/tapback";
 import type { JigsawMember } from "@/features/timeline/jigsaw-panel";
 import type { ProposalRecord } from "@/lib/repositories/planning-repository";
 
-export function ChatPane({ tripId, selfMemberId, members, proposalsById, canDecideProposals, activeProposalId, decidingProposalId, onDecision }: {
+export function ChatPane({ tripId, groupName = "Trip chat", selfMemberId, members, proposalsById, canDecideProposals, activeProposalId, decidingProposalId, onDecision }: {
   tripId: string;
+  /** Group title shown in the header; the header opens the group-info view. */
+  groupName?: string;
   selfMemberId: string | null;
   members: readonly JigsawMember[];
   proposalsById?: Readonly<Record<string, ProposalRecord>>;
@@ -26,6 +29,19 @@ export function ChatPane({ tripId, selfMemberId, members, proposalsById, canDeci
   const [assistantError, setAssistantError] = useState<string | null>(null);
   // Viewer-local reactions. Not persisted and not shared -- see features/chat/tapback.tsx.
   const [reactions, setReactions] = useState<Record<string, Tapback>>({});
+  // Pressing the header swaps the thread for the group-info view (wireframe panels 2-3).
+  const [showInfo, setShowInfo] = useState(false);
+  const [inviteCopied, setInviteCopied] = useState(false);
+
+  async function copyInvite() {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setInviteCopied(true);
+      window.setTimeout(() => setInviteCopied(false), 2000);
+    } catch {
+      // Clipboard blocked (insecure context / denied) -- leave the label unchanged.
+    }
+  }
 
   function react(messageId: string, tapback: Tapback | null) {
     setReactions((existing) => {
@@ -59,17 +75,29 @@ export function ChatPane({ tripId, selfMemberId, members, proposalsById, canDeci
 
   const connectionLabel = status === "connected" ? "Live" : status === "polling" ? "Reconnecting…" : status === "disconnected" ? "Offline" : "Connecting…";
 
+  if (showInfo) {
+    return <div className="chat-pane">
+      <GroupInfo groupName={groupName} members={members} onBack={() => setShowInfo(false)} />
+    </div>;
+  }
+
   return <div className="chat-pane">
-    <div className="chat-pane-top">
-      <div className="chat-pane-members">
-        <PresenceBar members={members} presentMemberIds={presentMemberIds} />
-        <span className="chat-pane-member-count">{members.length} member{members.length === 1 ? "" : "s"}</span>
-      </div>
-      <span className="chat-connection" data-state={status}>
-        <span className="chat-connection-dot" aria-hidden="true" />
-        {connectionLabel}
-      </span>
-    </div>
+    <ChatHeader
+      groupName={groupName}
+      members={members}
+      presentMemberIds={presentMemberIds}
+      onOpenInfo={() => setShowInfo(true)}
+      actions={<>
+        <span className="chat-connection" data-state={status}>
+          <span className="chat-connection-dot" aria-hidden="true" />
+          {connectionLabel}
+        </span>
+        <button type="button" className="chat-invite-button" onClick={copyInvite}>
+          <UserPlus size={14} aria-hidden="true" />
+          <span>{inviteCopied ? "Link copied" : "Invite"}</span>
+        </button>
+      </>}
+    />
     {loading ? (
       <p className="inline-notice" role="status"><LoaderCircle className="spin" aria-hidden="true" />Loading chat...</p>
     ) : loadError ? (

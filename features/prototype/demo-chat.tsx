@@ -4,13 +4,15 @@ import React, { useState } from "react";
 import { ChevronDown, Search } from "lucide-react";
 import { MessageList } from "@/features/chat/message-list";
 import { Composer } from "@/features/chat/composer";
+import { ChatHeader } from "@/features/chat/chat-header";
+import { GroupInfo } from "@/features/chat/group-info";
 import { ChatSignalCard } from "@/features/prototype/chat-signal-card";
 import { InvitePanel } from "@/features/prototype/invite-panel";
 import type { ChatEntry } from "@/features/chat/use-trip-channel";
 import type { Tapback } from "@/features/chat/tapback";
 import { shouldAddressAssistant } from "@/lib/chat/mention";
 import {
-  DEMO_CHAT_MESSAGES, DEMO_MEMBERS, DEMO_SELF_MEMBER_ID, DEMO_SIGNALS, DEMO_TRIP_ID,
+  DEMO_CHAT_MESSAGES, DEMO_MEMBERS, DEMO_SELF_MEMBER_ID, DEMO_SIGNALS, DEMO_TRIP, DEMO_TRIP_ID,
 } from "@/lib/prototype/fixtures";
 
 /**
@@ -29,6 +31,8 @@ export function DemoChat() {
   // The prototype drives the same typing/tapback props the live pane does, from local state.
   const [typingMemberIds, setTypingMemberIds] = useState<string[]>([]);
   const [reactions, setReactions] = useState<Record<string, Tapback>>({});
+  // Pressing the header swaps the thread for the group-info view (wireframe panels 2-3).
+  const [showInfo, setShowInfo] = useState(false);
 
   function react(messageId: string, tapback: Tapback | null) {
     setReactions((existing) => {
@@ -61,15 +65,27 @@ export function DemoChat() {
     }, 1600);
   }
 
+  if (showInfo) {
+    return (
+      <div className="demo-chat">
+        <GroupInfo groupName={DEMO_TRIP.name} members={DEMO_MEMBERS} onBack={() => setShowInfo(false)} />
+      </div>
+    );
+  }
+
   return (
     <div className="demo-chat">
-      <div className="chat-pane-top">
-        <span className="chat-pane-member-count">{DEMO_MEMBERS.length} members</span>
-        <InvitePanel />
-        <span className="chat-connection" data-state="connected">
-          <span className="chat-connection-dot" aria-hidden="true" />Demo
-        </span>
-      </div>
+      <ChatHeader
+        groupName={DEMO_TRIP.name}
+        members={DEMO_MEMBERS}
+        onOpenInfo={() => setShowInfo(true)}
+        actions={<>
+          <span className="chat-connection" data-state="connected">
+            <span className="chat-connection-dot" aria-hidden="true" />Demo
+          </span>
+          <InvitePanel />
+        </>}
+      />
 
       <MessageList
         messages={messages}

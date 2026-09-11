@@ -76,13 +76,17 @@ export function MessageList({ messages, members, selfMemberId, onRetry, proposal
     <ul className="chat-message-list" ref={listRef} aria-label="Trip chat messages">
       {messages.map((message, index) => {
         const previous = messages[index - 1];
+        const next = messages[index + 1];
         const showHeader = !previous || previous.authorMemberId !== message.authorMemberId || previous.authorKind !== message.authorKind;
+        // Last message of a sender's run -- the row that carries the avatar in the side gutter.
+        const runEnd = !next || next.authorMemberId !== message.authorMemberId || next.authorKind !== message.authorKind;
         const author = members.find((member) => member.id === message.authorMemberId);
         const newDay = !previous || dayKey(previous.createdAt) !== dayKey(message.createdAt);
         return <React.Fragment key={message.id}>
           {newDay && <li className="chat-date-sep"><span>{dayLabel(message.createdAt)}</span></li>}
           <MessageItem message={message} author={author}
-            showHeader={showHeader || newDay} groupStart={showHeader || newDay} isSelf={message.authorMemberId === selfMemberId}
+            showName={showHeader || newDay} groupStart={showHeader || newDay} showAvatar={runEnd}
+            isSelf={message.authorMemberId === selfMemberId}
             onRetry={() => onRetry(message.id)}
             proposal={message.proposalId ? proposalsById?.[message.proposalId] : undefined}
             canDecideProposals={canDecideProposals} activeProposalId={activeProposalId}

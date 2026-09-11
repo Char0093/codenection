@@ -471,16 +471,29 @@ details[open] > summary .collapse-chevron { transform: rotate(180deg); }
 /* The thread runs on pure white / true black rather than the grouped-grey app ground -- the
    list screen is the grouped surface, the conversation is the bare canvas. */
 .chat-pane { display: flex; flex-direction: column; flex: 1 1 auto; height: 100%; min-height: 0; background: var(--imsg-thread); }
+/* Flat solid bar -- no frosted material behind it, so the thread reads as one plain surface. */
 .chat-pane-top {
-  display: flex; align-items: center; gap: 10px; padding: 8px 16px; flex: none;
-  border-bottom: 1px solid var(--line);
-  background: color-mix(in srgb, var(--imsg-thread) 78%, transparent);
-  backdrop-filter: saturate(180%) blur(20px);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
-  box-shadow: none;
+  display: flex; align-items: center; gap: 8px; padding: 8px 14px; flex: none;
+  border-bottom: 1px solid var(--line); background: var(--imsg-thread);
 }
+/* The member count + group title are one button: pressing the strip opens the group-info view. */
+.chat-pane-heading {
+  flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 10px;
+  border: 0; background: none; color: var(--ink); text-align: left;
+  padding: 6px 8px; margin: -4px -2px -4px -8px; border-radius: 10px;
+}
+.chat-pane-heading:hover { background: var(--surface-2); }
+.chat-pane-heading:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+.chat-pane-heading .presence-bar { flex: none; }
 .chat-pane-members { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.chat-pane-member-count { font-size: 12px; font-weight: 600; color: var(--ink); white-space: nowrap; }
+.chat-pane-member-count { font-size: 12px; font-weight: 600; color: var(--muted); white-space: nowrap; flex: none; }
+.chat-pane-title {
+  flex: 1 1 auto; min-width: 0; text-align: center;
+  font-size: 15px; font-weight: 600; color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.chat-pane-heading-hint { color: var(--faint); flex: none; }
+.chat-pane-top-actions { flex: none; display: flex; align-items: center; gap: 8px; }
 .chat-connection { display: flex; align-items: center; gap: 6px; margin-left: auto; font-size: 11.5px; color: var(--muted); flex: none; }
 .chat-connection-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex: none; }
 .chat-connection[data-state="connected"] .chat-connection-dot { background: var(--consensus); }
@@ -537,17 +550,25 @@ details[open] > summary .collapse-chevron { transform: rotate(180deg); }
   box-shadow: none;
 }
 
-/* Bubble max width ~78% so the empty opposite margin is itself the directional cue. */
-.chat-message { max-width: 78%; display: flex; flex-direction: column; animation: chat-message-in 0.2s ease-out; }
+/* Bubble max width ~82% (a touch tighter once the avatar gutter is added) so the empty
+   opposite margin is still the directional cue. */
+.chat-message { max-width: 82%; display: flex; flex-direction: column; animation: chat-message-in 0.2s ease-out; }
 @keyframes chat-message-in { from { opacity: 0; transform: translateY(4px) scale(0.96); } to { opacity: 1; transform: none; } }
-.chat-message[data-self="true"] { align-self: flex-end; align-items: flex-end; }
-.chat-message[data-self="false"] { align-self: flex-start; align-items: flex-start; }
-.chat-message-header { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; padding: 0 2px; }
-.chat-message[data-self="true"] .chat-message-header { flex-direction: row-reverse; }
+.chat-message[data-self="true"] { align-self: flex-end; }
+.chat-message[data-self="false"] { align-self: flex-start; }
+/* Avatar rides in a fixed 24px gutter beside the bubble column -- left of incoming, right of
+   outgoing (row-reverse). The gutter stays reserved on every row of a run so stacked bubbles
+   keep their edge; only the run's last row paints an avatar into it. */
+.chat-message-row { display: flex; align-items: flex-end; gap: 8px; }
+.chat-message[data-self="true"] .chat-message-row { flex-direction: row-reverse; }
+.chat-message-gutter { flex: none; width: 24px; align-self: flex-end; }
+.chat-message[data-author-kind="system"] .chat-message-gutter { display: none; }
+.chat-message-col { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
+.chat-message[data-self="true"] .chat-message-col { align-items: flex-end; }
 .chat-message-avatar { flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--muted); color: #fff; display: grid; place-items: center; font-size: 10.5px; font-weight: 700; }
 .chat-message[data-author-kind="assistant"] .chat-message-avatar { background: var(--wishlist); }
 .chat-message[data-author-kind="system"] .chat-message-avatar { background: var(--muted); }
-.chat-message-name { font-size: 12px; font-weight: 700; }
+.chat-message-name { font-size: 12px; font-weight: 700; margin: 0 0 3px; padding: 0 4px; color: var(--muted); }
 
 /* The bubble is iMessage's fundamental unit: flat (no border, no shadow), 19pt radius,
    8pt/14pt padding, 17pt body text. Incoming is neutral grey and never tinted -- its
@@ -598,10 +619,7 @@ details[open] > summary .collapse-chevron { transform: rotate(180deg); }
    trailing 30pt circular send button that greys out when the field is empty. */
 .chat-composer {
   display: flex; align-items: flex-end; gap: 8px; padding: 8px 12px; flex: none;
-  border-top: 1px solid var(--line);
-  background: color-mix(in srgb, var(--imsg-thread) 78%, transparent);
-  backdrop-filter: saturate(180%) blur(20px);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-top: 1px solid var(--line); background: var(--imsg-thread);
 }
 .chat-composer input {
   flex: 1; min-height: 36px; padding: 7px 14px; border-radius: 18px;
@@ -619,6 +637,65 @@ details[open] > summary .collapse-chevron { transform: rotate(180deg); }
 .chat-composer .icon-button:active:not(:disabled) { transform: scale(0.92); background: var(--teal-dark); }
 .chat-composer .icon-button svg { width: 16px; height: 16px; }
 .chat-assistant-note { margin: 0; border-radius: 0; flex: none; }
+
+/* ---------- Group info (reached by pressing the chat header -- wireframe panels 2-3).
+   Centred group identity + a quick-action row, then a Members / Setting segmented control
+   over a plain titled list. Rendered in place of the thread. ---------- */
+.group-info { display: flex; flex-direction: column; background: var(--imsg-thread); }
+.chat-pane > .group-info { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.group-info-top { padding: 8px 12px 0; }
+.group-info-back {
+  width: 32px; height: 32px; border: 0; border-radius: 999px; background: none;
+  color: var(--ink); display: grid; place-items: center;
+}
+.group-info-back:hover { background: var(--surface-2); }
+.group-info-head {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 4px 16px 18px; border-bottom: 1px solid var(--line);
+}
+.group-info-avatar {
+  width: 72px; height: 72px; border-radius: 999px;
+  background: var(--surface-2); color: var(--ink); display: grid; place-items: center;
+}
+.group-info-name { margin: 2px 0 0; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; text-align: center; }
+.group-info-quick { display: flex; gap: 26px; margin-top: 6px; }
+.group-info-quick-item {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  border: 0; background: none; color: var(--ink); font-size: 11px; font-weight: 500;
+}
+.group-info-quick-item span { color: var(--muted); }
+.group-info-quick-item:hover { color: var(--blue); }
+.group-info-quick-item:hover span { color: var(--blue); }
+.group-info-tabs {
+  align-self: center; display: flex; gap: 4px; margin: 16px 0;
+  padding: 3px; background: var(--surface-2); border-radius: 999px;
+}
+.group-info-tab {
+  border: 0; background: none; padding: 6px 22px; border-radius: 999px;
+  font-size: 13px; font-weight: 600; color: var(--muted);
+}
+.group-info-tab[data-active="true"] {
+  background: var(--surface); color: var(--ink);
+  box-shadow: 0 1px 2px rgba(17, 18, 22, 0.10);
+}
+.group-info-list { list-style: none; margin: 0; padding: 0 0 24px; }
+.group-info-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 20px; border-bottom: 1px solid var(--line);
+}
+.group-info-row-link, .group-info-row-action { cursor: pointer; }
+.group-info-row-link:hover, .group-info-row-action:hover { background: var(--surface-2); }
+.group-info-row-icon {
+  flex: none; width: 34px; height: 34px; border-radius: 999px;
+  border: 1px solid var(--line-strong); display: grid; place-items: center; color: var(--ink);
+}
+.group-info-member-avatar {
+  flex: none; width: 34px; height: 34px; border-radius: 999px;
+  display: grid; place-items: center; color: #fff; font-size: 13px; font-weight: 700;
+}
+.group-info-row-label { flex: 1; min-width: 0; font-size: 15px; color: var(--ink); }
+.group-info-row-action .group-info-row-label { font-weight: 600; }
+.group-info-row-chevron { flex: none; color: var(--faint); }
 
 .assistant-proposal-card { margin-top: 8px; padding: 12px; border: 1px solid var(--line); border-radius: var(--r-standard); background: var(--surface); text-align: left; }
 .assistant-proposal-missing { margin: 8px 0 0; font-size: 12px; font-style: italic; color: var(--muted); }
