@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bell, Search, SquarePen } from "lucide-react";
+import { ArrowRight, Bell, MapPin, Plus, Search, Sparkles, UserRound } from "lucide-react";
 import { budgetTiers } from "@/lib/domain/trip";
 import { TRIP_MODES, TRIP_MODE_LABELS, type TripMode } from "@/lib/domain/trip";
 import type { BudgetTier } from "@/lib/domain/trip";
@@ -12,9 +12,10 @@ import type { ChatHomeTrip } from "@/lib/domain/chat-home";
 // Chat-group home (spec §2.3): membership-scoped list + an organizer create form
 // (destination + trip style + dates OR a rough length; optional proposed budget / split).
 //
-// Presented as the iOS Messages conversation list (ios-chat-design.md §4 "Conversation List"):
-// large title, search field, then 60pt rows of avatar / name / preview / timestamp. The data
-// contract, the create-form state and the POST /api/chats handler are unchanged -- only the
+// Presented as a trip-group dashboard: a hero panel (greeting, at-a-glance counts, search +
+// create) above a card grid of trip groups, in the same editorial/monochrome system as the
+// rest of the shell (globals.css "hub-*" rules). The data contract, the create-form state and
+// the POST /api/chats handler are unchanged from the earlier Messages-list build -- only the
 // markup and class names moved.
 
 function timeframeSummary(trip: ChatHomeTrip): string {
@@ -24,9 +25,9 @@ function timeframeSummary(trip: ChatHomeTrip): string {
 }
 
 /**
- * Messages-style relative stamp for the trailing edge of a row: clock time today, "Yesterday",
- * weekday within the last week, else a short date. Locale-formatted, never a hand-rolled
- * month table.
+ * Messages-style relative stamp for a trip card's trailing edge: clock time today,
+ * "Yesterday", weekday within the last week, else a short date. Locale-formatted, never a
+ * hand-rolled month table.
  */
 function rowTimestamp(iso: string): string {
   const at = new Date(iso);
@@ -38,6 +39,34 @@ function rowTimestamp(iso: string): string {
   if (dayDiff === 1) return "Yesterday";
   if (dayDiff < 7) return at.toLocaleDateString(undefined, { weekday: "short" });
   return at.toLocaleDateString(undefined, { month: "numeric", day: "numeric", year: "2-digit" });
+}
+
+/** First token of the account's email local-part, capitalised -- "mei.tan@…" -> "Mei". */
+function greetingName(email?: string | null): string {
+  if (!email) return "";
+  const local = email.split("@")[0] ?? "";
+  const first = local.split(/[._+-]/)[0] ?? local;
+  return first ? first.charAt(0).toUpperCase() + first.slice(1) : "";
+}
+
+function daysUntil(dateStr: string): number {
+  const target = new Date(`${dateStr}T00:00:00`);
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((target.getTime() - startOfToday.getTime()) / 86_400_000);
+}
+
+/** Soonest upcoming departure among "ready" trips, as a short label for the hero stat. */
+function nextDepartureLabel(trips: ChatHomeTrip[]): string {
+  const upcoming = trips
+    .filter((trip) => trip.status === "ready" && trip.startDate)
+    .map((trip) => ({ trip, days: daysUntil(trip.startDate as string) }))
+    .filter((entry) => entry.days >= 0)
+    .sort((a, b) => a.days - b.days)[0];
+  if (!upcoming) return "—";
+  if (upcoming.days === 0) return "Today";
+  if (upcoming.days === 1) return "Tomorrow";
+  return `${upcoming.days}d`;
 }
 
 export function ChatHomeView({ trips, accountEmail }: { trips: ChatHomeTrip[]; accountEmail?: string | null }) {
@@ -54,9 +83,13 @@ export function ChatHomeView({ trips, accountEmail }: { trips: ChatHomeTrip[]; a
       || (trip.latestMessage?.preview ?? "").toLowerCase().includes(needle));
   }, [trips, query]);
 
+  const readyCount = useMemo(() => trips.filter((trip) => trip.status === "ready").length, [trips]);
+  const departureLabel = useMemo(() => nextDepartureLabel(trips), [trips]);
+  const name = greetingName(accountEmail);
+
   return (
-    <div className="msg-list-screen">
-      <div className="msg-topbar">
+    <div className="hub-screen">
+      <div className="hub-topbar">
         <div className="msg-topbar-actions">
           <button type="button" className="msg-topbar-icon" aria-label="Notifications">
             <Bell size={17} aria-hidden="true" />
@@ -69,84 +102,144 @@ export function ChatHomeView({ trips, accountEmail }: { trips: ChatHomeTrip[]; a
           )}
         </div>
       </div>
-      <div className="msg-list-head">
-        <h1 className="msg-large-title">Messages</h1>
-        {trips.length > 0 && !showForm && (
-          <button type="button" className="msg-compose-button" onClick={() => setShowForm(true)} title="New trip group">
-            <SquarePen size={19} aria-hidden="true" />
-            <span className="sr-only">New trip group</span>
-          </button>
+
+      <section className="hub-hero">
+        <div className="hub-hero-glow" aria-hidden="true" />
+        <div className="hub-hero-row">
+          <span className="hub-hero-eyebrow"><Sparkles size={12} aria-hidden="true" />Trip groups</span>
+          <div className="hub-hero-stats" role="list">
+            <div className="hub-stat" role="listitem">
+              <strong>{trips.length}</strong>
+              <span>Trip group{trips.length === 1 ? "" : "s"}</span>
+            </div>
+            <div className="hub-stat" role="listitem">
+              <strong>{readyCount}</strong>
+              <span>Ready to go</span>
+            </div>
+            <div className="hub-stat" role="listitem">
+              <strong>{departureLabel}</strong>
+              <span>Next departure</span>
+            </div>
+          </div>
+        </div>
+        <h1 className="hub-hero-title">{name ? `Welcome back, ${name}` : "Welcome back"}</h1>
+        <p className="hub-hero-sub">
+          Every trip lives in its own group chat — plan, split and settle it together, in one place.
+        </p>
+
+        {!showForm && (
+          trips.length > 0 ? (
+            <div className="hub-hero-search">
+              <Search size={17} aria-hidden="true" />
+              <input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search your trip groups"
+                aria-label="Search trip groups"
+              />
+              <button type="button" className="primary-button hub-hero-cta" onClick={() => setShowForm(true)}>
+                <Plus size={16} aria-hidden="true" />
+                <span>New trip group</span>
+              </button>
+            </div>
+          ) : (
+            <button type="button" className="primary-button hub-hero-cta" onClick={() => setShowForm(true)}>
+              <Plus size={16} aria-hidden="true" />
+              <span>Create your first trip group</span>
+            </button>
+          )
         )}
-      </div>
+      </section>
 
-      {trips.length > 0 && !showForm && (
-        <div className="msg-search">
-          <Search size={15} aria-hidden="true" />
-          <input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search"
-            aria-label="Search trip groups"
-          />
-        </div>
-      )}
-
-      {trips.length === 0 && !showForm && (
-        <div className="msg-empty">
-          <p>You have no trip groups yet. Start one and invite people when you are ready.</p>
-          <button type="button" className="primary-button" onClick={() => setShowForm(true)}>
-            Create your first trip group
+      {!showForm && (
+        <section className="hub-quick-actions" aria-label="Quick actions">
+          <button type="button" className="hub-quick-card" onClick={() => setShowForm(true)}>
+            <span className="hub-quick-icon"><Plus aria-hidden="true" /></span>
+            <span className="hub-quick-text">
+              <strong>New trip group</strong>
+              <span>Pick a destination, invite your group</span>
+            </span>
+            <ArrowRight className="hub-quick-arrow" aria-hidden="true" />
           </button>
+          <Link href="/settings" className="hub-quick-card">
+            <span className="hub-quick-icon"><UserRound aria-hidden="true" /></span>
+            <span className="hub-quick-text">
+              <strong>Your Travel DNA</strong>
+              <span>Diet, access needs &amp; pace</span>
+            </span>
+            <ArrowRight className="hub-quick-arrow" aria-hidden="true" />
+          </Link>
+        </section>
+      )}
+
+      {showForm && (
+        <section className="hub-form-card">
+          <div className="hub-form-head">
+            <h2>New trip group</h2>
+            <p className="field-hint">Add a destination and rough dates — you can invite people once it&apos;s created.</p>
+          </div>
+          <CreateForm onCancel={() => setShowForm(false)} />
+        </section>
+      )}
+
+      {!showForm && trips.length === 0 && (
+        <div className="msg-empty hub-empty">
+          <p>You have no trip groups yet. Start one and invite people when you are ready.</p>
         </div>
       )}
 
-      {showForm && <CreateForm onCancel={() => setShowForm(false)} />}
+      {!showForm && trips.length > 0 && (
+        <section className="hub-trips">
+          <div className="hub-trips-head">
+            <h2>Your trip groups</h2>
+          </div>
 
-      {trips.length > 0 && !showForm && visible.length === 0 && (
-        <p className="msg-no-results">No trip groups match “{query.trim()}”.</p>
-      )}
-
-      {visible.length > 0 && !showForm && (
-        <ul className="msg-rows">
-          {visible.map((trip) => {
-            // `unread` is null until the unread infrastructure lands (see chat-home.ts), so the
-            // badge simply does not render rather than showing a fabricated count.
-            const unread = trip.unread ?? 0;
-            return (
-              <li key={trip.id} className="msg-row" data-unread={unread > 0 ? "true" : "false"}>
-                <Link href={`/trips/${trip.id}/chat`} className="chat-home-link msg-row-link">
-                  <span className="msg-row-dot" aria-hidden="true" />
-                  <span className="msg-row-avatars" aria-label={`${trip.memberCount} members`}>
-                    {trip.memberAvatars.slice(0, 3).map((avatar) => (
-                      <span key={avatar.id} className="msg-row-avatar" style={{ background: avatar.color }} title={avatar.displayName}>
-                        {avatar.displayName.slice(0, 1).toUpperCase()}
+          {visible.length === 0 ? (
+            <p className="msg-no-results">No trip groups match &ldquo;{query.trim()}&rdquo;.</p>
+          ) : (
+            <div className="hub-trip-grid">
+              {visible.map((trip) => {
+                const unread = trip.unread ?? 0;
+                return (
+                  <Link key={trip.id} href={`/trips/${trip.id}/chat`} className="hub-trip-card">
+                    <div className="hub-trip-card-top">
+                      <span className="hub-trip-badge" data-status={trip.status}>
+                        {trip.status === "ready" ? "Ready" : "Draft"}
                       </span>
-                    ))}
-                  </span>
-                  <span className="msg-row-main">
-                    <span className="msg-row-top">
-                      <span className="msg-row-name">{trip.name}</span>
+                      {unread > 0 && <span className="msg-row-badge" aria-label={`${unread} unread`}>{unread}</span>}
+                    </div>
+                    <h3 className="hub-trip-name">{trip.name}</h3>
+                    <p className="hub-trip-dest">
+                      <MapPin size={13} aria-hidden="true" />
+                      <span>
+                        {timeframeSummary(trip)}
+                        {trip.status === "draft" && " · Planning locked until dates are set"}
+                      </span>
+                    </p>
+                    <p className="hub-trip-preview">
+                      {trip.latestMessage ? trip.latestMessage.preview : "No messages yet"}
+                    </p>
+                    <div className="hub-trip-foot">
+                      <span className="hub-trip-avatars" aria-label={`${trip.memberCount} members`}>
+                        {trip.memberAvatars.slice(0, 3).map((avatar) => (
+                          <span key={avatar.id} className="hub-trip-avatar" style={{ background: avatar.color }} title={avatar.displayName}>
+                            {avatar.displayName.slice(0, 1).toUpperCase()}
+                          </span>
+                        ))}
+                      </span>
                       {trip.latestMessage && (
-                        <time className="msg-row-time" dateTime={trip.latestMessage.at}>
+                        <time className="hub-trip-time" dateTime={trip.latestMessage.at}>
                           {rowTimestamp(trip.latestMessage.at)}
                         </time>
                       )}
-                    </span>
-                    <span className="msg-row-preview">
-                      {trip.latestMessage ? trip.latestMessage.preview : "No messages yet"}
-                    </span>
-                    <span className="msg-row-meta">
-                      {timeframeSummary(trip)}
-                      {trip.status === "draft" && " · Planning locked until dates are set"}
-                    </span>
-                  </span>
-                  {unread > 0 && <span className="msg-row-badge" aria-label={`${unread} unread`}>{unread}</span>}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </section>
       )}
     </div>
   );

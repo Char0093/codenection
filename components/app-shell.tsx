@@ -30,9 +30,9 @@ const TRIP_ITEMS = [
 
 const WIDTH_KEY = "waypoint-sidebar-w";
 const COLLAPSED_KEY = "waypoint-sidebar-collapsed";
-const MIN_WIDTH = 200;
-const MAX_WIDTH = 380;
-const DEFAULT_WIDTH = 240;
+const MIN_WIDTH = 224;
+const MAX_WIDTH = 420;
+const DEFAULT_WIDTH = 272;
 
 function clampWidth(value: number) {
   return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, Math.round(value)));
@@ -64,7 +64,7 @@ export function AppShell({ trip, accountEmail, children }: {
   // slim top bar is the only "you are here" landmark on Plan/Timeline/Budget/etc. -- it needs
   // both the trip name and which section of it this is, not just the trip name alone.
   const section = trip ? TRIP_ITEMS.find((item) => pathname === `/trips/${trip.id}/${item.key}`) : null;
-  const pageTitle = trip?.name ?? (pathname === "/chats" ? "Messages" : pathname === "/settings" ? "Settings" : "Waypoint");
+  const pageTitle = trip?.name ?? (pathname === "/chats" ? "Trip groups" : pathname === "/settings" ? "Settings" : "Waypoint");
 
   // Restore the saved rail size / fold state. localStorage is client-only, so this can't run
   // during render without a hydration mismatch -- same pattern as the theme toggle.
@@ -155,7 +155,7 @@ export function AppShell({ trip, accountEmail, children }: {
           style={{ ["--sidebar-w" as string]: `${width}px` }}
         >
           <div className="app-sidebar-head">
-            <Link href="/chats" className="brand-block"><BrandMark /><strong>Waypoint</strong></Link>
+            <Link href="/chats" className="brand-block"><BrandMark size={26} /><strong>Waypoint</strong></Link>
             <button type="button" className="app-sidebar-collapse" aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
               aria-pressed={collapsed} onClick={toggleCollapsed}>
               {collapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}

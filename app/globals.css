@@ -374,7 +374,8 @@ details[open] > summary .collapse-chevron { transform: rotate(180deg); }
 .proposal-status.rejected, .proposal-status.expired { color: var(--error-dark); background: var(--error-soft); }
 .proposal-summary { margin: 16px 0 20px; color: var(--muted); }
 /* A single grouped surface with inset hairline rows -- the same "iOS Settings list" construction
-   as .msg-rows, rather than dividers floating directly on the canvas with no enclosing card. */
+   as .hub-trip-card's footer rule, rather than dividers floating directly on the canvas with no
+   enclosing card. */
 .activity-list { list-style: none; padding: 0 18px; margin: 0; background: var(--surface); border-radius: var(--r-standard); overflow: hidden; box-shadow: var(--shadow-card); }
 .activity-list > li { padding: 18px 0; border-top: 1px solid var(--line); }
 .activity-list > li:first-child { border-top: 0; }
@@ -1183,86 +1184,122 @@ details[open] > summary .collapse-chevron { transform: rotate(180deg); }
   .onb-sheet { border-radius: 18px; }
 }
 
-/* ---------- Chat-group home as the iOS Messages conversation list ----------
-   ios-chat-design.md §4 "Conversation List": large title, search field, then
-   rows of leading circular avatar / name / 2-line preview / trailing timestamp,
-   separated by inset hairlines rather than cards. No dividers survive into the
-   thread itself -- those live only here, on the list. ---------------------- */
-.msg-list-screen { max-width: 680px; margin: 0 auto; padding: 20px 0 24px; }
-.msg-list-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding: 8px 0 10px; }
-.msg-large-title { font-size: 32px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; margin: 0; }
-.msg-compose-button {
-  flex: none; display: inline-flex; align-items: center; justify-content: center;
-  width: 44px; height: 44px; border: 0; border-radius: 50%; background: transparent;
-  color: var(--teal); cursor: pointer; transition: opacity 0.15s;
-}
-.msg-compose-button:hover { background: var(--teal-soft); }
-.msg-compose-button:active { opacity: 0.3; }
+/* ---------- Chat-group home as a trip-group dashboard ----------
+   A hero panel (greeting, at-a-glance counts, search + create) sits above a responsive card
+   grid of trip groups -- structurally similar to a travel site's search hub (big banner, quick
+   actions, content grid) but built entirely from Waypoint's own tokens: no new colour, just
+   more generous layout and richer cards than the old thin conversation-list rows. ----------- */
+.hub-screen { max-width: 1120px; margin: 0 auto; padding: 4px 0 32px; display: flex; flex-direction: column; gap: 20px; }
+.hub-topbar { display: flex; justify-content: flex-end; }
 
-/* Search field: 36pt, systemGray5 fill, 10pt radius, magnifier in tertiaryLabel. */
-.msg-search {
-  display: flex; align-items: center; gap: 7px; height: 36px; padding: 0 10px;
-  margin-bottom: 8px; border-radius: var(--r-subtle); background: var(--surface-2); color: var(--faint);
+/* The hero always inverts against the page ground (dark panel on the light canvas, light panel
+   once dark mode flips --ink/--teal-dark) so it reads as a lit banner in either theme without a
+   second colour palette -- see --on-accent's own light/dark flip for the text riding on it. */
+.hub-hero {
+  position: relative; overflow: hidden; padding: 28px clamp(20px, 4vw, 36px) 26px;
+  border-radius: var(--r-comfortable); background: linear-gradient(135deg, var(--ink) 0%, var(--teal-dark) 130%);
+  color: var(--on-accent); box-shadow: var(--shadow-card);
 }
-.msg-search input {
-  flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; background: transparent;
-  font-size: 17px; color: var(--ink); min-height: 0;
+.hub-hero-glow {
+  position: absolute; inset: -40% -10% auto auto; width: 340px; height: 340px; border-radius: 50%;
+  background: radial-gradient(circle, var(--on-accent), transparent 70%); opacity: 0.08; pointer-events: none;
 }
-.msg-search input::placeholder { color: var(--faint); }
-.msg-search input:focus { outline: none; box-shadow: none; }
-.msg-search input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+.hub-hero-row { position: relative; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; margin-bottom: 18px; }
+.hub-hero-eyebrow {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: var(--r-capsule);
+  background: color-mix(in srgb, var(--on-accent) 14%, transparent); font-size: 11.5px; font-weight: 700;
+  letter-spacing: 0.02em; text-transform: uppercase;
+}
+.hub-hero-stats { display: flex; align-items: center; gap: 20px; }
+.hub-stat { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.2; }
+.hub-stat strong { font-family: var(--font-display); font-size: 20px; font-weight: 800; }
+.hub-stat span { font-size: 11px; color: color-mix(in srgb, var(--on-accent) 68%, transparent); white-space: nowrap; }
+.hub-hero-title { position: relative; font-size: clamp(24px, 3vw, 32px); font-weight: 800; letter-spacing: -0.02em; color: var(--on-accent); margin: 0; }
+.hub-hero-sub { position: relative; margin: 8px 0 0; max-width: 520px; font-size: 14.5px; line-height: 1.5; color: color-mix(in srgb, var(--on-accent) 78%, transparent); }
 
-.msg-rows { list-style: none; margin: 0; padding: 0; background: var(--surface); border-radius: var(--r-standard); overflow: hidden; box-shadow: var(--shadow-card); }
-.msg-row + .msg-row .msg-row-link::before {
-  /* Inset hairline aligned to the text column, the way a grouped iOS table draws it:
-     8px row padding + 10px unread dot + 12px gap + 104px avatar column + 12px gap. */
-  content: ""; position: absolute; left: 146px; right: 0; top: 0; height: 1px; background: var(--line);
+/* A white search-and-create panel floating on the dark hero, echoing a travel site's banner
+   search bar but scoped to Waypoint's own feature: filtering + starting a trip group. */
+.hub-hero-search {
+  position: relative; display: flex; align-items: center; gap: 10px; margin-top: 22px; padding: 8px 8px 8px 16px;
+  border-radius: var(--r-capsule); background: var(--surface); color: var(--faint); box-shadow: var(--shadow-float);
+  max-width: 640px;
 }
-.msg-row-link {
-  position: relative; display: flex; align-items: center; gap: 12px;
-  min-height: 60px; padding: 10px 14px 10px 8px; text-decoration: none; color: inherit;
-}
-.msg-row-link:hover { background: var(--teal-soft); }
-.msg-row-link:active { background: var(--surface-2); }
+.hub-hero-search > svg { flex: none; }
+.hub-hero-search input { flex: 1; min-width: 0; height: 40px; padding: 0; border: 0; background: transparent; font-size: 15px; color: var(--ink); min-height: 0; }
+.hub-hero-search input::placeholder { color: var(--faint); }
+.hub-hero-search input:focus { outline: none; box-shadow: none; }
+.hub-hero-search input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+.hub-hero-cta { flex: none; white-space: nowrap; }
+.hub-hero > .hub-hero-cta { position: relative; margin-top: 22px; }
 
-/* Leading unread dot occupies its own 10pt column so names stay aligned whether or
-   not a row is unread -- it is only painted when the row carries unread state. */
-.msg-row-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: transparent; }
-.msg-row[data-unread="true"] .msg-row-dot { background: var(--blue); }
+.hub-quick-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.hub-quick-card {
+  display: flex; align-items: center; gap: 14px; padding: 16px 18px; border: 1px solid var(--line);
+  border-radius: var(--r-comfortable); background: var(--surface); box-shadow: var(--shadow-card);
+  text-decoration: none; color: inherit; text-align: left; cursor: pointer; transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+}
+.hub-quick-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-float); border-color: var(--line-strong); }
+.hub-quick-icon {
+  flex: none; width: 42px; height: 42px; display: inline-grid; place-items: center;
+  border-radius: var(--r-standard); background: var(--surface-2); color: var(--ink);
+}
+.hub-quick-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.hub-quick-text strong { font-size: 14.5px; font-weight: 700; letter-spacing: -0.01em; }
+.hub-quick-text span { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-quick-arrow { flex: none; width: 16px; height: 16px; color: var(--faint); transition: transform 0.15s, color 0.15s; }
+.hub-quick-card:hover .hub-quick-arrow { transform: translateX(3px); color: var(--ink); }
 
-/* Fixed-width avatar column (three 44px avatars overlapped by 14px = 104px) so the name and
-   preview columns line up down the list no matter how many members a group has. */
-.msg-row-avatars { flex: none; display: flex; align-items: center; width: 104px; }
-.msg-row-avatar {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 44px; height: 44px; margin-left: -14px; border-radius: 50%;
-  border: 2px solid var(--surface); color: #fff; font-size: 15px; font-weight: 600;
-}
-.msg-row-avatars .msg-row-avatar:first-child { margin-left: 0; }
+.hub-form-card { padding: 22px clamp(18px, 3vw, 28px) 26px; border-radius: var(--r-comfortable); background: var(--surface); box-shadow: var(--shadow-card); }
+.hub-form-head { margin-bottom: 16px; }
+.hub-form-head h2 { font-size: 19px; }
+.hub-form-head .field-hint { margin: 4px 0 0; }
+.hub-form-card .chat-home-form { margin: 0; max-width: 560px; }
 
-.msg-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.msg-row-top { display: flex; align-items: baseline; gap: 8px; }
-.msg-row-name { flex: 1; min-width: 0; font-size: 17px; font-weight: 600; letter-spacing: -0.4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.msg-row-time { flex: none; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.msg-row-preview {
-  font-size: 15px; line-height: 1.35; letter-spacing: -0.2px; color: var(--muted);
-  display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+.hub-empty { padding: 40px 8px; justify-items: center; text-align: center; }
+
+.hub-trips-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+.hub-trips-head h2 { font-size: 17px; }
+
+.hub-trip-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(272px, 1fr)); gap: 16px; }
+.hub-trip-card {
+  display: flex; flex-direction: column; gap: 8px; padding: 18px 20px 16px; border-radius: var(--r-comfortable);
+  background: var(--surface); box-shadow: var(--shadow-card); text-decoration: none; color: inherit;
+  transition: transform 0.15s, box-shadow 0.15s;
 }
-.msg-row-meta { font-size: 13px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.msg-row-badge {
-  flex: none; min-width: 22px; height: 22px; padding: 0 7px; border-radius: var(--r-capsule);
-  background: var(--teal); color: var(--on-accent); font-size: 13px; font-weight: 600;
-  display: inline-flex; align-items: center; justify-content: center;
+.hub-trip-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-float); }
+.hub-trip-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.hub-trip-badge { padding: 4px 10px; border-radius: var(--r-capsule); font-size: 11px; font-weight: 700; letter-spacing: 0.01em; }
+.hub-trip-badge[data-status="ready"] { color: var(--consensus); background: var(--consensus-soft); }
+.hub-trip-badge[data-status="draft"] { color: var(--flexible-dark); background: var(--flexible-soft); }
+.hub-trip-name { font-size: 17px; letter-spacing: -0.3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-trip-dest { display: flex; align-items: center; gap: 5px; margin: 0; font-size: 12.5px; color: var(--muted); overflow: hidden; }
+.hub-trip-dest svg { flex: none; color: var(--faint); }
+.hub-trip-dest span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-trip-preview {
+  margin: 2px 0 0; font-size: 13.5px; line-height: 1.4; color: var(--muted);
+  display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 2.8em;
 }
+.hub-trip-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--line); }
+.hub-trip-avatars { display: flex; align-items: center; }
+.hub-trip-avatar {
+  display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; margin-left: -8px;
+  border-radius: 50%; border: 2px solid var(--surface); color: #fff; font-size: 11px; font-weight: 700;
+}
+.hub-trip-avatars .hub-trip-avatar:first-child { margin-left: 0; }
+.hub-trip-time { font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; }
 
 .msg-empty { display: grid; gap: 12px; justify-items: start; padding: 20px 0; color: var(--muted); font-size: 15px; }
 .msg-empty p { margin: 0; }
 .msg-no-results { margin: 20px 0; font-size: 15px; color: var(--muted); text-align: center; }
 
-@media (max-width: 520px) {
-  .msg-large-title { font-size: 30px; }
-  .msg-rows { border-radius: 0; margin: 0 -20px; }
-  .msg-row + .msg-row .msg-row-link::before { left: 140px; }
+@media (max-width: 640px) {
+  .hub-hero { padding: 24px 18px 22px; }
+  .hub-hero-row { flex-direction: column; align-items: flex-start; }
+  .hub-hero-stats { gap: 16px; }
+  .hub-hero-search { flex-wrap: wrap; padding: 12px; border-radius: var(--r-comfortable); }
+  .hub-hero-search input { width: 100%; height: 44px; }
+  .hub-hero-cta { width: 100%; }
+  .hub-trip-grid { grid-template-columns: 1fr; }
 }
 
 /* Legacy .chat-home-* rules kept only where the create form still uses them. */
@@ -1306,49 +1343,50 @@ details[open] > summary .collapse-chevron { transform: rotate(180deg); }
 .app-sidebar-backdrop { display: none; }
 
 .app-sidebar {
-  flex: 0 0 var(--sidebar-w, 240px); display: flex; flex-direction: column; gap: 4px;
-  padding: 18px 16px 18px 14px; border: 0; border-radius: var(--r-comfortable); background: var(--surface);
+  flex: 0 0 var(--sidebar-w, 272px); display: flex; flex-direction: column; gap: 4px;
+  padding: 22px 18px 20px 16px; border: 0; border-radius: var(--r-comfortable); background: var(--surface);
   box-shadow: var(--shadow-card); overflow-y: auto; overflow-x: hidden; position: relative;
   transition: flex-basis 0.18s ease;
 }
 .app-sidebar[data-dragging="true"] { transition: none; user-select: none; }
-.app-sidebar[data-collapsed="true"] { flex-basis: 76px; padding: 18px 12px; align-items: stretch; }
+.app-sidebar[data-collapsed="true"] { flex-basis: 84px; padding: 22px 14px; align-items: stretch; }
 .app-sidebar[data-collapsed="true"] .app-sidebar-heading,
 .app-sidebar[data-collapsed="true"] .app-sidebar-email,
 .app-sidebar[data-collapsed="true"] .app-sidebar-link span,
 .app-sidebar[data-collapsed="true"] .brand-block strong { display: none; }
 .app-sidebar[data-collapsed="true"] .app-sidebar-link,
 .app-sidebar[data-collapsed="true"] .app-sidebar-head { justify-content: center; }
-.app-sidebar[data-collapsed="true"] .app-sidebar-link { padding: 8px 0; }
+.app-sidebar[data-collapsed="true"] .app-sidebar-link { padding: 10px 0; }
 
-.app-sidebar-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 16px; }
+.app-sidebar-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 20px; }
 .app-sidebar-head .brand-block { color: var(--ink); }
-.app-sidebar-head .brand-block > svg { color: var(--ink); }
+.app-sidebar-head .brand-block > svg { width: 26px; height: 26px; color: var(--ink); }
+.app-sidebar-head .brand-block strong { font-size: 18.5px; }
 /* Fold / unfold control -- collapses the rail to an icons-only strip and back. */
 .app-sidebar-collapse {
-  flex: none; width: 30px; height: 30px; display: inline-grid; place-items: center; padding: 0;
-  border: 0; border-radius: 8px; background: transparent; color: var(--faint); cursor: pointer;
+  flex: none; width: 32px; height: 32px; display: inline-grid; place-items: center; padding: 0;
+  border: 0; border-radius: 9px; background: transparent; color: var(--faint); cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
 .app-sidebar-collapse:hover { background: var(--surface-2); color: var(--ink); }
 .app-sidebar-close { display: none; }
-.app-sidebar-nav { display: flex; flex-direction: column; gap: 2px; }
+.app-sidebar-nav { display: flex; flex-direction: column; gap: 3px; }
 .app-sidebar-heading {
-  margin: 16px 0 4px; padding: 0 10px; font-size: 11px; font-weight: 700; text-transform: uppercase;
+  margin: 20px 0 6px; padding: 0 12px; font-size: 11.5px; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.08em; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .app-sidebar-link {
-  display: flex; align-items: center; gap: 11px; min-height: 40px; padding: 8px 12px; margin: 0; width: 100%;
-  border: 0; border-radius: var(--r-capsule); background: none; color: var(--muted); font-size: 13.5px; font-weight: 600;
+  display: flex; align-items: center; gap: 13px; min-height: 48px; padding: 11px 14px; margin: 0; width: 100%;
+  border: 0; border-radius: var(--r-capsule); background: none; color: var(--muted); font-size: 14.5px; font-weight: 600;
   text-decoration: none; text-align: left; cursor: pointer; transition: background 0.15s, color 0.15s;
 }
-.app-sidebar-link svg { width: 18px; height: 18px; flex: none; }
+.app-sidebar-link svg { width: 21px; height: 21px; flex: none; }
 .app-sidebar-link:hover:not([aria-disabled="true"]) { background: var(--surface-2); color: var(--ink); }
 .app-sidebar-link[aria-current="page"] { background: var(--teal); color: var(--on-accent); }
 .app-sidebar-link[aria-current="page"]:hover { background: var(--teal-dark); color: var(--on-accent); }
 .app-sidebar-link[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
 .app-sidebar-spacer { flex: 1 1 auto; }
-.app-sidebar-email { margin: 4px 12px; font-size: 11.5px; color: var(--faint); overflow-wrap: anywhere; }
+.app-sidebar-email { margin: 6px 14px 2px; font-size: 12px; color: var(--faint); overflow-wrap: anywhere; }
 .app-sidebar-logout:hover { background: var(--error-soft); color: var(--error-dark); }
 /* Drag the right edge to resize the rail (desktop only; see app-shell.tsx). Sits inside the
    card's right padding so it never overlaps a nav label. */
@@ -1406,7 +1444,7 @@ details[open] > summary .collapse-chevron { transform: rotate(180deg); }
   }
   .shell-body { gap: 0; padding: 0; }
   .app-sidebar {
-    position: fixed; inset: 0 auto 0 0; z-index: 30; width: min(280px, 82vw); flex: none;
+    position: fixed; inset: 0 auto 0 0; z-index: 30; width: min(300px, 84vw); flex: none;
     border-radius: 0; box-shadow: 2px 0 16px rgba(0, 0, 0, 0.12);
     transform: translateX(-100%); transition: transform 0.2s ease;
     padding-top: calc(20px + env(safe-area-inset-top, 0px)); padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
@@ -1419,7 +1457,7 @@ details[open] > summary .collapse-chevron { transform: rotate(180deg); }
   .app-sidebar[data-collapsed="true"] .app-sidebar-email,
   .app-sidebar[data-collapsed="true"] .app-sidebar-link span,
   .app-sidebar[data-collapsed="true"] .brand-block strong { display: revert; }
-  .app-sidebar[data-collapsed="true"] .app-sidebar-link { padding: 8px 12px; justify-content: flex-start; }
+  .app-sidebar[data-collapsed="true"] .app-sidebar-link { padding: 11px 14px; justify-content: flex-start; }
   .app-sidebar-collapse, .app-sidebar-resize { display: none; }
   .app-sidebar-close { display: inline-grid; }
 }
