@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Search, SquarePen } from "lucide-react";
+import { Bell, Search, SquarePen } from "lucide-react";
 import { budgetTiers } from "@/lib/domain/trip";
 import { TRIP_MODES, TRIP_MODE_LABELS, type TripMode } from "@/lib/domain/trip";
 import type { BudgetTier } from "@/lib/domain/trip";
@@ -40,7 +40,7 @@ function rowTimestamp(iso: string): string {
   return at.toLocaleDateString(undefined, { month: "numeric", day: "numeric", year: "2-digit" });
 }
 
-export function ChatHomeView({ trips }: { trips: ChatHomeTrip[] }) {
+export function ChatHomeView({ trips, accountEmail }: { trips: ChatHomeTrip[]; accountEmail?: string | null }) {
   const [showForm, setShowForm] = useState(false);
   const [query, setQuery] = useState("");
 
@@ -56,6 +56,19 @@ export function ChatHomeView({ trips }: { trips: ChatHomeTrip[] }) {
 
   return (
     <div className="msg-list-screen">
+      <div className="msg-topbar">
+        <div className="msg-topbar-actions">
+          <button type="button" className="msg-topbar-icon" aria-label="Notifications">
+            <Bell size={17} aria-hidden="true" />
+          </button>
+          {accountEmail && (
+            <Link href="/settings" className="msg-user-chip">
+              <span className="msg-user-avatar">{accountEmail.slice(0, 1).toUpperCase()}</span>
+              <span className="msg-user-name">{accountEmail}</span>
+            </Link>
+          )}
+        </div>
+      </div>
       <div className="msg-list-head">
         <h1 className="msg-large-title">Messages</h1>
         {trips.length > 0 && !showForm && (

@@ -13,7 +13,7 @@ export default async function ChatsPage() {
   if (isPrototype()) {
     return (
       <AppShell accountEmail={DEMO_USER.email}>
-        <ChatHomeView trips={DEMO_CHAT_HOME_TRIPS} />
+        <ChatHomeView trips={DEMO_CHAT_HOME_TRIPS} accountEmail={DEMO_USER.email} />
       </AppShell>
     );
   }
@@ -25,7 +25,7 @@ export default async function ChatsPage() {
   const home = await getChatHome(client);
   return (
     <AppShell accountEmail={user.email}>
-      <ChatHomeView trips={home.trips} />
+      <ChatHomeView trips={home.trips} accountEmail={user.email} />
     </AppShell>
   );
 }
