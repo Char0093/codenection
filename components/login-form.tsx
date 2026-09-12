@@ -18,9 +18,34 @@ function GoogleG() {
   );
 }
 
-function AuthTrustPanel() {
+const SLIDE_DURATION_MS = 5000;
+
+function AuthSlideshow({ images }: { images: string[] }) {
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    if (images.length < 2) return;
+    const id = setInterval(() => setIndex((current) => (current + 1) % images.length), SLIDE_DURATION_MS);
+    return () => clearInterval(id);
+  }, [images.length]);
+
+  if (images.length === 0) return null;
+
+  return (
+    <div className="mkt-auth-slideshow" aria-hidden="true">
+      {images.map((src, i) => (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img key={src} src={src} alt="" className="mkt-auth-slideshow-img" style={{ opacity: i === index ? 1 : 0 }} />
+      ))}
+      <div className="mkt-auth-slideshow-scrim" />
+    </div>
+  );
+}
+
+function AuthTrustPanel({ slideshowImages }: { slideshowImages: string[] }) {
   return (
     <div className="mkt-auth-left">
+      <AuthSlideshow images={slideshowImages} />
       <div className="mkt-mesh"><i /><i /></div>
       <span className="mkt-brand" style={{ position: "relative" }}><span className="mkt-brand-mark"><BrandMark size={16} /></span>Waypoint</span>
       <div>
@@ -52,7 +77,7 @@ function AuthTrustPanel() {
  * bypasses auth purely from `isPrototype()`. Rendered by the login page in place of the real
  * sign-in form when the build is in prototype mode.
  */
-export function PrototypeEntry() {
+export function PrototypeEntry({ slideshowImages = [] }: { slideshowImages?: string[] }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -63,7 +88,7 @@ export function PrototypeEntry() {
 
   return (
     <main className="mkt mkt-auth">
-      <AuthTrustPanel />
+      <AuthTrustPanel slideshowImages={slideshowImages} />
       <div className="mkt-auth-right">
         <div className="mkt-auth-form">
           <span className="mkt-auth-form-eyebrow">Demo build</span>
@@ -92,7 +117,7 @@ export function PrototypeEntry() {
   );
 }
 
-export function LoginForm({ configured }: { configured: boolean }) {
+export function LoginForm({ configured, slideshowImages = [] }: { configured: boolean; slideshowImages?: string[] }) {
   const [email, setEmail] = useState("");
   const [pending, setPending] = useState(false);
   const [sent, setSent] = useState(false);
@@ -175,7 +200,7 @@ export function LoginForm({ configured }: { configured: boolean }) {
 
   return (
     <main className="mkt mkt-auth">
-      <AuthTrustPanel />
+      <AuthTrustPanel slideshowImages={slideshowImages} />
       <div className="mkt-auth-right">
         <div className="mkt-auth-form">
           <span className="mkt-auth-form-eyebrow">Welcome back</span>
