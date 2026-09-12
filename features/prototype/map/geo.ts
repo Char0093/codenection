@@ -67,6 +67,33 @@ export function remainingDistance(path: readonly LatLng[], p: LatLng): number {
   return total;
 }
 
+/** Total length of a polyline in metres. */
+export function pathLength(path: readonly LatLng[]): number {
+  let total = 0;
+  for (let i = 1; i < path.length; i += 1) total += distanceMetres(path[i - 1], path[i]);
+  return total;
+}
+
+/**
+ * The point `metres` along `path` from its start, linearly interpolated between the two
+ * vertices it falls between. Clamps to the first/last vertex outside that range — used to
+ * animate a "you are here" dot walking the route during simulated navigation.
+ */
+export function pointAtDistance(path: readonly LatLng[], metres: number): LatLng | null {
+  if (path.length === 0) return null;
+  if (path.length === 1 || metres <= 0) return path[0];
+  let remaining = metres;
+  for (let i = 1; i < path.length; i += 1) {
+    const seg = distanceMetres(path[i - 1], path[i]);
+    if (remaining <= seg) {
+      const t = seg === 0 ? 0 : remaining / seg;
+      return { lat: path[i - 1].lat + (path[i].lat - path[i - 1].lat) * t, lng: path[i - 1].lng + (path[i].lng - path[i - 1].lng) * t };
+    }
+    remaining -= seg;
+  }
+  return path[path.length - 1];
+}
+
 /**
  * Where to point from your *current* position: a point `lookAhead` metres further along the
  * route, so the arrow follows the street instead of aiming through whatever is between you and

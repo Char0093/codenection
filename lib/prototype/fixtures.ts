@@ -242,6 +242,8 @@ export type DemoRouteLeg = {
   mode: "walk" | "drive" | "funicular";
   minutes: number;
   distanceKm: number;
+  /** Illustrative road-condition tint for this leg — demo data, not live traffic. */
+  congestion?: "low" | "medium" | "high";
 };
 
 export const DEMO_MAP_STOPS: Record<string, DemoMapStop[]> = {
@@ -271,16 +273,16 @@ export const DEMO_MAP_STOPS: Record<string, DemoMapStop[]> = {
  */
 export const DEMO_ROUTE_LEGS: Record<string, DemoRouteLeg[]> = {
   "2026-10-03": [
-    { fromId: "s1", toId: "s2", mode: "walk", minutes: 4, distanceKm: 0.27 },
-    { fromId: "s2", toId: "s3", mode: "walk", minutes: 20, distanceKm: 1.38 },
-    { fromId: "s3", toId: "s4", mode: "walk", minutes: 8, distanceKm: 0.54 },
+    { fromId: "s1", toId: "s2", mode: "walk", minutes: 4, distanceKm: 0.27, congestion: "low" },
+    { fromId: "s2", toId: "s3", mode: "walk", minutes: 20, distanceKm: 1.38, congestion: "high" },
+    { fromId: "s3", toId: "s4", mode: "walk", minutes: 8, distanceKm: 0.54, congestion: "medium" },
   ],
   "2026-10-04": [
-    { fromId: "s5", toId: "s6", mode: "walk", minutes: 7, distanceKm: 0.49 },
-    { fromId: "s6", toId: "s7", mode: "walk", minutes: 6, distanceKm: 0.41 },
+    { fromId: "s5", toId: "s6", mode: "walk", minutes: 7, distanceKm: 0.49, congestion: "low" },
+    { fromId: "s6", toId: "s7", mode: "walk", minutes: 6, distanceKm: 0.41, congestion: "medium" },
   ],
   "2026-10-05": [
-    { fromId: "s8", toId: "s9", mode: "funicular", minutes: 6, distanceKm: 7.86 },
+    { fromId: "s8", toId: "s9", mode: "funicular", minutes: 6, distanceKm: 7.86, congestion: "low" },
   ],
 };
 

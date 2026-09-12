@@ -1,15 +1,18 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Compass, RotateCcw, RotateCw } from "lucide-react";
 import { loadGoogleMaps } from "@/lib/prototype/google-maps-loader";
+import type { DemoRouteLeg } from "@/lib/prototype/fixtures";
 import { bearing, type LatLng } from "./geo";
+import { createLiveDotOverlay, type LiveDotOverlay } from "./live-dot-overlay";
 import type { DemoMapStop } from "./types";
 
 /* Minimal shapes of the Google Maps globals used here. */
 type GMap = {
   fitBounds: (b: unknown, padding?: unknown) => void;
   panTo: (p: LatLng) => void;
+  panBy: (x: number, y: number) => void;
   setZoom: (z: number) => void;
   getZoom: () => number | undefined;
   setTilt: (t: number) => void;
@@ -18,11 +21,17 @@ type GMap = {
   setMapTypeId: (id: string) => void;
   setOptions: (o: Record<string, unknown>) => void;
   moveCamera: (c: Record<string, unknown>) => void;
+  addListener: (event: string, cb: () => void) => { remove: () => void };
 };
 type GMaps = {
   maps: {
     Map: new (el: HTMLElement, opts: Record<string, unknown>) => GMap;
     Marker: new (opts: Record<string, unknown>) => { setMap: (m: unknown) => void };
+    Polyline: new (opts: Record<string, unknown>) => {
+      setMap: (m: unknown) => void;
+      setOptions: (o: Record<string, unknown>) => void;
+    };
+    TrafficLayer: new () => { setMap: (m: unknown) => void };
     LatLngBounds: new () => { extend: (p: LatLng) => void };
     DirectionsRenderer: new (opts: Record<string, unknown>) => {
       setDirections: (r: unknown) => void;
@@ -31,6 +40,7 @@ type GMaps = {
     Animation: { DROP: unknown };
     Point: new (x: number, y: number) => unknown;
     Size: new (w: number, h: number) => unknown;
+    SymbolPath: { FORWARD_CLOSED_ARROW: unknown };
   };
 };
 
@@ -49,6 +59,24 @@ const MAP_STYLE = [
   { featureType: "water", elementType: "geometry", stylers: [{ color: "#a9cbd6" }] },
   { featureType: "administrative", elementType: "geometry", stylers: [{ visibility: "off" }] },
 ];
+
+// How far (px) to lift the followed point above the map's true centre, so it lands in the
+// middle of the strip still visible between the nav card (top) and the nav bar (bottom) —
+// both roughly the same height once the edge FABs/thumbnail are hidden during navigation.
+const NAV_CENTER_LIFT_PX = 40;
+
+const CONGESTION_FALLBACK: Record<NonNullable<DemoRouteLeg["congestion"]>, string> = {
+  low: "#1a9750", medium: "#e0850d", high: "#e5484d",
+};
+/** Reads the live theme's own token for each congestion tier, so the overlay matches light/dark
+ *  rather than a hardcoded palette baked into map tiles. */
+function congestionColor(level: DemoRouteLeg["congestion"]): string | null {
+  if (!level) return null;
+  if (typeof window === "undefined") return CONGESTION_FALLBACK[level];
+  const varName = level === "low" ? "--consensus" : level === "medium" ? "--flexible" : "--error";
+  const value = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+  return value || CONGESTION_FALLBACK[level];
+}
 
 /** A gold star anchor marking where split branches reconverge. */
 function rendezvousIcon(): string {
@@ -69,26 +97,52 @@ function pinIcon(order: number): string {
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
 
+export type MapLayerHandle = { recentre: () => void };
+
 /**
  * The Google map: a muted base style + dropped navy numbered pins + a thick route polyline in
  * 2D; in 3D it swaps to tilted satellite/aerial imagery (45° where Google has it) headed along
- * the route, Waze-style, with rotate + reset-north controls.
+ * the route, Waze-style, with rotate + reset-north controls. On top: a per-leg congestion tint,
+ * an optional live traffic layer, and — while navigating — a pulsing "you are here" dot that the
+ * camera follows until the traveller drags the map away (see `following`/`onManualPan`).
  */
-export function MapLayer({ stops, activeResult, view, dimmed, rendezvous, focus }: {
+export const MapLayer = forwardRef<MapLayerHandle, {
   stops: DemoMapStop[];
+  legs: DemoRouteLeg[];
   activeResult: unknown;
+  /** The walked polyline per leg, in stop order — same source used for the congestion tint and
+   *  the nav simulation's live dot. */
+  legPaths?: LatLng[][];
   view: "2d" | "3d";
   dimmed: boolean;
   /** Where split branches rejoin, drawn as a gold star. Null on days without a split. */
   rendezvous?: { lat: number; lng: number; name: string; time: string } | null;
-  /** While navigating, the manoeuvre to centre on instead of framing the whole day. */
-  focus?: { lat: number; lng: number } | null;
-}) {
+  /** The simulated "you are here" position while navigating. Null when not navigating. */
+  liveDot?: { lat: number; lng: number; heading: number | null } | null;
+  /** Whether the camera should keep panning to `liveDot` as it moves. */
+  following: boolean;
+  showTraffic: boolean;
+  /** Fired when the traveller drags the map during navigation, so RouteScreen can drop `following`. */
+  onManualPan?: () => void;
+}>(function MapLayer(
+  { stops, legs, activeResult, legPaths, view, dimmed, rendezvous, liveDot, following, showTraffic, onManualPan },
+  ref,
+) {
   const elRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<GMap | null>(null);
   const rendererRef = useRef<{ setDirections: (r: unknown) => void; setMap: (m: unknown) => void } | null>(null);
   const markersRef = useRef<{ setMap: (m: unknown) => void }[]>([]);
+  const congestionRef = useRef<{ setMap: (m: unknown) => void }[]>([]);
+  const flowRef = useRef<{ setMap: (m: unknown) => void; setOptions: (o: Record<string, unknown>) => void } | null>(null);
+  const flowOffsetRef = useRef(0);
+  const trafficRef = useRef<{ setMap: (m: unknown) => void } | null>(null);
+  const liveDotRef = useRef<LiveDotOverlay | null>(null);
+  const dragListenerRef = useRef<{ remove: () => void } | null>(null);
   const [built, setBuilt] = useState(false);
+
+  // Read through a ref so re-subscribing to `dragstart` doesn't churn on every render.
+  const onManualPanRef = useRef(onManualPan);
+  onManualPanRef.current = onManualPan;
 
   // Build the map once Google Maps is ready (the loader promise is cached, so this is cheap).
   useEffect(() => {
@@ -113,14 +167,22 @@ export function MapLayer({ stops, activeResult, view, dimmed, rendezvous, focus 
         preserveViewport: true,
         polylineOptions: { strokeColor: "#182544", strokeWeight: 5, strokeOpacity: 0.92 },
       });
+      liveDotRef.current = createLiveDotOverlay(mapRef.current);
+      dragListenerRef.current = mapRef.current.addListener("dragstart", () => onManualPanRef.current?.());
       setBuilt(true);
     }).catch(() => { /* RouteScreen shows the fallback + the error note */ });
     return () => {
       cancelled = true;
       markersRef.current.forEach((m) => m.setMap(null));
+      congestionRef.current.forEach((p) => p.setMap(null));
+      flowRef.current?.setMap(null);
       rendererRef.current?.setMap(null);
+      trafficRef.current?.setMap(null);
+      liveDotRef.current?.destroy();
+      dragListenerRef.current?.remove();
       mapRef.current = null;
       rendererRef.current = null;
+      liveDotRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -139,7 +201,23 @@ export function MapLayer({ stops, activeResult, view, dimmed, rendezvous, focus 
       : { top: 150, right: 44, bottom: 244, left: 44 });
   }, [stops]);
 
-  // Re-draw pins + route + bounds whenever the day or the active route changes (or on first build).
+  useImperativeHandle(ref, () => ({
+    recentre: () => {
+      const map = mapRef.current;
+      if (!map) return;
+      if (liveDot) {
+        const target = { lat: liveDot.lat, lng: liveDot.lng };
+        const shifted = liveDotRef.current?.offset(target, 0, NAV_CENTER_LIFT_PX) ?? target;
+        map.panTo(shifted);
+        if ((map.getZoom() ?? 0) < 18) map.setZoom(18);
+      } else {
+        frameRoute();
+      }
+    },
+  }), [liveDot, frameRoute]);
+
+  // Re-draw pins + congestion tint + route + bounds whenever the day or the active route
+  // changes (or on first build).
   useEffect(() => {
     const g = (window as unknown as { google?: GMaps }).google;
     const map = mapRef.current;
@@ -165,23 +243,90 @@ export function MapLayer({ stops, activeResult, view, dimmed, rendezvous, focus 
       }));
     }
 
-    if (activeResult && rendererRef.current) rendererRef.current.setDirections(activeResult);
-    // While navigating, the focus effect owns the camera — don't yank it back to the whole day.
-    if (!focus) frameRoute();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stops, activeResult, built, frameRoute, rendezvous]);
+    congestionRef.current.forEach((p) => p.setMap(null));
+    congestionRef.current = [];
+    if (legPaths && legPaths.length === legs.length) {
+      legs.forEach((leg, i) => {
+        const color = congestionColor(leg.congestion);
+        const path = legPaths[i];
+        if (!color || !path || path.length < 2) return;
+        congestionRef.current.push(new g.maps.Polyline({
+          map, path, strokeColor: color, strokeOpacity: 0.55, strokeWeight: 9, zIndex: 50, clickable: false,
+        }));
+      });
+    }
 
-  // Navigation mode: follow the current manoeuvre.
+    // A near-invisible line carrying only repeating arrow glyphs, offset-animated on an interval
+    // (see the effect below) — the classic Maps technique for showing a route has a direction of
+    // travel, some ambient life on the screen even before you hit Start.
+    flowRef.current?.setMap(null);
+    const flowPath = (legPaths ?? []).flat();
+    flowRef.current = flowPath.length >= 2
+      ? new g.maps.Polyline({
+          map, path: flowPath, strokeOpacity: 0, zIndex: 90, clickable: false,
+          icons: [{
+            icon: {
+              path: g.maps.SymbolPath.FORWARD_CLOSED_ARROW, scale: 2.8,
+              fillColor: "#ffffff", fillOpacity: 0.95, strokeColor: "#182544", strokeWeight: 1.4,
+            },
+            offset: "0%", repeat: "64px",
+          }],
+        })
+      : null;
+
+    if (activeResult && rendererRef.current) rendererRef.current.setDirections(activeResult);
+    // While navigating, the follow effect owns the camera — don't yank it back to the whole day.
+    if (!liveDot) frameRoute();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stops, legs, legPaths, activeResult, built, frameRoute, rendezvous]);
+
+  // Animate the flow arrows drifting along the route — paused while navigating, since the live
+  // dot already carries the motion cue there, and skipped under reduced-motion.
+  useEffect(() => {
+    if (!built || liveDot) return undefined;
+    if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return undefined;
+    const id = window.setInterval(() => {
+      flowOffsetRef.current = (flowOffsetRef.current + 0.7) % 100;
+      flowRef.current?.setOptions({
+        icons: [{
+          icon: {
+            path: (window as unknown as { google?: GMaps }).google?.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+            scale: 2.8, fillColor: "#ffffff", fillOpacity: 0.95, strokeColor: "#182544", strokeWeight: 1.4,
+          },
+          offset: `${flowOffsetRef.current}%`, repeat: "64px",
+        }],
+      });
+    }, 45);
+    return () => window.clearInterval(id);
+  }, [built, liveDot]);
+
+  // Live traffic, toggled by the Traffic FAB.
+  useEffect(() => {
+    const g = (window as unknown as { google?: GMaps }).google;
+    const map = mapRef.current;
+    if (!built || !g?.maps || !map) return;
+    if (!trafficRef.current) trafficRef.current = new g.maps.TrafficLayer();
+    trafficRef.current.setMap(showTraffic ? map : null);
+  }, [showTraffic, built]);
+
+  // Navigation mode: draw the live dot and, while following, keep the camera on it — lifted
+  // clear of the nav card/bar so it reads as centred in the visible strip, not the raw div.
+  // This runs on every simulated position tick (~60/s while playing), so the camera move must
+  // be instant (`moveCamera`, not `panTo`): calling an *animated* pan every frame fights its own
+  // still-running easing and the camera drifts rather than tracking the dot.
   useEffect(() => {
     const map = mapRef.current;
+    const dot = liveDotRef.current;
     if (!built || !map) return;
-    if (focus) {
-      map.panTo(focus);
-      if ((map.getZoom() ?? 0) < 18) map.setZoom(18);
-    } else {
-      frameRoute();
+    if (!liveDot) { dot?.setPosition(null); return; }
+    const target = { lat: liveDot.lat, lng: liveDot.lng };
+    dot?.setPosition(target);
+    dot?.setHeading(liveDot.heading);
+    if (following) {
+      const shifted = dot?.offset(target, 0, NAV_CENTER_LIFT_PX) ?? target;
+      map.moveCamera({ center: shifted, zoom: Math.max(map.getZoom() ?? 0, 18) });
     }
-  }, [focus, built, frameRoute]);
+  }, [liveDot, following, built]);
 
   // 2D <-> 3D: flat styled roadmap vs. tilted aerial imagery headed along the route.
   useEffect(() => {
@@ -235,4 +380,4 @@ export function MapLayer({ stops, activeResult, view, dimmed, rendezvous, focus 
       )}
     </div>
   );
-}
+});

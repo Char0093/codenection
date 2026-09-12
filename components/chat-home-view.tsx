@@ -3,11 +3,12 @@
 import React, { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Bell, MapPin, Plus, Search, Sparkles, UserRound } from "lucide-react";
+import { ArrowRight, Bell, CalendarRange, MapPin, Plus, Search, Sparkles, UserRound } from "lucide-react";
 import { budgetTiers } from "@/lib/domain/trip";
 import { TRIP_MODES, TRIP_MODE_LABELS, type TripMode } from "@/lib/domain/trip";
 import type { BudgetTier } from "@/lib/domain/trip";
 import type { ChatHomeTrip } from "@/lib/domain/chat-home";
+import { DrawCheckbox } from "@/components/draw-checkbox";
 
 // Chat-group home (spec §2.3): membership-scoped list + an organizer create form
 // (destination + trip style + dates OR a rough length; optional proposed budget / split).
@@ -176,8 +177,11 @@ export function ChatHomeView({ trips, accountEmail }: { trips: ChatHomeTrip[]; a
       {showForm && (
         <section className="hub-form-card">
           <div className="hub-form-head">
-            <h2>New trip group</h2>
-            <p className="field-hint">Add a destination and rough dates — you can invite people once it&apos;s created.</p>
+            <span className="hub-form-head-icon" aria-hidden="true"><CalendarRange /></span>
+            <div>
+              <h2>New trip group</h2>
+              <p className="field-hint">Add a destination and rough dates — you can invite people once it&apos;s created.</p>
+            </div>
           </div>
           <CreateForm onCancel={() => setShowForm(false)} />
         </section>
@@ -314,14 +318,16 @@ function CreateForm({ onCancel }: { onCancel: () => void }) {
 
       <fieldset>
         <legend>When</legend>
-        <label>
-          <input type="radio" name="timeframe" checked={timeframe === "dates"} onChange={() => setTimeframe("dates")} />
-          I have dates
-        </label>
-        <label>
-          <input type="radio" name="timeframe" checked={timeframe === "length"} onChange={() => setTimeframe("length")} />
-          Just a rough length
-        </label>
+        <div className="chat-home-when theme-segmented" role="radiogroup" aria-label="When">
+          <button type="button" className="theme-segment" data-active={timeframe === "dates" ? "true" : undefined}
+            role="radio" aria-checked={timeframe === "dates"} onClick={() => setTimeframe("dates")}>
+            I have dates
+          </button>
+          <button type="button" className="theme-segment" data-active={timeframe === "length" ? "true" : undefined}
+            role="radio" aria-checked={timeframe === "length"} onClick={() => setTimeframe("length")}>
+            Just a rough length
+          </button>
+        </div>
         {timeframe === "dates" ? (
           <div className="chat-home-dates">
             <label>
@@ -342,19 +348,22 @@ function CreateForm({ onCancel }: { onCancel: () => void }) {
         )}
       </fieldset>
 
-      <label>
-        Proposed per-person budget (optional)
-        <select value={proposedBudgetTier} onChange={(event) => setProposedBudgetTier(event.target.value as BudgetTier)}>
-          <option value="">No preference</option>
-          {budgetTiers.map((tier) => (
-            <option key={tier.value} value={tier.value}>{tier.label}</option>
-          ))}
-        </select>
-      </label>
-      <label className="onboarding-quick">
-        <input type="checkbox" checked={splitAllowed} onChange={(event) => setSplitAllowed(event.target.checked)} />
-        Allow splitting into subgroups during the trip
-      </label>
+      <div className="chat-home-extras">
+        <label>
+          Proposed per-person budget (optional)
+          <select value={proposedBudgetTier} onChange={(event) => setProposedBudgetTier(event.target.value as BudgetTier)}>
+            <option value="">No preference</option>
+            {budgetTiers.map((tier) => (
+              <option key={tier.value} value={tier.value}>{tier.label}</option>
+            ))}
+          </select>
+        </label>
+        <DrawCheckbox
+          checked={splitAllowed}
+          onChange={setSplitAllowed}
+          label="Allow splitting into subgroups during the trip"
+        />
+      </div>
 
       {error && <p className="error-notice" role="alert"><span>{error}</span></p>}
 

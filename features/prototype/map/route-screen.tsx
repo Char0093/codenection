@@ -1,14 +1,14 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
-  Bookmark, Box, Crosshair, Layers, Map as MapIcon, Navigation, PersonStanding, Plus, Share2,
+  Bookmark, Box, Crosshair, Map as MapIcon, Navigation, PersonStanding, Plus, Share2, TrafficCone,
 } from "lucide-react";
 import Link from "next/link";
 import { DEMO_MAP_STOPS, DEMO_ROUTE_LEGS, DEMO_TRIP_DATES, DEMO_TRIP_ID } from "@/lib/prototype/fixtures";
 import { DEMO_SPLIT } from "@/lib/prototype/demo-features";
 import { MAPS_KEY } from "@/lib/prototype/google-maps-loader";
-import { MapLayer } from "./map-layer";
+import { MapLayer, type MapLayerHandle } from "./map-layer";
 import { FallbackMap } from "./fallback-map";
 import { RouteCard } from "./route-card";
 import { RouteSheet } from "./route-sheet";
@@ -18,7 +18,8 @@ import { StreetView } from "./street-view";
 import { StreetThumb } from "./street-thumb";
 import { NavMode } from "./nav-mode";
 import { useDirections } from "./use-directions";
-import { MODE_META, TRAVEL_MODES, type ModeRoute, type SheetSnap, type TravelMode } from "./types";
+import { useNavSim } from "./use-nav-sim";
+import { MODE_META, type ModeRoute, type SheetSnap, type TravelMode } from "./types";
 
 /** Rough per-mode figures from the fixture legs, for when there is no Google key. */
 function fixtureRoutes(date: string): Record<TravelMode, ModeRoute> {
@@ -44,10 +45,14 @@ export function RouteScreen() {
   const [mode, setMode] = useState<TravelMode>("WALKING");
   const [snap, setSnap] = useState<SheetSnap>("half");
   const [view, setView] = useState<"2d" | "3d">("2d");
+  const [showTraffic, setShowTraffic] = useState(false);
   // Index of the stop whose Street View is open; null = the map is showing.
   const [streetStop, setStreetStop] = useState<number | null>(null);
-  // Index of the turn-by-turn step being navigated; null = not navigating.
-  const [navStep, setNavStep] = useState<number | null>(null);
+  // Whether turn-by-turn nav mode is open.
+  const [navigating, setNavigating] = useState(false);
+  // Whether the camera is following the simulated live position, or the traveller panned away.
+  const [following, setFollowing] = useState(true);
+  const mapLayerRef = useRef<MapLayerHandle | null>(null);
 
   const stops = DEMO_MAP_STOPS[selectedDate] ?? [];
   const legs = DEMO_ROUTE_LEGS[selectedDate] ?? [];
@@ -60,64 +65,97 @@ export function RouteScreen() {
   );
   const active = displayRoutes[mode];
   const steps = active?.steps ?? [];
-  const canNavigate = liveMap && steps.length > 0;
-  const navigating = navStep !== null;
-  const focus = navigating ? steps[navStep] : undefined;
+  const canNavigate = liveMap && steps.length > 0 && (active?.legPaths?.length ?? 0) > 0;
+
+  const sim = useNavSim({
+    legPaths: active?.legPaths, steps, totalDurationMin: active?.durationMin, active: navigating,
+  });
+  const liveDot = navigating && sim.position
+    ? { lat: sim.position.lat, lng: sim.position.lng, heading: sim.heading }
+    : null;
 
   function recentre() {
-    // MapLayer re-fits bounds whenever `stops` identity changes; nudge it by re-selecting.
-    setSelectedDate((d) => d);
+    if (navigating) { setFollowing(true); return; }
+    mapLayerRef.current?.recentre();
   }
 
   function startNavigation() {
     if (!canNavigate) return;
     setSnap("peek");   // get the sheet out of the way of the map
-    setNavStep(0);
+    setFollowing(true);
+    setNavigating(true);
+    sim.play();
+  }
+
+  function exitNavigation() {
+    setNavigating(false);
+    setSnap("half");
+    setFollowing(true);
   }
 
   return (
     <div className="map-screen" data-snap={snap} data-navigating={navigating ? "true" : undefined}>
       <div className="map-screen-map">
         {liveMap
-          ? <MapLayer stops={stops} activeResult={active?.result} view={view} dimmed={snap === "full"}
+          ? <MapLayer ref={mapLayerRef} stops={stops} legs={legs} activeResult={active?.result}
+              legPaths={active?.legPaths} view={view} dimmed={snap === "full"}
               rendezvous={selectedDate === DEMO_SPLIT.date ? DEMO_SPLIT.rendezvous : null}
-              focus={focus?.lat != null && focus?.lng != null ? { lat: focus.lat, lng: focus.lng } : null} />
-          : <FallbackMap stops={stops} />}
+              liveDot={liveDot} following={following} showTraffic={showTraffic}
+              onManualPan={() => setFollowing(false)} />
+          : <FallbackMap stops={stops} legs={legs} />}
         {!liveMap && mapError && (
           <p className="map-screen-note" role="status">{mapError} — showing the stylised map instead.</p>
         )}
-        {liveMap && <StreetThumb stops={stops} onOpen={() => setStreetStop(0)} />}
+        {liveMap && !navigating && <StreetThumb stops={stops} onOpen={() => setStreetStop(0)} />}
       </div>
 
-      <RouteCard stops={stops} dates={DEMO_TRIP_DATES} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
+      {!navigating && (
+        <RouteCard stops={stops} dates={DEMO_TRIP_DATES} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
+      )}
 
-      <div className="map-screen-controls">
-        {liveMap && (
-          <button
-            type="button"
-            className="map-fab map-fab-view"
-            data-on={view === "3d" ? "true" : undefined}
-            aria-pressed={view === "3d"}
-            aria-label={view === "3d" ? "Switch to 2D map" : "Switch to 3D map"}
-            onClick={() => setView((v) => (v === "3d" ? "2d" : "3d"))}
-          >
-            {view === "3d" ? <MapIcon aria-hidden="true" /> : <Box aria-hidden="true" />}
-            <span>{view === "3d" ? "2D" : "3D"}</span>
+      {!navigating && (
+        <div className="map-screen-controls">
+          {liveMap && (
+            <button
+              type="button"
+              className="map-fab map-fab-pill"
+              data-on={view === "3d" ? "true" : undefined}
+              aria-pressed={view === "3d"}
+              aria-label={view === "3d" ? "Switch to 2D map" : "Switch to 3D map"}
+              onClick={() => setView((v) => (v === "3d" ? "2d" : "3d"))}
+            >
+              {view === "3d" ? <MapIcon aria-hidden="true" /> : <Box aria-hidden="true" />}
+              <span>{view === "3d" ? "2D" : "3D"}</span>
+            </button>
+          )}
+          {liveMap && (
+            <button type="button" className="map-fab map-fab-pill" aria-label="Open street view"
+              onClick={() => setStreetStop(0)}>
+              <PersonStanding aria-hidden="true" />
+              <span>Street view</span>
+            </button>
+          )}
+          {liveMap && (
+            <button type="button" className="map-fab map-fab-pill" data-on={showTraffic ? "true" : undefined}
+              aria-pressed={showTraffic} aria-label="Toggle live traffic"
+              onClick={() => setShowTraffic((v) => !v)}>
+              <TrafficCone aria-hidden="true" />
+              <span>Traffic</span>
+            </button>
+          )}
+          <button type="button" className="map-fab map-fab-pill map-fab-hero" aria-label="Recentre on the route"
+            onClick={recentre}>
+            <Crosshair aria-hidden="true" />
+            <span>Recentre</span>
           </button>
-        )}
-        {liveMap && (
-          <button type="button" className="map-fab" aria-label="Open street view"
-            onClick={() => setStreetStop(0)}>
-            <PersonStanding aria-hidden="true" />
-          </button>
-        )}
-        <button type="button" className="map-fab" aria-label="Map layers (demo)" tabIndex={-1}>
-          <Layers aria-hidden="true" />
+        </div>
+      )}
+
+      {navigating && !following && (
+        <button type="button" className="nav-recentre" onClick={recentre}>
+          <Crosshair aria-hidden="true" size={15} />Re-centre
         </button>
-        <button type="button" className="map-fab" aria-label="Recentre on the route" onClick={recentre}>
-          <Crosshair aria-hidden="true" />
-        </button>
-      </div>
+      )}
 
       {streetStop !== null && (
         <StreetView stops={stops} legs={legs} legHeadings={active?.legHeadings}
@@ -128,10 +166,9 @@ export function RouteScreen() {
       {navigating && (
         <NavMode
           steps={steps}
-          index={navStep}
+          sim={sim}
           destination={stops[stops.length - 1]?.name ?? "your destination"}
-          onIndex={setNavStep}
-          onExit={() => { setNavStep(null); setSnap("half"); }}
+          onExit={exitNavigation}
         />
       )}
 

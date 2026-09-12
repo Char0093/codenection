@@ -6,6 +6,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NavMode } from "@/features/prototype/map/nav-mode";
 import type { RouteStep } from "@/features/prototype/map/types";
+import type { NavSim } from "@/features/prototype/map/use-nav-sim";
 
 afterEach(cleanup);
 
@@ -15,53 +16,82 @@ const steps: RouteStep[] = [
   { instruction: "Turn right onto Beach St", distanceText: "68 m", maneuver: "turn-right", lat: 5.4155, lng: 100.3401 },
 ];
 
-function setup(index = 0) {
-  const onIndex = vi.fn();
+function makeSim(overrides: Partial<NavSim> = {}): NavSim {
+  return {
+    position: { lat: 5.4162, lng: 100.3348 },
+    heading: 45,
+    stepIndex: 0,
+    progress: 0,
+    playing: false,
+    arrived: false,
+    speed: 1,
+    remainingText: "0.3 km · 4 min",
+    etaText: "arrives 10:04 AM",
+    play: vi.fn(),
+    pause: vi.fn(),
+    toggle: vi.fn(),
+    seek: vi.fn(),
+    cycleSpeed: vi.fn(),
+    ...overrides,
+  };
+}
+
+function setup(simOverrides: Partial<NavSim> = {}) {
   const onExit = vi.fn();
-  render(<NavMode steps={steps} index={index} destination="Armenian Street art"
-    onIndex={onIndex} onExit={onExit} />);
-  return { onIndex, onExit };
+  const sim = makeSim(simOverrides);
+  render(<NavMode steps={steps} sim={sim} destination="Armenian Street art" onExit={onExit} />);
+  return { onExit, sim };
 }
 
 describe("NavMode", () => {
-  it("shows the current manoeuvre, its distance and the step counter", () => {
-    setup(0);
-    expect(screen.getByText(steps[0].instruction)).toBeInTheDocument();
-    expect(screen.getByText("0.2 km")).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("Step 1 of 3");
+  it("shows the current manoeuvre and its distance for the sim's step index", () => {
+    setup({ stepIndex: 1 });
+    expect(screen.getByText(steps[1].instruction)).toBeInTheDocument();
+    expect(screen.getByText("0.1 km")).toBeInTheDocument();
   });
 
-  it("cannot go back from the first step", () => {
-    setup(0);
-    expect(screen.getByRole("button", { name: /back/i })).toBeDisabled();
+  it("reflects progress on the scrubber and remaining distance/ETA in the bar", () => {
+    setup({ progress: 0.4, remainingText: "0.6 km · 8 min", etaText: "arrives 10:12 AM" });
+    expect(screen.getByRole("slider", { name: /navigation progress/i })).toHaveAttribute("aria-valuenow", "40");
+    expect(screen.getByText("0.6 km · 8 min")).toBeInTheDocument();
+    expect(screen.getByText("arrives 10:12 AM")).toBeInTheDocument();
   });
 
-  it("advances and rewinds through the steps", async () => {
+  it("toggles play/pause from the play button and the space bar", async () => {
     const user = userEvent.setup();
-    const { onIndex } = setup(1);
-    await user.click(screen.getByRole("button", { name: /next/i }));
-    expect(onIndex).toHaveBeenCalledWith(2);
-    await user.click(screen.getByRole("button", { name: /back/i }));
-    expect(onIndex).toHaveBeenCalledWith(0);
+    const { sim } = setup({ playing: false });
+    await user.click(screen.getByRole("button", { name: /^play$/i }));
+    expect(sim.toggle).toHaveBeenCalledTimes(1);
+    await user.keyboard(" ");
+    expect(sim.toggle).toHaveBeenCalledTimes(2);
   });
 
-  it("arrives on the last step and finishes instead of advancing", async () => {
+  it("seeks forward and back from the keyboard, and exits on Escape", async () => {
     const user = userEvent.setup();
-    const { onExit } = setup(steps.length - 1);
-    expect(screen.getByRole("status")).toHaveTextContent("Arrived · Armenian Street art");
-    expect(screen.queryByRole("button", { name: /next/i })).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /finish/i }));
+    const { sim, onExit } = setup({ progress: 0.5 });
+    await user.keyboard("{ArrowRight}");
+    expect(sim.seek).toHaveBeenCalledWith(0.54);
+    await user.keyboard("{ArrowLeft}");
+    expect(sim.seek).toHaveBeenCalledWith(0.46);
+    await user.keyboard("{Escape}");
     expect(onExit).toHaveBeenCalledTimes(1);
   });
 
-  it("drives from the keyboard: arrows step, Escape exits", async () => {
+  it("cycles playback speed from its own control", async () => {
     const user = userEvent.setup();
-    const { onIndex, onExit } = setup(1);
-    await user.keyboard("{ArrowRight}");
-    expect(onIndex).toHaveBeenCalledWith(2);
-    await user.keyboard("{ArrowLeft}");
-    expect(onIndex).toHaveBeenCalledWith(0);
-    await user.keyboard("{Escape}");
+    const { sim } = setup({ speed: 1 });
+    await user.click(screen.getByRole("button", { name: /playback speed 1x/i }));
+    expect(sim.cycleSpeed).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows an arrived state with a Finish button instead of play controls", async () => {
+    const user = userEvent.setup();
+    const { onExit } = setup({ arrived: true, progress: 1, stepIndex: steps.length - 1 });
+    expect(screen.getByText("You've arrived")).toBeInTheDocument();
+    expect(screen.getByText("Arrived")).toBeInTheDocument();
+    expect(screen.getByText("Armenian Street art")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^play$/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /finish/i }));
     expect(onExit).toHaveBeenCalledTimes(1);
   });
 });
