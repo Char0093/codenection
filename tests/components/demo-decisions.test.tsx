@@ -6,6 +6,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 import { DemoDecisions } from "@/features/prototype/demo-decisions";
 import { DemoTripStateProvider } from "@/features/prototype/demo-trip-state";
+import { DemoTimeline } from "@/features/prototype/demo-timeline";
 
 afterEach(cleanup);
 
@@ -31,5 +32,26 @@ describe("DemoDecisions", () => {
 
     expect(within(card).getByText(/you agreed/i)).toBeInTheDocument();
     expect(within(card).getByLabelText("4 out of 5 stars")).toBeInTheDocument();
+  });
+
+  it("adds a decision card when a Timeline change is saved", async () => {
+    const user = userEvent.setup();
+    render(
+      <DemoTripStateProvider>
+        <DemoTimeline />
+        <DemoDecisions />
+      </DemoTripStateProvider>,
+    );
+
+    const walk = screen.getByRole("button", { name: /^Street of Harmony walk,/ });
+    walk.focus();
+    await user.keyboard("{ArrowDown}{ArrowDown}");
+    await user.click(screen.getByRole("button", { name: /^save/i }));
+
+    // Two ArrowDown presses queue two separate "move" pending changes (one per key press --
+    // see queueChange in demo-timeline.tsx), so Save creates two Timeline-sourced decisions here,
+    // both labeled "Timeline change"; hence getAllByText rather than the single-match getByText.
+    expect(screen.getAllByText(/timeline change/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Street of Harmony walk moved to 10:00–12:00/)).toBeInTheDocument();
   });
 });

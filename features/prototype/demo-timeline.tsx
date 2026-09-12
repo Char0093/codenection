@@ -42,7 +42,7 @@ let seq = 0;
  * added. Everything is local state — no server write, resets on refresh.
  */
 export function DemoTimeline() {
-  const { postMessage } = useDemoTripState();
+  const { postMessage, addTimelineDecision } = useDemoTripState();
   const [selectedDate, setSelectedDate] = useState(DEMO_TRIP_DATES[0]);
   const [blocks, setBlocks] = useState<DemoBlock[]>(() => DEMO_ITINERARY.map((b) => ({ ...b })));
   const [live, setLive] = useState<Live | null>(null);
@@ -417,6 +417,7 @@ export function DemoTimeline() {
     postMessage(lines.length === 1
       ? `Here's a change to the plan — ${lines[0]}. Let me know if that works.`
       : `A few changes to the plan: ${lines.join("; ")}. Let me know if those work.`);
+    pendingChanges.forEach((c) => addTimelineDecision({ text: c.text }));
     setPendingChanges([]);
     setAnnounce("Sent to the group chat");
   }
