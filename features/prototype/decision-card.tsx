@@ -53,6 +53,8 @@ export function DecisionCard({ decision, onRespond }: {
         {decision.forMemberName && <span className="decision-card-for"> · for {decision.forMemberName}</span>}
       </p>
 
+      {decision.quote && <p className="decision-card-quote">Heard in chat: {decision.quote}</p>}
+
       <p className="decision-card-detail field-hint">{decision.detail}</p>
 
       {response === null ? (

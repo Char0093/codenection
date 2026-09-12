@@ -11,10 +11,24 @@ import { useDemoTripState } from "@/features/prototype/demo-trip-state";
 export function DemoDecisions() {
   const { decisions, respondToDecision } = useDemoTripState();
   return (
-    <ul className="decisions-list">
-      {[...decisions].reverse().map((decision) => (
-        <DecisionCard key={decision.id} decision={decision} onRespond={respondToDecision} />
-      ))}
-    </ul>
+    <section className="decisions-view">
+      <div className="section-heading">
+        <div>
+          <h1>Decisions</h1>
+          <p className="field-hint">{decisions.length} to review</p>
+        </div>
+      </div>
+      <p className="demo-hint">Demo — chat signals and Timeline changes land here; agreeing or disagreeing is feedback only and resets on refresh.</p>
+
+      {decisions.length === 0 ? (
+        <p className="decisions-empty">No decisions yet.</p>
+      ) : (
+        <ul className="decisions-list">
+          {[...decisions].reverse().map((decision) => (
+            <DecisionCard key={decision.id} decision={decision} onRespond={respondToDecision} />
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

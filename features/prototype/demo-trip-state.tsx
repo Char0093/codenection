@@ -16,6 +16,8 @@ export type Decision = {
   kind?: "soft" | "hard-candidate";
   title: string;
   detail: string;
+  /** Only meaningful for source: "signal" -- the chat line this was inferred from. */
+  quote?: string;
   forMemberName?: string | null;
   expiresInDays?: number | null;
   createdAt: string;
@@ -46,6 +48,7 @@ function signalToDecision(signal: (typeof DEMO_SIGNALS)[number]): Decision {
     kind: signal.kind,
     title: signal.label,
     detail: signal.detail,
+    quote: signal.quote,
     forMemberName: signal.forMemberName,
     expiresInDays: signal.expiresInDays,
     createdAt: new Date(0).toISOString(),

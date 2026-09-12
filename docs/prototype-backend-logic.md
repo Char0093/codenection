@@ -46,6 +46,7 @@ isPrototype() =
 | `/trips/[id]/plan` | `PlanView` → `GET /api/trips/[id]` | `DemoPlan` over `DEMO_PROPOSAL`, local accept/reject |
 | `/trips/[id]/timeline` | `TimelinePane` → itinerary + POI APIs | `DemoTimeline`, seeded blocks — local drag-to-move, drag-bottom-edge-to-resize (15-min snap, keyboard too), add/remove |
 | `/trips/[id]/map` | *not built* | `DemoMap` (this branch adds the route + nav item) |
+| `/trips/[id]/decisions` | *not built* | `DemoDecisions` — signals from chat + saved Timeline changes, Agree/Disagree + 1-5 star rating, local state only |
 | `/trips/[id]/entry` | `getMyMemberEntryContext` server action | `DemoMemberEntry` + `DailyRhythm` |
 | `/trips/[id]/jigsaw` | *not built* | `JigsawView` — fixture scores through the **real** `evaluateTeam`/`shouldSplitCut` |
 | `/trips/[id]/budget` | *not built* | `BudgetView` — fixture expenses through the **real** `simplifyDebts` |
@@ -91,12 +92,13 @@ confirmation. The copy states the rule: this is a **soft** change.
 
 ## 3. Feature: chat preference extraction
 
-**Prototype** (`features/prototype/chat-signal-card.tsx` + `demo-chat.tsx`):
-three scripted cards under the message list — two soft signals (`live jazz`,
-`indoor day Saturday`) with an expiry, one **hard-constraint candidate**
-(`no shellfish`, addressed to Arun). Confirm / Edit / Reject mutate local state.
-The hard card's button reads "Confirm as Arun" and its copy states it stays
-inert until Arun acts.
+**Prototype** (`features/prototype/demo-decisions.tsx` + `decision-card.tsx`, fed
+by `DemoTripStateProvider`'s `decisions` list): every signal is listed on the
+dedicated `/trips/[id]/decisions` page rather than inline in chat — two soft
+signals (`live jazz`, `indoor day Saturday`) with an expiry, one
+**hard-constraint candidate** (`no shellfish`, addressed to Arun). Agree/Disagree
+then a 1-5 star rating replace the old Confirm/Edit/Reject; the same page also
+collects one entry per Timeline change saved that session.
 
 **Real backend**
 

@@ -1532,8 +1532,8 @@ details[open] > summary .collapse-chevron { transform: rotate(180deg); }
 .ghost-button:hover { color: var(--ink); background: var(--canvas); }
 
 /* Prototype chat: a plain scrolling column (not the fixed-composer .chat-pane), so the
-   extraction panel and composer flow after the messages -- .workspace-main's own default
-   overflow-y (see above) is what scrolls it, same as every other trip-page pane. */
+   composer flows after the messages -- .workspace-main's own default overflow-y (see above)
+   is what scrolls it, same as every other trip-page pane. */
 /* The route map is a full-bleed canvas with its own floating chrome: kill the shell padding
    and let it fill the content area. */
 .app-shell:has(> .workspace-main) > .workspace-main:has(> .map-screen) { padding: 0; position: relative; overflow: hidden; }
@@ -1544,7 +1544,8 @@ details[open] > summary .collapse-chevron { transform: rotate(180deg); }
 .demo-chat .chat-composer { position: sticky; bottom: 0; border: 1px solid var(--line); border-radius: 10px; }
 
 /* Decisions page ------------------------------------------------------------- */
-.decisions-list { list-style: none; margin: 0; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.decisions-list { list-style: none; margin: 16px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.decisions-empty { margin: 16px 0 0; color: var(--muted); font-size: 13px; }
 .decision-card { padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--canvas); }
 .decision-card-hard { border-color: var(--flexible); background: var(--flexible-soft); }
 .decision-card[data-status="disagreed"] { opacity: 0.6; }
@@ -1554,12 +1555,13 @@ details[open] > summary .collapse-chevron { transform: rotate(180deg); }
 .decision-card-expiry { margin-left: auto; font-variant-numeric: tabular-nums; }
 .decision-card-label { margin: 6px 0 2px; font-size: 14px; font-weight: 600; font-family: var(--font-display); }
 .decision-card-for { font-weight: 500; color: var(--muted); }
+.decision-card-quote { margin: 2px 0; font-size: 12px; color: var(--muted); }
 .decision-card-detail { margin: 4px 0 8px; }
 .decision-card-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .decision-card-actions button { min-height: 34px; padding: 6px 10px; font-size: 12px; }
 .decision-star-picker { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .decision-star-picker-label { font-size: 12px; color: var(--muted); margin-right: 4px; }
-.decision-star-btn { padding: 4px; border: 0; background: none; color: var(--flexible); cursor: pointer; border-radius: 6px; }
+.decision-star-btn { min-height: 34px; min-width: 34px; padding: 4px; border: 0; background: none; color: var(--flexible); cursor: pointer; border-radius: 6px; }
 .decision-star-btn:hover { background: var(--surface-2); }
 .decision-star-row { display: inline-flex; align-items: center; gap: 1px; color: var(--flexible); vertical-align: middle; }
 .decision-card-result { margin: 4px 0 0; font-size: 12px; font-weight: 600; color: var(--consensus); }

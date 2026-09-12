@@ -36,7 +36,7 @@ describe("DemoDecisions", () => {
 
   it("adds a decision card when a Timeline change is saved", async () => {
     const user = userEvent.setup();
-    render(
+    const { container } = render(
       <DemoTripStateProvider>
         <DemoTimeline />
         <DemoDecisions />
@@ -51,7 +51,11 @@ describe("DemoDecisions", () => {
     // Two ArrowDown presses queue two separate "move" pending changes (one per key press --
     // see queueChange in demo-timeline.tsx), so Save creates two Timeline-sourced decisions here,
     // both labeled "Timeline change"; hence getAllByText rather than the single-match getByText.
-    expect(screen.getAllByText(/timeline change/i).length).toBeGreaterThan(0);
+    // Scoped to the decisions list itself (not the whole screen) because the page's own demo-hint
+    // copy ("...Timeline changes land here...") also matches /timeline change/i, and DemoTimeline
+    // renders lists of its own so getByRole("list") isn't unique here.
+    const list = container.querySelector(".decisions-list") as HTMLElement;
+    expect(within(list).getAllByText(/timeline change/i)).toHaveLength(2);
     expect(screen.getByText(/Street of Harmony walk moved to 10:00–12:00/)).toBeInTheDocument();
   });
 });

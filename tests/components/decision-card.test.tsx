@@ -11,7 +11,8 @@ afterEach(cleanup);
 
 const SOFT_SIGNAL: Decision = {
   id: "sig-1", source: "signal", kind: "soft", title: "live jazz",
-  detail: "A soft discovery signal.", forMemberName: null, expiresInDays: 3,
+  detail: "A soft discovery signal.", quote: "I'd love a jazz bar one evening if there's one nearby",
+  forMemberName: null, expiresInDays: 3,
   createdAt: "2026-01-01T00:00:00.000Z", response: null,
 };
 
@@ -31,6 +32,7 @@ describe("DecisionCard", () => {
   it("labels a soft signal as a discovery signal", () => {
     render(<DecisionCard decision={SOFT_SIGNAL} onRespond={vi.fn()} />);
     expect(screen.getByText("Discovery signal")).toBeInTheDocument();
+    expect(screen.getByText(/Heard in chat: I'd love a jazz bar/)).toBeInTheDocument();
   });
 
   it("labels a hard-candidate signal as a possible safety constraint, addressed to its member", () => {
