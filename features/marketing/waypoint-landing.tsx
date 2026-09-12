@@ -15,7 +15,7 @@ import { BrandMark } from "@/components/brand-mark";
  */
 
 const NAV_DEMO_ITEMS = [
-  { key: "chat", label: "Chat", icon: MessageCircle, active: true },
+  { key: "chat", label: "Chat", icon: MessageCircle },
   { key: "plan", label: "Plan", icon: ListChecks },
   { key: "timeline", label: "Timeline", icon: CalendarClock },
   { key: "map", label: "Map", icon: MapIcon },
@@ -72,7 +72,7 @@ function DemoChatPanel() {
           <div className="mkt-demo-side">
             <span className="mkt-brand"><span className="mkt-brand-mark"><BrandMark size={12} /></span>Waypoint</span>
             {NAV_DEMO_ITEMS.map((item) => (
-              <div key={item.key} className={"mkt-demo-nav-item" + (item.active ? " active" : "")}>
+              <div key={item.key} className={"mkt-demo-nav-item" + (item.key === "chat" ? " active" : "")}>
                 <item.icon aria-hidden="true" /><span>{item.label}</span>
               </div>
             ))}
