@@ -186,6 +186,12 @@ export type DemoBlock = {
   durationMinutes: number;
   locked?: boolean;
   note?: string;
+  /** Set only for a block scheduled from DEMO_POOL -- lets it reappear in the pool when
+   * removed, instead of a seeded itinerary block that just vanishes. */
+  poolId?: string;
+  /** Set when a second place has been dropped onto this same time slot -- renders as two
+   * cards side by side instead of one. Only one split partner is supported at a time. */
+  split?: { title: string; category: DemoBlock["category"]; poolId?: string };
 };
 
 export const DEMO_ITINERARY: DemoBlock[] = [

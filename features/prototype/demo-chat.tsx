@@ -8,11 +8,11 @@ import { ChatHeader } from "@/features/chat/chat-header";
 import { GroupInfo } from "@/features/chat/group-info";
 import { ChatSignalCard } from "@/features/prototype/chat-signal-card";
 import { InvitePanel } from "@/features/prototype/invite-panel";
-import type { ChatEntry } from "@/features/chat/use-trip-channel";
 import type { Tapback } from "@/features/chat/tapback";
 import { shouldAddressAssistant } from "@/lib/chat/mention";
+import { useDemoTripState } from "@/features/prototype/demo-trip-state";
 import {
-  DEMO_CHAT_MESSAGES, DEMO_MEMBERS, DEMO_SELF_MEMBER_ID, DEMO_SIGNALS, DEMO_TRIP, DEMO_TRIP_ID,
+  DEMO_MEMBERS, DEMO_SELF_MEMBER_ID, DEMO_SIGNALS, DEMO_TRIP,
 } from "@/lib/prototype/fixtures";
 
 /**
@@ -27,7 +27,10 @@ const DEMO_ASSISTANT_TYPING_ID = ASSISTANT_TYPING.id;
  *  chat-preference-extraction panel. Sending a message that addresses the assistant appends a
  *  canned reply. Nothing leaves the browser and nothing persists. */
 export function DemoChat() {
-  const [messages, setMessages] = useState<ChatEntry[]>(() => DEMO_CHAT_MESSAGES.map((m) => ({ ...m })));
+  // Shared with every other prototype page for this trip (see DemoTripStateProvider) -- a
+  // message posted from the Timeline's Save button shows up here without either page needing
+  // to know about the other.
+  const { messages, postMessage } = useDemoTripState();
   // The prototype drives the same typing/tapback props the live pane does, from local state.
   const [typingMemberIds, setTypingMemberIds] = useState<string[]>([]);
   const [reactions, setReactions] = useState<Record<string, Tapback>>({});
@@ -45,23 +48,17 @@ export function DemoChat() {
   }
 
   function send(body: string) {
-    const now = new Date().toISOString();
-    const mine: ChatEntry = {
-      id: `local-${Date.now()}`, tripId: DEMO_TRIP_ID, authorMemberId: DEMO_SELF_MEMBER_ID,
-      authorKind: "member", body, proposalId: null, createdAt: now,
-    };
-    setMessages((prev) => [...prev, mine]);
+    postMessage(body);
     if (!shouldAddressAssistant(body)) return;
     // Show the assistant composing while its canned reply is pending -- the same dots the
     // live pane renders from a real broadcast, driven here by a timer.
     setTypingMemberIds([DEMO_ASSISTANT_TYPING_ID]);
     window.setTimeout(() => {
       setTypingMemberIds([]);
-      setMessages((prev) => [...prev, {
-        id: `assist-${Date.now()}`, tripId: DEMO_TRIP_ID, authorMemberId: null, authorKind: "assistant",
-        body: "In the prototype I only reply with canned text. The itinerary I already drafted is on the Plan tab; open a stop there to see the reasoning.",
-        proposalId: null, createdAt: new Date().toISOString(),
-      }]);
+      postMessage(
+        "In the prototype I only reply with canned text. The itinerary I already drafted is on the Plan tab; open a stop there to see the reasoning.",
+        "assistant",
+      );
     }, 1600);
   }
 

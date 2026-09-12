@@ -203,15 +203,31 @@ a { color: var(--blue); }
 [hidden] { display: none !important; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
-.app-shell { min-height: 100vh; padding: 0 24px; flex: 1 1 auto; min-width: 0; }
-/* A page whose own top-level content is .workspace-main (every /trips/[tripId]/* page, via
-   AppShell) needs to fill the row beside the sidebar and hand that height down so the chat
-   pane can scroll internally. Every other .app-shell page (the trip-groups list, settings,
-   ...) keeps the plain block layout above, scrolling the page. Scoped to .workspace-main as a
+.app-shell { min-height: 0; padding: 0 24px; flex: 1 1 auto; min-width: 0; overflow-y: auto; }
+/* .shell below is capped to one viewport tall, so every .app-shell is a bounded flex/grid cell,
+   not a box that grows past the fold -- that's what keeps the sidebar in place while only the
+   pane under the cursor scrolls. A plain .app-shell page (the trip-groups list, settings, ...)
+   scrolls itself directly, above. A page whose own top-level content is .workspace-main (every
+   /trips/[tripId]/* page, via AppShell) instead hands the scroll down to that child, so it can
+   own a sticky header/composer around its own scroll region. Scoped to .workspace-main as a
    *direct* child so trip-setup-dashboard, which nests its own .workspace-main two levels down
    inside .app-body, is untouched -- see .workspace-main below. */
-.app-shell:has(> .workspace-main) { display: flex; flex-direction: column; min-height: 0; }
-.app-shell:has(> .workspace-main) > .workspace-main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding-top: 20px; }
+.app-shell:has(> .workspace-main) { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.app-shell:has(> .workspace-main) > .workspace-main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding-top: 20px; overflow-y: auto; }
+/* Every independently-scrolling pane in the app shell keeps working the same (wheel, trackpad,
+   touch, keyboard, a scrolled-into-view focus target) with its scrollbar hidden -- scrollable,
+   just not visibly chromed. Each browser needs its own property for this; there is no shorthand. */
+.app-sidebar, .app-shell, .workspace-main, .poi-pool, .cal-viewport, .demo-pool,
+.chat-message-list, .chat-pane .group-info, .jigsaw-scroll, .map-sheet-body {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* legacy Edge */
+}
+.app-sidebar::-webkit-scrollbar, .app-shell::-webkit-scrollbar, .workspace-main::-webkit-scrollbar,
+.poi-pool::-webkit-scrollbar, .cal-viewport::-webkit-scrollbar, .demo-pool::-webkit-scrollbar,
+.chat-message-list::-webkit-scrollbar, .chat-pane .group-info::-webkit-scrollbar,
+.jigsaw-scroll::-webkit-scrollbar, .map-sheet-body::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Edge (Chromium) */
+}
 .topbar { min-height: 72px; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 16px max(24px, calc((100% - 1200px) / 2)); background: var(--navy); color: #fff; }
 .brand-block { display: inline-flex; align-items: center; gap: 9px; min-width: 0; color: var(--ink); text-decoration: none; }
 .brand-block strong { font-family: var(--font-display); font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
@@ -893,6 +909,9 @@ details[open] > summary .collapse-chevron { transform: rotate(180deg); }
 /* ---------- Active-itinerary calendar timeline (Task 3.4) ---------- */
 
 .timeline-pane { display: flex; flex-direction: column; gap: 8px; }
+.demo-timeline-toolbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.demo-timeline-toolbar .cal-date-strip { flex: 1 1 auto; min-width: 0; }
+.demo-timeline-toolbar > .primary-button { flex: none; }
 .cal-viewport { max-height: 620px; overflow: auto; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface); }
 .cal-body { position: relative; display: flex; min-width: max-content; }
 
@@ -1335,7 +1354,7 @@ details[open] > summary .collapse-chevron { transform: rotate(180deg); }
    there; a trip's Chat/Plan/Timeline/Your prefs section only appears while that trip is open.
    Desktop keeps the sidebar always visible; under 900px it collapses into an off-canvas drawer
    opened from the mobile top bar instead of a permanent rail. ---------- */
-.shell { display: flex; flex-direction: column; min-height: 100dvh; background: var(--canvas); }
+.shell { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; background: var(--canvas); }
 .mobile-topbar { display: none; }
 /* Desktop: sidebar + content float as separate rounded cards on the grey ground, with a
    gutter around and between them -- the mockup's shell layout. */
@@ -1486,9 +1505,8 @@ details[open] > summary .collapse-chevron { transform: rotate(180deg); }
 .ghost-button:hover { color: var(--ink); background: var(--canvas); }
 
 /* Prototype chat: a plain scrolling column (not the fixed-composer .chat-pane), so the
-   extraction panel and composer flow after the messages and the page scrolls. The parent
-   .workspace-main is a bounded flex column, so it needs to own the scroll here. */
-.app-shell:has(> .workspace-main) > .workspace-main:has(> .demo-chat) { overflow-y: auto; }
+   extraction panel and composer flow after the messages -- .workspace-main's own default
+   overflow-y (see above) is what scrolls it, same as every other trip-page pane. */
 /* The route map is a full-bleed canvas with its own floating chrome: kill the shell padding
    and let it fill the content area. */
 .app-shell:has(> .workspace-main) > .workspace-main:has(> .map-screen) { padding: 0; position: relative; overflow: hidden; }
@@ -1545,14 +1563,35 @@ details[open] > summary .collapse-chevron { transform: rotate(180deg); }
 .cal-column .cal-block.cat-culture { border-left: 3px solid var(--wishlist); }
 .cal-column .cal-block.cat-nature { border-left: 3px solid var(--consensus); }
 .cal-column .cal-block.cat-shopping { border-left: 3px solid var(--blue); }
+/* A pool place dropped onto an occupied slot instead of an empty one: outlines the slot it would
+   merge into, in place of the plain new-slot ghost (.cal-drop-preview), while the drag is over it. */
+.cal-column .cal-block[data-split-target="true"] { outline: 2px dashed var(--blue); outline-offset: 2px; }
 .cal-block-locked { background: var(--canvas); border-style: dashed; cursor: default; }
+
+/* ---- Split slot: two places sharing one time range, side by side (see DemoTimeline) ---- */
+.cal-block-split { cursor: default; }
+/* The base .cal-block rule sets align-items: flex-start for the real ActivityCard's handle+text
+   row -- without overriding it here, a column-direction flex child like this one shrinks to its
+   content's width instead of stretching, leaving dead space instead of a true 50/50 split. */
+.cal-split-halves { display: flex; flex: 1; align-self: stretch; min-height: 0; min-width: 0; gap: 4px; }
+.cal-split-half {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: space-between;
+  gap: 4px; padding: 6px 7px; border-radius: 6px; background: var(--canvas);
+  border: 1px solid var(--line-strong); cursor: grab; overflow: hidden;
+}
+.cal-split-half:active { cursor: grabbing; }
+.cal-split-half[data-dragging="true"] { opacity: 0.5; }
+.cal-split-half.cat-food { border-left: 3px solid var(--flexible); }
+.cal-split-half.cat-culture { border-left: 3px solid var(--wishlist); }
+.cal-split-half.cat-nature { border-left: 3px solid var(--consensus); }
+.cal-split-half.cat-shopping { border-left: 3px solid var(--blue); }
+.cal-split-title { font-size: 11.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-split-pending {
+  position: absolute; top: 4px; right: 8px; font-size: 9.5px; font-weight: 700;
+  letter-spacing: 0.02em; text-transform: uppercase; color: var(--flexible-dark);
+}
 .cal-block-title { display: flex; align-items: center; gap: 4px; }
 .cal-block-note { font-size: 10.5px; color: var(--muted); }
-.cal-block-remove {
-  align-self: flex-start; margin-top: 2px; padding: 1px 6px; font-size: 10.5px;
-  border: 1px solid var(--line-strong); border-radius: 5px; background: transparent; color: var(--muted);
-  cursor: pointer;
-}
 .cal-block-resize {
   position: absolute; left: 0; right: 0; bottom: 0; height: 9px; cursor: ns-resize;
 }
@@ -1566,12 +1605,15 @@ details[open] > summary .collapse-chevron { transform: rotate(180deg); }
   border: 0; border-radius: var(--r-standard); background: var(--surface); box-shadow: var(--shadow-card);
   padding: 14px; max-height: 620px; overflow: auto;
 }
+.demo-pool[data-drag-over="true"] { box-shadow: var(--shadow-card), inset 0 0 0 2px var(--blue); background: var(--canvas); }
 .demo-pool h3 { margin: 0 0 8px; font-size: 13px; }
 .demo-pool ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .demo-pool-card {
   display: flex; gap: 8px; align-items: flex-start; justify-content: space-between;
   padding: 10px; border: 0; border-radius: var(--r-subtle); background: var(--canvas);
+  cursor: grab;
 }
+.demo-pool-card[data-dragging="true"] { opacity: 0.5; }
 .demo-pool-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .demo-pool-body strong { font-size: 12.5px; }
 .demo-pool-meta { font-size: 11px; color: var(--muted); text-transform: capitalize; }
@@ -1580,7 +1622,6 @@ details[open] > summary .collapse-chevron { transform: rotate(180deg); }
 .demo-safety-verified { color: var(--consensus); }
 .demo-safety-claimed { color: var(--flexible-dark); }
 .demo-safety-unknown { color: var(--error); }
-.demo-pool-card button { flex: none; min-height: 34px; padding: 6px 9px; font-size: 11.5px; white-space: nowrap; }
 
 /* Daily rhythm ----------------------------------------------------------- */
 .daily-rhythm { margin: 8px 0; padding: 16px; border: 0; border-radius: var(--r-standard); background: var(--surface); box-shadow: var(--shadow-card); }
@@ -1624,8 +1665,6 @@ details[open] > summary .collapse-chevron { transform: rotate(180deg); }
 
 @media (max-width: 900px) {
   .demo-pool { max-height: 42vh; }
-  .demo-pool-card { flex-direction: column; }
-  .demo-pool-card button { align-self: stretch; }
 }
 
 /* ============================================================================

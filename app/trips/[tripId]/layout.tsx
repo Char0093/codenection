@@ -4,6 +4,7 @@ import { AppShell } from "@/components/app-shell";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { isPrototype } from "@/lib/prototype/config";
 import { DEMO_TRIP, DEMO_USER } from "@/lib/prototype/fixtures";
+import { DemoTripStateProvider } from "@/features/prototype/demo-trip-state";
 import { createClient } from "@/lib/supabase/server";
 
 // The single auth + membership gate for every /trips/[tripId]/* page. Draft-tolerant: it
@@ -20,7 +21,9 @@ export default async function TripLayout({ children, params }: {
   if (isPrototype()) {
     return (
       <AppShell trip={{ id: DEMO_TRIP.id, name: DEMO_TRIP.name, ready: DEMO_TRIP.status === "ready" }} accountEmail={DEMO_USER.email}>
-        <div className="workspace-main">{children}</div>
+        <DemoTripStateProvider>
+          <div className="workspace-main">{children}</div>
+        </DemoTripStateProvider>
       </AppShell>
     );
   }

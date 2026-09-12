@@ -5,20 +5,25 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DemoChat } from "@/features/prototype/demo-chat";
+import { DemoTripStateProvider } from "@/features/prototype/demo-trip-state";
 import { DEMO_TRIP_ID } from "@/lib/prototype/fixtures";
 
 afterEach(cleanup);
 
+function renderDemoChat() {
+  return render(<DemoTripStateProvider><DemoChat /></DemoTripStateProvider>);
+}
+
 describe("DemoChat invite link", () => {
   it("shows an Invite control in the chat header", () => {
-    render(<DemoChat />);
+    renderDemoChat();
     const invite = screen.getByRole("button", { name: /invite/i });
     expect(invite).toHaveAttribute("aria-expanded", "false");
   });
 
   it("reveals a shareable invite link for this trip when Invite is clicked", async () => {
     const user = userEvent.setup();
-    render(<DemoChat />);
+    renderDemoChat();
 
     await user.click(screen.getByRole("button", { name: /invite/i }));
 
@@ -30,7 +35,7 @@ describe("DemoChat invite link", () => {
   it("copies the invite link to the clipboard", async () => {
     const user = userEvent.setup();
     const writeText = vi.spyOn(navigator.clipboard, "writeText");
-    render(<DemoChat />);
+    renderDemoChat();
 
     await user.click(screen.getByRole("button", { name: /invite/i }));
     const link = (screen.getByLabelText(/invite link/i) as HTMLInputElement).value;
@@ -46,7 +51,7 @@ describe("DemoChat invite link", () => {
     const exec = vi.fn().mockReturnValue(true);
     // jsdom has no execCommand implementation; install one for this test.
     (document as unknown as { execCommand: unknown }).execCommand = exec;
-    render(<DemoChat />);
+    renderDemoChat();
 
     await user.click(screen.getByRole("button", { name: /invite/i }));
     await user.click(screen.getByRole("button", { name: /copy link/i }));

@@ -5,9 +5,14 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 import { DemoTimeline } from "@/features/prototype/demo-timeline";
+import { DemoTripStateProvider } from "@/features/prototype/demo-trip-state";
 import { DEMO_WEATHER } from "@/lib/prototype/demo-features";
 
 afterEach(cleanup);
+
+function renderDemoTimeline() {
+  return render(<DemoTripStateProvider><DemoTimeline /></DemoTripStateProvider>);
+}
 
 // Seeded day 1: "Street of Harmony walk" 09:30–11:30, "Peranakan Mansion (guided)" is locked
 // (it lives on day 2, so day-1 assertions use the walk).
@@ -15,13 +20,13 @@ const walk = () => screen.getByRole("button", { name: /^Street of Harmony walk,/
 
 describe("DemoTimeline drag/resize", () => {
   it("renders a seeded block with its time range", () => {
-    render(<DemoTimeline />);
+    renderDemoTimeline();
     expect(walk()).toHaveAccessibleName(/09:30 to 11:30/);
   });
 
   it("moves a block later with ArrowDown (15-minute step)", async () => {
     const user = userEvent.setup();
-    render(<DemoTimeline />);
+    renderDemoTimeline();
     walk().focus();
     await user.keyboard("{ArrowDown}{ArrowDown}");
     expect(walk()).toHaveAccessibleName(/10:00 to 12:00/);
@@ -29,7 +34,7 @@ describe("DemoTimeline drag/resize", () => {
 
   it("changes duration with Shift+Arrow without moving the start", async () => {
     const user = userEvent.setup();
-    render(<DemoTimeline />);
+    renderDemoTimeline();
     walk().focus();
     await user.keyboard("{Shift>}{ArrowDown}{/Shift}");
     expect(walk()).toHaveAccessibleName(/09:30 to 11:45/);
@@ -39,7 +44,7 @@ describe("DemoTimeline drag/resize", () => {
 
   it("does not let a block move above the start of the day window", async () => {
     const user = userEvent.setup();
-    render(<DemoTimeline />);
+    renderDemoTimeline();
     walk().focus();
     // window opens at 06:00; the walk starts at 09:30, so 14+ up-steps would run past it
     await user.keyboard("{ArrowUp}".repeat(20));
@@ -48,7 +53,7 @@ describe("DemoTimeline drag/resize", () => {
 
   it("simulates rain, swaps the at-risk block for the indoor plan, and undoes it", async () => {
     const user = userEvent.setup();
-    render(<DemoTimeline />);
+    renderDemoTimeline();
 
     await user.click(screen.getByRole("button", { name: /simulate rain/i }));
     // jumps to the affected day and flags the outdoor block
@@ -68,7 +73,7 @@ describe("DemoTimeline drag/resize", () => {
 
   it("keeps a locked block non-interactive", async () => {
     const user = userEvent.setup();
-    render(<DemoTimeline />);
+    renderDemoTimeline();
     // switch to day 2, where the guided Peranakan Mansion block is locked
     await user.click(screen.getByRole("tab", { name: /2026-10-04/ }));
     expect(screen.getByText(/Peranakan Mansion \(guided\)/)).toBeInTheDocument();
