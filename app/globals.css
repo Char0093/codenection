@@ -1540,7 +1540,7 @@ details[open] > summary .collapse-chevron { transform: rotate(180deg); }
 /* The prototype thread is still a thread: it gets the bare thread canvas (white / true black),
    not the grouped-grey app ground, matching .chat-pane above. */
 .demo-chat { display: flex; flex-direction: column; gap: 8px; padding-bottom: 24px; background: var(--imsg-thread); }
-.demo-chat .chat-message-list { flex: none; overflow: visible; padding: 8px 0; }
+.demo-chat .chat-message-list { flex: none; overflow: visible; padding: 8px 20px; }
 .demo-chat .chat-composer { position: sticky; bottom: 0; border: 1px solid var(--line); border-radius: 10px; }
 
 /* Chat preference extraction ------------------------------------------------- */
