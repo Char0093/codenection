@@ -4,9 +4,9 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  CalendarClock, ChevronDown, Info, LayoutDashboard, ListChecks, LogOut, Luggage, Map as MapIcon,
-  Menu, MessageCircle, PanelLeftClose, PanelLeftOpen, Settings, ShieldCheck, Split, UserRound,
-  Wallet, X,
+  CalendarClock, ChevronDown, ClipboardCheck, Info, LayoutDashboard, ListChecks, LogOut, Luggage,
+  Map as MapIcon, Menu, MessageCircle, PanelLeftClose, PanelLeftOpen, Settings, ShieldCheck, Split,
+  UserRound, Wallet, X,
 } from "lucide-react";
 import { isPrototype } from "@/lib/prototype/config";
 import { BrandMark } from "@/components/brand-mark";
@@ -22,6 +22,7 @@ const TRIP_ITEMS = [
   { key: "chat", label: "Chat", needsReady: false, icon: MessageCircle, demoOnly: false },
   { key: "plan", label: "Plan", needsReady: true, icon: ListChecks, demoOnly: false },
   { key: "timeline", label: "Timeline", needsReady: true, icon: CalendarClock, demoOnly: false },
+  { key: "decisions", label: "Decisions", needsReady: false, icon: ClipboardCheck, demoOnly: true },
   { key: "map", label: "Map", needsReady: true, icon: MapIcon, demoOnly: true },
   { key: "jigsaw", label: "Split & merge", needsReady: true, icon: Split, demoOnly: true },
   { key: "budget", label: "Budget", needsReady: true, icon: Wallet, demoOnly: true },
