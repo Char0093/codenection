@@ -8,15 +8,54 @@ import { AppShell } from "@/components/app-shell";
 
 const pathname = vi.fn(() => "/trips/t1/chat");
 vi.mock("next/navigation", () => ({ usePathname: () => pathname() }));
-afterEach(() => { cleanup(); pathname.mockReturnValue("/trips/t1/chat"); });
+afterEach(() => { cleanup(); pathname.mockReturnValue("/trips/t1/chat"); localStorage.clear(); });
 
 describe("AppShell", () => {
-  it("always offers a route to the group list, Settings, and Log out", () => {
+  it("always offers a route to the dashboard, Settings, and Log out", () => {
     render(<AppShell><div>body</div></AppShell>);
-    expect(screen.getByRole("link", { name: /all trip groups/i })).toHaveAttribute("href", "/chats");
+    expect(screen.getByRole("link", { name: /dashboard/i })).toHaveAttribute("href", "/chats");
     expect(screen.getByRole("link", { name: /settings/i })).toHaveAttribute("href", "/settings");
     expect(screen.getByRole("button", { name: /log out/i }).closest("form")).toHaveAttribute("action", "/auth/signout");
     expect(screen.getByText("body")).toBeInTheDocument();
+  });
+
+  it("shows no Chatroom section when no trips list is given", () => {
+    render(<AppShell><div /></AppShell>);
+    expect(screen.queryByRole("button", { name: /chatroom/i })).not.toBeInTheDocument();
+  });
+
+  it("lists each trip under Chatroom, expanded by default, linking straight to its chat", () => {
+    const trips = [{ id: "t1", name: "Melaka crew" }, { id: "t2", name: "Samarahan trip" }];
+    render(<AppShell trips={trips}><div /></AppShell>);
+    const toggle = screen.getByRole("button", { name: /chatroom/i });
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("link", { name: "Melaka crew" })).toHaveAttribute("href", "/trips/t1/chat");
+    expect(screen.getByRole("link", { name: "Samarahan trip" })).toHaveAttribute("href", "/trips/t2/chat");
+  });
+
+  it("collapses and re-expands the trip list on toggle click, remembering the choice", async () => {
+    const user = userEvent.setup();
+    const trips = [{ id: "t1", name: "Melaka crew" }];
+    render(<AppShell trips={trips}><div /></AppShell>);
+    const toggle = screen.getByRole("button", { name: /chatroom/i });
+
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("link", { name: "Melaka crew" })).not.toBeInTheDocument();
+    expect(localStorage.getItem("waypoint-sidebar-chatroom-open")).toBe("0");
+
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("link", { name: "Melaka crew" })).toBeInTheDocument();
+    expect(localStorage.getItem("waypoint-sidebar-chatroom-open")).toBe("1");
+  });
+
+  it("starts collapsed when a prior visit saved that preference", () => {
+    localStorage.setItem("waypoint-sidebar-chatroom-open", "0");
+    const trips = [{ id: "t1", name: "Melaka crew" }];
+    render(<AppShell trips={trips}><div /></AppShell>);
+    expect(screen.getByRole("button", { name: /chatroom/i })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("link", { name: "Melaka crew" })).not.toBeInTheDocument();
   });
 
   it("shows no trip section when no trip is open", () => {

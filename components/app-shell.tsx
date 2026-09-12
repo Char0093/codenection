@@ -4,13 +4,15 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  CalendarClock, Info, ListChecks, LogOut, Luggage, Map as MapIcon, Menu, MessageCircle,
-  PanelLeftClose, PanelLeftOpen, Settings, ShieldCheck, Split, Users, UserRound, Wallet, X,
+  CalendarClock, ChevronDown, Info, LayoutDashboard, ListChecks, LogOut, Luggage, Map as MapIcon,
+  Menu, MessageCircle, PanelLeftClose, PanelLeftOpen, Settings, ShieldCheck, Split, UserRound,
+  Wallet, X,
 } from "lucide-react";
 import { isPrototype } from "@/lib/prototype/config";
 import { BrandMark } from "@/components/brand-mark";
 
 type TripContext = { id: string; name: string; ready: boolean };
+type SidebarTrip = { id: string; name: string };
 
 // Trip-scoped items: only shown once a specific trip is open (see the `trip` prop below).
 // Unlike Chat/Your prefs, the planning surfaces need a ready trip (valid destination + dates).
@@ -30,6 +32,7 @@ const TRIP_ITEMS = [
 
 const WIDTH_KEY = "waypoint-sidebar-w";
 const COLLAPSED_KEY = "waypoint-sidebar-collapsed";
+const CHATROOM_OPEN_KEY = "waypoint-sidebar-chatroom-open";
 const MIN_WIDTH = 224;
 const MAX_WIDTH = 420;
 const DEFAULT_WIDTH = 272;
@@ -40,22 +43,26 @@ function clampWidth(value: number) {
 
 /**
  * The one persistent app shell: a sidebar alongside the page's own content. The sidebar always
- * carries the account-level items (All trip groups / Settings / Log out) and, only while a
- * specific trip is open, that trip's Chat/Plan/Timeline/Your prefs section above them.
+ * carries the account-level items (Dashboard / Settings / Log out) and, only while a specific
+ * trip is open, that trip's Chat/Plan/Timeline/Your prefs section above them. When the caller
+ * passes `trips` (only the dashboard page does), a collapsible "Chatroom" section lists each
+ * trip by name so its chat is reachable in one click; its open/closed state persists too.
  *
  * On desktop the rail is resizable (drag its right edge) and foldable (the toggle collapses it
  * to an icons-only strip); both preferences persist to localStorage. Under 900px it becomes an
  * off-canvas drawer opened from the slim mobile top bar -- see .app-sidebar/.mobile-topbar in
  * globals.css.
  */
-export function AppShell({ trip, accountEmail, children }: {
+export function AppShell({ trip, trips, accountEmail, children }: {
   trip?: TripContext | null;
+  trips?: SidebarTrip[];
   accountEmail?: string | null;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [chatroomOpen, setChatroomOpen] = useState(true);
   const [width, setWidth] = useState(DEFAULT_WIDTH);
   const [dragging, setDragging] = useState(false);
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
@@ -73,6 +80,8 @@ export function AppShell({ trip, accountEmail, children }: {
       const savedWidth = Number(localStorage.getItem(WIDTH_KEY));
       if (Number.isFinite(savedWidth) && savedWidth > 0) setWidth(clampWidth(savedWidth));
       if (localStorage.getItem(COLLAPSED_KEY) === "1") setCollapsed(true);
+      const savedChatroomOpen = localStorage.getItem(CHATROOM_OPEN_KEY);
+      if (savedChatroomOpen !== null) setChatroomOpen(savedChatroomOpen === "1");
     } catch {
       // Blocked storage: fall back to the defaults already in state.
     }
@@ -91,6 +100,14 @@ export function AppShell({ trip, accountEmail, children }: {
     setCollapsed((prev) => {
       const next = !prev;
       try { localStorage.setItem(COLLAPSED_KEY, next ? "1" : "0"); } catch { /* ignore */ }
+      return next;
+    });
+  }
+
+  function toggleChatroomOpen() {
+    setChatroomOpen((prev) => {
+      const next = !prev;
+      try { localStorage.setItem(CHATROOM_OPEN_KEY, next ? "1" : "0"); } catch { /* ignore */ }
       return next;
     });
   }
@@ -167,8 +184,30 @@ export function AppShell({ trip, accountEmail, children }: {
 
           <nav className="app-sidebar-nav" aria-label="Trip groups">
             <Link href="/chats" className="app-sidebar-link" aria-current={pathname === "/chats" ? "page" : undefined}>
-              <Users aria-hidden="true" /><span>All trip groups</span>
+              <LayoutDashboard aria-hidden="true" /><span>Dashboard</span>
             </Link>
+            {trips && trips.length > 0 && (
+              <>
+                <button type="button" className="app-sidebar-link app-sidebar-toggle"
+                  aria-expanded={chatroomOpen} onClick={toggleChatroomOpen}>
+                  <MessageCircle aria-hidden="true" /><span>Chatroom</span>
+                  <ChevronDown className="app-sidebar-toggle-chevron" aria-hidden="true" />
+                </button>
+                {chatroomOpen && (
+                  <nav className="app-sidebar-nav app-sidebar-subnav" aria-label="Your trip chats">
+                    {trips.map((t) => {
+                      const href = `/trips/${t.id}/chat`;
+                      return (
+                        <Link key={t.id} href={href} className="app-sidebar-link app-sidebar-sublink"
+                          aria-current={pathname === href ? "page" : undefined} title={t.name}>
+                          <MessageCircle aria-hidden="true" /><span>{t.name}</span>
+                        </Link>
+                      );
+                    })}
+                  </nav>
+                )}
+              </>
+            )}
           </nav>
 
           {trip && (
