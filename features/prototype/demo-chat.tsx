@@ -19,9 +19,10 @@ import { DEMO_MEMBERS, DEMO_SELF_MEMBER_ID, DEMO_TRIP } from "@/lib/prototype/fi
 const ASSISTANT_TYPING = { id: "demo-assistant-typing", displayName: "Assistant", color: "#af52de" };
 const DEMO_ASSISTANT_TYPING_ID = ASSISTANT_TYPING.id;
 
-/** Prototype chat: the real MessageList + Composer over seeded messages, plus the assistant's
- *  chat-preference-extraction panel. Sending a message that addresses the assistant appends a
- *  canned reply. Nothing leaves the browser and nothing persists. */
+/** Prototype chat: the real MessageList + Composer over seeded messages. Sending a message
+ *  that addresses the assistant appends a canned reply. Nothing leaves the browser and nothing
+ *  persists. Discovery signals and safety constraints heard in this chat now surface on the
+ *  Decisions page instead of inline here. */
 export function DemoChat() {
   // Shared with every other prototype page for this trip (see DemoTripStateProvider) -- a
   // message posted from the Timeline's Save button shows up here without either page needing
