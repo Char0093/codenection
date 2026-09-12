@@ -1543,38 +1543,6 @@ details[open] > summary .collapse-chevron { transform: rotate(180deg); }
 .demo-chat .chat-message-list { flex: none; overflow: visible; padding: 8px 20px; }
 .demo-chat .chat-composer { position: sticky; bottom: 0; border: 1px solid var(--line); border-radius: 10px; }
 
-/* Chat preference extraction ------------------------------------------------- */
-.signal-panel {
-  margin: 10px 0 6px; padding: 14px; border: 0;
-  border-radius: var(--r-standard); background: var(--surface); box-shadow: var(--shadow-card);
-}
-.signal-panel[open] .signal-panel-head { margin-bottom: 10px; }
-.signal-panel-head {
-  display: flex; align-items: center; gap: 8px; margin: 0;
-  font-size: 12.5px; font-weight: 600; color: var(--ink);
-}
-.signal-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-.signal-card {
-  padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px;
-  background: var(--canvas);
-}
-.signal-card-hard { border-color: var(--flexible); background: var(--flexible-soft); }
-.signal-card[data-status="rejected"] { opacity: 0.6; }
-.signal-card-head { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
-.signal-card-hard .signal-card-head { color: var(--flexible-dark); }
-.signal-card-kind { font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; }
-.signal-card-expiry { margin-left: auto; font-variant-numeric: tabular-nums; }
-.signal-card-label { margin: 6px 0 2px; font-size: 14px; font-weight: 600; font-family: var(--font-display); }
-.signal-card-label input { font: inherit; padding: 2px 6px; border: 1px solid var(--line-strong); border-radius: 5px; }
-.signal-card-for { font-weight: 500; color: var(--muted); }
-.signal-card-quote { margin: 2px 0; font-size: 12px; color: var(--muted); }
-.signal-card-detail { margin: 4px 0 8px; }
-.signal-card-actions { display: flex; flex-wrap: wrap; gap: 6px; }
-.signal-card-actions button { min-height: 34px; padding: 6px 10px; font-size: 12px; }
-.signal-card-result { margin: 4px 0 0; font-size: 12px; font-weight: 600; color: var(--consensus); }
-.signal-card[data-status="rejected"] .signal-card-result { color: var(--muted); }
-.signal-card .demo-hint { display: inline; font-weight: 400; }
-
 /* Decisions page ------------------------------------------------------------- */
 .decisions-list { list-style: none; margin: 0; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
 .decision-card { padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--canvas); }

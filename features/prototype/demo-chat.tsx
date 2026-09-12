@@ -1,19 +1,15 @@
 "use client";
 
 import React, { useState } from "react";
-import { ChevronDown, Search } from "lucide-react";
 import { MessageList } from "@/features/chat/message-list";
 import { Composer } from "@/features/chat/composer";
 import { ChatHeader } from "@/features/chat/chat-header";
 import { GroupInfo } from "@/features/chat/group-info";
-import { ChatSignalCard } from "@/features/prototype/chat-signal-card";
 import { InvitePanel } from "@/features/prototype/invite-panel";
 import type { Tapback } from "@/features/chat/tapback";
 import { shouldAddressAssistant } from "@/lib/chat/mention";
 import { useDemoTripState } from "@/features/prototype/demo-trip-state";
-import {
-  DEMO_MEMBERS, DEMO_SELF_MEMBER_ID, DEMO_SIGNALS, DEMO_TRIP,
-} from "@/lib/prototype/fixtures";
+import { DEMO_MEMBERS, DEMO_SELF_MEMBER_ID, DEMO_TRIP } from "@/lib/prototype/fixtures";
 
 /**
  * The assistant is not a trip member, so it has no row in DEMO_MEMBERS. This pseudo-member
@@ -93,17 +89,6 @@ export function DemoChat() {
         reactions={reactions}
         onReact={react}
       />
-
-      <details className="signal-panel" open>
-        <summary className="signal-panel-head">
-          <Search size={14} aria-hidden="true" />
-          <span>From this chat the assistant picked up {DEMO_SIGNALS.length} things. Confirm what should shape the plan.</span>
-          <ChevronDown className="collapse-chevron" size={16} aria-hidden="true" />
-        </summary>
-        <ul className="signal-list">
-          {DEMO_SIGNALS.map((signal) => <ChatSignalCard key={signal.id} signal={signal} />)}
-        </ul>
-      </details>
 
       <Composer onSend={send} />
     </div>

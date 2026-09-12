@@ -15,6 +15,11 @@ function renderDemoChat() {
 }
 
 describe("DemoChat invite link", () => {
+  it("does not show the discovery-signal panel inline (moved to the Decisions page)", () => {
+    renderDemoChat();
+    expect(screen.queryByText(/From this chat the assistant picked up/i)).not.toBeInTheDocument();
+  });
+
   it("shows an Invite control in the chat header", () => {
     renderDemoChat();
     const invite = screen.getByRole("button", { name: /invite/i });
