@@ -1691,7 +1691,7 @@ details[open] > summary .collapse-chevron { transform: rotate(180deg); }
    weather disruption. Prototype-only.
    ========================================================================== */
 
-.jigsaw-view, .budget-view, .vqa-view, .pack-view {
+.jigsaw-view, .budget-view, .vqa-view, .pack-view, .decisions-view {
   max-width: 680px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; padding: 20px 0 40px;
 }
 
