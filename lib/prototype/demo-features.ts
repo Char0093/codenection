@@ -110,6 +110,7 @@ export const DEMO_WEATHER = {
     durationMinutes: 60,
     startMinute: 15 * 60 + 30,
     costTier: "standard" as const,
+    location: "Pengkalan Weld, George Town",
   },
 } as const;
 

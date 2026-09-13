@@ -43,10 +43,10 @@ isPrototype() =
 | `/chats` | `getChatHome(client)` → RLS query | `DEMO_CHAT_HOME_TRIPS` fixture |
 | `/trips/[id]/layout` | membership + trip row check | fixed `DEMO_TRIP` shell |
 | `/trips/[id]/chat` | `listMessages` + Realtime channel | `DemoChat` over `DEMO_CHAT_MESSAGES`, local state |
-| `/trips/[id]/plan` | `PlanView` → `GET /api/trips/[id]` | `DemoPlan` over `DEMO_PROPOSAL`, local accept/reject |
-| `/trips/[id]/timeline` | `TimelinePane` → itinerary + POI APIs | `DemoTimeline`, seeded blocks — local drag-to-move, drag-bottom-edge-to-resize (15-min snap, keyboard too), add/remove |
+| `/trips/[id]/plan` | `PlanView` → `GET /api/trips/[id]` | `DemoPlan` over `DemoTripStateProvider`'s `planBlocks` (itinerary) + the static `DEMO_PROPOSAL` narrative, local accept/reject |
+| `/trips/[id]/timeline` | `TimelinePane` → itinerary + POI APIs | `DemoTimeline`, seeded blocks — local drag-to-move, drag-bottom-edge-to-resize (15-min snap, keyboard too), add/remove, each block shows a location line |
 | `/trips/[id]/map` | *not built* | `DemoMap` (this branch adds the route + nav item) |
-| `/trips/[id]/decisions` | *not built* | `DemoDecisions` — signals from chat + saved Timeline changes, Agree/Disagree + 1-5 star rating, local state only |
+| `/trips/[id]/decisions` | *not built* | `DemoDecisions` — signals from chat + saved Timeline changes, Agree/Disagree + 1-5 star rating; agreeing to a Timeline change also updates `planBlocks`, so it shows up on the Plan tab |
 | `/trips/[id]/entry` | `getMyMemberEntryContext` server action | `DemoMemberEntry` + `DailyRhythm` |
 | `/trips/[id]/jigsaw` | *not built* | `JigsawView` — fixture scores through the **real** `evaluateTeam`/`shouldSplitCut` |
 | `/trips/[id]/budget` | *not built* | `BudgetView` — fixture expenses through the **real** `simplifyDebts` |
@@ -98,7 +98,10 @@ dedicated `/trips/[id]/decisions` page rather than inline in chat — two soft
 signals (`live jazz`, `indoor day Saturday`) with an expiry, one
 **hard-constraint candidate** (`no shellfish`, addressed to Arun). Agree/Disagree
 then a 1-5 star rating replace the old Confirm/Edit/Reject; the same page also
-collects one entry per Timeline change saved that session.
+collects one entry per Timeline change saved that session. Agreeing to a
+Timeline-sourced decision additionally applies that change to the Plan tab's
+itinerary (other members are assumed to agree too, for this prototype) — see
+`DemoTripStateProvider.respondToDecision`.
 
 **Real backend**
 

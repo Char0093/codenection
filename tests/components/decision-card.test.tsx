@@ -13,19 +13,19 @@ const SOFT_SIGNAL: Decision = {
   id: "sig-1", source: "signal", kind: "soft", title: "live jazz",
   detail: "A soft discovery signal.", quote: "I'd love a jazz bar one evening if there's one nearby",
   forMemberName: null, expiresInDays: 3,
-  createdAt: "2026-01-01T00:00:00.000Z", response: null,
+  createdAt: "2026-01-01T00:00:00.000Z", response: null, blockPatch: null,
 };
 
 const HARD_SIGNAL: Decision = {
   id: "sig-2", source: "signal", kind: "hard-candidate", title: "no shellfish",
   detail: "A possible hard safety constraint.", forMemberName: "Arun", expiresInDays: null,
-  createdAt: "2026-01-01T00:00:00.000Z", response: null,
+  createdAt: "2026-01-01T00:00:00.000Z", response: null, blockPatch: null,
 };
 
 const TIMELINE_CHANGE: Decision = {
   id: "chg-1", source: "timeline", title: "Street of Harmony walk moved to 10:00–12:00 on 2026-10-03",
   detail: "A change made on the Timeline.", forMemberName: null, expiresInDays: null,
-  createdAt: "2026-01-01T00:00:00.000Z", response: null,
+  createdAt: "2026-01-01T00:00:00.000Z", response: null, blockPatch: null,
 };
 
 describe("DecisionCard", () => {

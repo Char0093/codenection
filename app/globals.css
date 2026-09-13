@@ -475,6 +475,8 @@ details[open] > summary .collapse-chevron { transform: rotate(180deg); }
 .activity-meta > span:first-child { text-transform: capitalize; }
 .activity-list p { margin: 10px 0 0; font-size: 13px; }
 .contingency-note { color: var(--muted); padding-left: 12px; border-left: 2px solid var(--line-strong); }
+.activity-location { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 12px; }
+.activity-location svg { flex: none; }
 .assumptions { padding: 18px 0; border-top: 1px solid var(--line); }
 .assumptions ul { margin: 9px 0 0; padding-left: 20px; color: var(--muted); font-size: 13px; }
 .assumptions li { padding-bottom: 4px; overflow-wrap: anywhere; }
@@ -1691,6 +1693,7 @@ details[open] > summary .collapse-chevron { transform: rotate(180deg); }
   letter-spacing: 0.02em; text-transform: uppercase; color: var(--flexible-dark);
 }
 .cal-block-title { display: flex; align-items: center; gap: 4px; }
+.cal-block-location { font-size: 10.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cal-block-note { font-size: 10.5px; color: var(--muted); }
 .cal-block-resize {
   position: absolute; left: 0; right: 0; bottom: 0; height: 9px; cursor: ns-resize;

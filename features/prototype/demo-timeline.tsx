@@ -257,7 +257,7 @@ export function DemoTimeline() {
     const id = `added-${seq}`;
     setBlocks((prev) => [...prev, {
       id, title: poi.name, category: poi.category, date: selectedDate,
-      startMinute: start, durationMinutes: poi.durationMinutes, poolId: poi.id,
+      startMinute: start, durationMinutes: poi.durationMinutes, poolId: poi.id, location: poi.location,
     }]);
     setAnnounce(`${poi.name} added at ${hhmm(start)}`);
     queueChange(id, "add", `${poi.name} added at ${hhmm(start)} on ${selectedDate}`);
@@ -299,7 +299,7 @@ export function DemoTimeline() {
   function createSplit(blockId: string, poi: DemoPoolItem) {
     const target = blocks.find((b) => b.id === blockId);
     setBlocks((prev) => prev.map((b) => (b.id === blockId
-      ? { ...b, split: { title: poi.name, category: poi.category, poolId: poi.id } }
+      ? { ...b, split: { title: poi.name, category: poi.category, poolId: poi.id, location: poi.location } }
       : b)));
     setAnnounce(`${poi.name} split into the same slot as ${blockTitle(blockId)} — save to tell the group`);
     if (target) {
@@ -344,7 +344,7 @@ export function DemoTimeline() {
     setBlocks((prev) => prev
       .filter((b) => b.id !== sourceId)
       .map((b) => (b.id === targetId
-        ? { ...b, split: { title: source.title, category: source.category, poolId: source.poolId } }
+        ? { ...b, split: { title: source.title, category: source.category, poolId: source.poolId, location: source.location } }
         : b)));
     setAnnounce(`${source.title} split into ${target.title}'s slot`);
     setPendingChanges((prev) => [
@@ -366,8 +366,8 @@ export function DemoTimeline() {
     if (!source?.split) return;
 
     const moving = side === "split"
-      ? { title: source.split.title, category: source.split.category, poolId: source.split.poolId }
-      : { title: source.title, category: source.category, poolId: source.poolId };
+      ? { title: source.split.title, category: source.split.category, poolId: source.split.poolId, location: source.split.location }
+      : { title: source.title, category: source.category, poolId: source.poolId, location: source.location };
     const withoutSource: DemoBlock[] = side === "split"
       ? blocks.map((b): DemoBlock => {
         if (b.id !== blockId) return b;
@@ -392,7 +392,7 @@ export function DemoTimeline() {
 
     if (target) {
       setBlocks(withoutSource.map((b) => (b.id === target.id
-        ? { ...b, split: { title: moving.title, category: moving.category, poolId: moving.poolId } }
+        ? { ...b, split: { title: moving.title, category: moving.category, poolId: moving.poolId, location: moving.location } }
         : b)));
       setAnnounce(`${moving.title} split into ${target.title}'s slot`);
       queueChange(target.id, "split", `${hhmm(target.startMinute)}–${hhmm(target.startMinute + target.durationMinutes)} on ${target.date}: ${target.title} or ${moving.title}`);
@@ -403,7 +403,7 @@ export function DemoTimeline() {
     const newId = `moved-${seq}`;
     setBlocks([...withoutSource, {
       id: newId, title: moving.title, category: moving.category, date: selectedDate,
-      startMinute, durationMinutes, poolId: moving.poolId,
+      startMinute, durationMinutes, poolId: moving.poolId, location: moving.location,
     }]);
     setAnnounce(`${moving.title} moved to ${hhmm(startMinute)}–${hhmm(end)}`);
     queueChange(newId, "move", `${moving.title} moved to ${hhmm(startMinute)}–${hhmm(end)} on ${selectedDate}`);
@@ -417,7 +417,14 @@ export function DemoTimeline() {
     postMessage(lines.length === 1
       ? `Here's a change to the plan — ${lines[0]}. Let me know if that works.`
       : `A few changes to the plan: ${lines.join("; ")}. Let me know if those work.`);
-    pendingChanges.forEach((c) => addTimelineDecision({ text: c.text }));
+    // Snapshot each changed block as it stands right now -- once this decision is agreed to (see
+    // DemoTripStateProvider.respondToDecision), this exact shape lands on the Plan tab. A blockId
+    // no longer present in `blocks` (removeBlock) snapshots as `result: null`, which agreeing
+    // later reads as "take this block off the Plan tab too."
+    pendingChanges.forEach((c) => addTimelineDecision({
+      text: c.text,
+      blockPatch: { blockId: c.blockId, result: blocks.find((b) => b.id === c.blockId) ?? null },
+    }));
     setPendingChanges([]);
     setAnnounce("Sent to the group chat");
   }
@@ -448,6 +455,8 @@ export function DemoTimeline() {
         startMinute: DEMO_WEATHER.replacement.startMinute,
         durationMinutes: DEMO_WEATHER.replacement.durationMinutes,
         note: "Indoor swap — rain",
+        location: DEMO_WEATHER.replacement.location,
+        rationale: DEMO_WEATHER.replacement.why,
       }
       : b)));
     setWeather("applied");
@@ -732,6 +741,7 @@ export function DemoTimeline() {
                       {b.locked && <Lock size={11} aria-hidden="true" />}{b.title}
                     </div>
                     <div className="cal-block-time">{hhmm(s.startMinute)}–{hhmm(s.startMinute + s.durationMinutes)}</div>
+                    {b.location && <div className="cal-block-location">{b.location}</div>}
                     {b.note && <div className="cal-block-note">{b.note}</div>}
                     {!b.locked && <div className="cal-block-resize" aria-hidden="true" />}
                   </div>

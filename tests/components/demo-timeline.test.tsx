@@ -24,6 +24,11 @@ describe("DemoTimeline drag/resize", () => {
     expect(walk()).toHaveAccessibleName(/09:30 to 11:30/);
   });
 
+  it("shows a seeded block's location so the viewer knows where it is", () => {
+    renderDemoTimeline();
+    expect(screen.getByText("Lebuh Acheh, George Town")).toBeInTheDocument();
+  });
+
   it("moves a block later with ArrowDown (15-minute step)", async () => {
     const user = userEvent.setup();
     renderDemoTimeline();

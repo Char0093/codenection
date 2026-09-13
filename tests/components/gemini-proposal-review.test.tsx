@@ -12,6 +12,20 @@ it("renders dated activities, assumptions, rationale, and contingency notes", ()
   for (const text of ["2026-10-03", "09:00", "Market visit", "Local transport available", "Time for local food", "Covered market nearby"])
     expect(screen.getByText(text, { exact: false })).toBeInTheDocument();
 });
+it("renders an activity's location when the demo layer provides one", () => {
+  const withLocation = proposal({
+    payload: {
+      ...proposal().payload,
+      activities: [{ ...proposal().payload.activities[0], location: "Jalan Pasar, Penang" } as never],
+    },
+  });
+  render(<GeminiProposalReview proposal={withLocation} canDecide onDecision={vi.fn()} />);
+  expect(screen.getByText("Jalan Pasar, Penang")).toBeInTheDocument();
+});
+it("renders no location line for a real (non-demo) activity", () => {
+  render(<GeminiProposalReview proposal={proposal()} canDecide onDecision={vi.fn()} />);
+  expect(document.querySelector(".activity-location")).not.toBeInTheDocument();
+});
 it.each(["accepted", "rejected", "expired"] as const)("does not offer decisions for %s proposals", (status) => {
   render(<GeminiProposalReview proposal={proposal({ status })} canDecide onDecision={vi.fn()} />);
   expect(screen.queryByRole("button", { name: "Confirm itinerary" })).not.toBeInTheDocument();

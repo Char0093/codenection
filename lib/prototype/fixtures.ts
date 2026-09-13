@@ -122,48 +122,17 @@ export const DEMO_PROPOSAL: ProposalRecord = {
   payload: {
     summary:
       "Three days in George Town at a balanced pace. Heritage and food on foot in the core, a wet-weather indoor block on Saturday, and Penang Hill kept for the clearest morning. Shellfish is avoided in every listed food stop.",
+    // Every other activity from the original AI-authored proposal now lives as a DemoBlock in
+    // DEMO_ITINERARY instead (see buildPlanActivities), so the Plan tab and the Timeline agree on
+    // one schedule and a Timeline edit actually shows up here. This one has no Timeline block on
+    // purpose -- it's an unscheduled option, not a committed slot -- so it stays proposal-only,
+    // appended after the itinerary-derived activities in DemoPlan.
     activities: [
-      {
-        title: "Street of Harmony walk", category: "culture", date: "2026-10-03", startTime: "09:30",
-        durationMinutes: 120, estimatedCostTier: "budget",
-        rationale: "Mosque, temples and church on one street — an easy orientation to the old town.",
-        contingencyNote: "Dress modestly for the mosque; it closes to visitors at prayer times.",
-      },
-      {
-        title: "Hawker lunch at Chulia Street", category: "food", date: "2026-10-03", startTime: "12:00",
-        durationMinutes: 75, estimatedCostTier: "budget",
-        rationale: "Char kway teow and duck egg options; stalls confirmed to have non-shellfish plates.",
-        contingencyNote: "Peak queue 12:30–13:00; go early or shift 30 minutes.",
-      },
-      {
-        title: "Clan Jetties + Armenian Street", category: "culture", date: "2026-10-03", startTime: "15:00",
-        durationMinutes: 120, estimatedCostTier: "budget",
-        rationale: "Waterfront stilt village and the street-art core, both walkable from lunch.",
-        contingencyNote: null,
-      },
-      {
-        title: "Peranakan Mansion", category: "culture", date: "2026-10-04", startTime: "10:00",
-        durationMinutes: 90, estimatedCostTier: "standard",
-        rationale: "Indoor and covered — the wet-weather anchor for the day.",
-        contingencyNote: "Guided entry only; last tour 15:30.",
-      },
-      {
-        title: "Tea + kaya toast, Campbell House", category: "food", date: "2026-10-04", startTime: "15:30",
-        durationMinutes: 60, estimatedCostTier: "standard",
-        rationale: "Sit-down indoor stop to wait out the forecast afternoon rain.",
-        contingencyNote: null,
-      },
       {
         title: "Jazz at a Love Lane bar (optional)", category: "culture", date: "2026-10-04", startTime: "21:00",
         durationMinutes: 120, estimatedCostTier: "standard",
         rationale: "Held as an option for Arun; not locked so the evening stays flexible.",
         contingencyNote: "Live set only on weekends — confirm on arrival.",
-      },
-      {
-        title: "Penang Hill early ascent", category: "nature", date: "2026-10-05", startTime: "08:00",
-        durationMinutes: 180, estimatedCostTier: "standard",
-        rationale: "Best light and shortest funicular queue before 09:00; clearest-morning slot.",
-        contingencyNote: "If low cloud, swap for the Botanic Gardens loop.",
       },
     ],
     assumptions: [
@@ -189,18 +158,47 @@ export type DemoBlock = {
   /** Set only for a block scheduled from DEMO_POOL -- lets it reappear in the pool when
    * removed, instead of a seeded itinerary block that just vanishes. */
   poolId?: string;
+  /** Plain-language address/place name -- shown on Timeline and on Plan (via
+   * buildPlanActivities) so viewers know where the stop actually is. */
+  location?: string;
+  /** Why this stop is worth the slot. Seeded blocks carry their own (copied once from the
+   * AI-authored proposal fixture); a block without one falls back to its pool item's `blurb` in
+   * buildPlanActivities. */
+  rationale?: string;
+  contingencyNote?: string | null;
+  /** Seeded blocks carry their own (copied once from the AI-authored proposal fixture); a block
+   * without one falls back to its pool item's `costTier` in buildPlanActivities. */
+  estimatedCostTier?: "budget" | "standard" | "premium" | "luxury";
   /** Set when a second place has been dropped onto this same time slot -- renders as two
    * cards side by side instead of one. Only one split partner is supported at a time. */
-  split?: { title: string; category: DemoBlock["category"]; poolId?: string };
+  split?: { title: string; category: DemoBlock["category"]; poolId?: string; location?: string };
 };
 
 export const DEMO_ITINERARY: DemoBlock[] = [
-  { id: "b1", title: "Street of Harmony walk", category: "culture", date: "2026-10-03", startMinute: 9 * 60 + 30, durationMinutes: 120 },
-  { id: "b2", title: "Hawker lunch, Chulia Street", category: "food", date: "2026-10-03", startMinute: 12 * 60, durationMinutes: 75, note: "Shellfish-free stalls only" },
-  { id: "b3", title: "Clan Jetties + Armenian Street", category: "culture", date: "2026-10-03", startMinute: 15 * 60, durationMinutes: 120 },
-  { id: "b4", title: "Peranakan Mansion (guided)", category: "culture", date: "2026-10-04", startMinute: 10 * 60, durationMinutes: 90, locked: true, note: "Booked — 15:30 last tour" },
-  { id: "b5", title: "Kaya toast, Campbell House", category: "food", date: "2026-10-04", startMinute: 15 * 60 + 30, durationMinutes: 60 },
-  { id: "b6", title: "Penang Hill early ascent", category: "nature", date: "2026-10-05", startMinute: 8 * 60, durationMinutes: 180 },
+  { id: "b1", title: "Street of Harmony walk", category: "culture", date: "2026-10-03", startMinute: 9 * 60 + 30, durationMinutes: 120,
+    location: "Lebuh Acheh, George Town", estimatedCostTier: "budget",
+    rationale: "Mosque, temples and church on one street — an easy orientation to the old town.",
+    contingencyNote: "Dress modestly for the mosque; it closes to visitors at prayer times." },
+  { id: "b2", title: "Hawker lunch, Chulia Street", category: "food", date: "2026-10-03", startMinute: 12 * 60, durationMinutes: 75, note: "Shellfish-free stalls only",
+    location: "Lebuh Chulia, George Town", estimatedCostTier: "budget",
+    rationale: "Char kway teow and duck egg options; stalls confirmed to have non-shellfish plates.",
+    contingencyNote: "Peak queue 12:30–13:00; go early or shift 30 minutes." },
+  { id: "b3", title: "Clan Jetties + Armenian Street", category: "culture", date: "2026-10-03", startMinute: 15 * 60, durationMinutes: 120,
+    location: "Chew Jetty, Weld Quay, George Town", estimatedCostTier: "budget",
+    rationale: "Waterfront stilt village and the street-art core, both walkable from lunch.",
+    contingencyNote: null },
+  { id: "b4", title: "Peranakan Mansion (guided)", category: "culture", date: "2026-10-04", startMinute: 10 * 60, durationMinutes: 90, locked: true, note: "Booked — 15:30 last tour",
+    location: "29 Church Street, George Town", estimatedCostTier: "standard",
+    rationale: "Indoor and covered — the wet-weather anchor for the day.",
+    contingencyNote: "Guided entry only; last tour 15:30." },
+  { id: "b5", title: "Kaya toast, Campbell House", category: "food", date: "2026-10-04", startMinute: 15 * 60 + 30, durationMinutes: 60,
+    location: "Campbell House, Lebuh Campbell, George Town", estimatedCostTier: "standard",
+    rationale: "Sit-down indoor stop to wait out the forecast afternoon rain.",
+    contingencyNote: null },
+  { id: "b6", title: "Penang Hill early ascent", category: "nature", date: "2026-10-05", startMinute: 8 * 60, durationMinutes: 180,
+    location: "Penang Hill Lower Station, Air Itam", estimatedCostTier: "standard",
+    rationale: "Best light and shortest funicular queue before 09:00; clearest-morning slot.",
+    contingencyNote: "If low cloud, swap for the Botanic Gardens loop." },
 ];
 
 export type DemoPoolItem = {
@@ -211,14 +209,15 @@ export type DemoPoolItem = {
   costTier: "budget" | "standard" | "premium" | "luxury";
   blurb: string;
   safety: "verified" | "claimed" | "unknown";
+  location: string;
 };
 
 export const DEMO_POOL: DemoPoolItem[] = [
-  { id: "p1", name: "Kek Lok Si Temple", category: "culture", durationMinutes: 120, costTier: "budget", blurb: "Hillside temple complex above Air Itam.", safety: "verified" },
-  { id: "p2", name: "Gurney Drive hawker stalls", category: "food", durationMinutes: 90, costTier: "budget", blurb: "Seafront food court — has shellfish-free stalls.", safety: "claimed" },
-  { id: "p3", name: "Penang Botanic Gardens", category: "nature", durationMinutes: 120, costTier: "budget", blurb: "Monkey Cup garden and a shaded loop trail.", safety: "verified" },
-  { id: "p4", name: "Hin Bus Depot market", category: "shopping", durationMinutes: 75, costTier: "standard", blurb: "Sunday makers' market in a former bus depot.", safety: "unknown" },
-  { id: "p5", name: "Wonderfood Museum", category: "culture", durationMinutes: 60, costTier: "standard", blurb: "Indoor — good rain fallback.", safety: "verified" },
+  { id: "p1", name: "Kek Lok Si Temple", category: "culture", durationMinutes: 120, costTier: "budget", blurb: "Hillside temple complex above Air Itam.", safety: "verified", location: "Kek Lok Si, Air Itam" },
+  { id: "p2", name: "Gurney Drive hawker stalls", category: "food", durationMinutes: 90, costTier: "budget", blurb: "Seafront food court — has shellfish-free stalls.", safety: "claimed", location: "Gurney Drive, George Town" },
+  { id: "p3", name: "Penang Botanic Gardens", category: "nature", durationMinutes: 120, costTier: "budget", blurb: "Monkey Cup garden and a shaded loop trail.", safety: "verified", location: "Jalan Kebun Bunga, George Town" },
+  { id: "p4", name: "Hin Bus Depot market", category: "shopping", durationMinutes: 75, costTier: "standard", blurb: "Sunday makers' market in a former bus depot.", safety: "unknown", location: "Jalan Gurdwara, George Town" },
+  { id: "p5", name: "Wonderfood Museum", category: "culture", durationMinutes: 60, costTier: "standard", blurb: "Indoor — good rain fallback.", safety: "verified", location: "Pengkalan Weld, George Town" },
 ];
 
 // --- Map + routing (feature: live map and travel-time routing) -------------------------

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useId, useState } from "react";
-import { Check, Clock, X } from "lucide-react";
+import { Check, Clock, MapPin, X } from "lucide-react";
 import type { ProposalRecord } from "@/lib/repositories/planning-repository";
 
 export type GeminiProposalReviewProps = {
@@ -32,13 +32,19 @@ export function GeminiProposalReview({ proposal, active = false, canDecide = fal
     <div className="proposal-heading"><h2 id={headingId}>{title}</h2><span className={`proposal-status ${active ? "accepted" : status}`}>{statusLabel}</span></div>
     <p className="proposal-summary">{proposal.payload.summary}</p>
     <ol className="activity-list">
-      {proposal.payload.activities.map((activity, index) => <li key={`${activity.date}-${activity.startTime}-${index}`}>
-        <div className="activity-schedule"><time dateTime={activity.date}>{activity.date}</time><span><Clock aria-hidden="true" /><time dateTime={`${activity.date}T${activity.startTime}`}>{activity.startTime}</time> / {activity.durationMinutes} min</span></div>
-        <h3>{activity.title}</h3>
-        <div className="activity-meta"><span>{activity.category}</span><span>Estimated cost: {activity.estimatedCostTier}</span></div>
-        <p>{activity.rationale}</p>
-        {activity.contingencyNote && <p className="contingency-note">{activity.contingencyNote}</p>}
-      </li>)}
+      {proposal.payload.activities.map((activity, index) => {
+        // `location` is a demo-only addition layered on top of the real Gemini activity shape
+        // (see lib/prototype/build-plan-activities.ts) -- a real, non-demo activity never has it.
+        const location = (activity as { location?: string }).location;
+        return <li key={`${activity.date}-${activity.startTime}-${index}`}>
+          <div className="activity-schedule"><time dateTime={activity.date}>{activity.date}</time><span><Clock aria-hidden="true" /><time dateTime={`${activity.date}T${activity.startTime}`}>{activity.startTime}</time> / {activity.durationMinutes} min</span></div>
+          <h3>{activity.title}</h3>
+          {location && <p className="activity-location"><MapPin size={12} aria-hidden="true" />{location}</p>}
+          <div className="activity-meta"><span>{activity.category}</span><span>Estimated cost: {activity.estimatedCostTier}</span></div>
+          <p>{activity.rationale}</p>
+          {activity.contingencyNote && <p className="contingency-note">{activity.contingencyNote}</p>}
+        </li>;
+      })}
     </ol>
     {proposal.payload.assumptions.length > 0 && <div className="assumptions"><h3>Assumptions</h3><ul>{proposal.payload.assumptions.map((assumption, index) => <li key={index}>{assumption}</li>)}</ul></div>}
     {!active && pending && <p className="expiry-label">Expires <time dateTime={proposal.expiresAt}>{new Date(proposal.expiresAt).toLocaleString()}</time></p>}
