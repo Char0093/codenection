@@ -1,4 +1,4 @@
-# WayPoint by [Team Name]
+# WayPoint by [Samarahan]
 
 **Team:** Thim Yee Song, Duncan Oh Si Xun, Chong Bing Heng, Kho Wei Jie
 
