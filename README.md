@@ -2,7 +2,7 @@
 
 **Team:** Thim Yee Song, Duncan Oh Si Xun, Chong Bing Heng, Kho Wei Jie
 
-**Problem Statement:** Travel Planner
+**Problem Statement:** Planning an Escape
 
 **Video Presentation:** https://youtu.be/wjObWcz9PDI
 
