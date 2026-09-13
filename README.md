@@ -489,18 +489,3 @@ GitHub Actions runs lint, typecheck, tests and the production build on pushes to
 | `Implementation_Plan.md` | Detailed engineering roadmap (binding specification) |
 | `docs/implementation-status.md` | Point-in-time engineering handoff |
 
-## Submission checklist
-
-- [ ] Team name filled in at the top
-- [x] YouTube video link added — confirm the video is no longer than five minutes
-- [x] Presentation slides link added — confirm it opens for a logged-out viewer
-- [x] UI prototype link and demo account added — re-verify both in an incognito window before submitting
-- [x] Section 2.2: ideation board embedded as images and committed as `docs/ideation.html`
-- [ ] Confirm `/ideation.html` loads on the deployment after the next deploy
-- [x] Section 2.3: mentor consultation table completed and linked to the full write-up
-- [x] Section 3: chat and timeline screenshots added to `docs/screens/` (optional: add Decisions, Map, Food check)
-- [ ] Latest migration and seed applied to the demo project
-- [ ] Demo account and reference trip tested in a clean browser (confirm `dev_test@gmail.com` still signs in)
-- [ ] README claims checked against the final commit
-- [ ] No credentials beyond the disposable demo account, no private links, no personal medical information committed
-
